@@ -10,6 +10,7 @@ const { HttpError, msg, msgList, badRequest, notFound, conflict } = require('../
 const { parseOptionalId, parseTrueFlag: parseFlag } = require('../lib/validate');
 const { zonedToday, isValidReleaseDate } = require('../radar');
 const client = require('../mangaPassion/client');
+const catalogWrite = require('../lib/catalogWrite');
 const gapsLib = require('../mangaPassion/gaps');
 const autofill = require('../mangaPassion/autofill');
 const releases = require('../mangaPassion/releases');
@@ -69,13 +70,21 @@ async function gaps(ctx, { params, query }) {
     return { body: result };
 }
 
+/** A series row as an answer carries it: without the internal catalog link and the shelf's own field list (migration 46). */
+function seriesAnswer(row) {
+    if (!row) return row;
+    const rest = { ...row };
+    for (const key of ['catalog_series_id', 'local_fields', 'manga_passion_edition_data']) delete rest[key];
+    return rest;
+}
+
 // { tags_only: true } fills empty genres from the linked edition only ("Genres nachladen"); edition_id is not needed
 async function syncEdition(ctx, { params, body }) {
     const mangaId = mangaExists(ctx, params);
     const { edition_id, update_total_volumes, update_status, update_publisher } = body;
     if (parseFlag(body.tags_only, false)) {
         const { manga, ...result } = await fillTagsFromEdition(ctx, mangaId);
-        return { body: { ...result, manga } };
+        return { body: { ...result, manga: seriesAnswer(manga) } };
     }
     if (edition_id === undefined || edition_id === null || edition_id === '') {
         throw badRequest('edition_id ist erforderlich');
@@ -89,7 +98,7 @@ async function syncEdition(ctx, { params, body }) {
         update_publisher: parseFlag(update_publisher, false)
     });
 
-    return { body: { success: true, manga: updatedManga } };
+    return { body: { success: true, manga: seriesAnswer(updatedManga) } };
 }
 
 const MAX_GAP_ENTRIES = 500;
@@ -389,14 +398,14 @@ async function importRelease(ctx, { body }) {
         let existingVol = mpVolumeId
             ? ctx.db.prepare(`
                 SELECT id, status FROM volumes
-                WHERE manga_id = ? AND manga_passion_volume_id = ? AND COALESCE(type, 'volume') = ?
+                WHERE manga_id = ? AND manga_passion_volume_id = ? AND type = ?
                 ORDER BY id
             `).get(mangaId, mpVolumeId, type)
             : null;
         if (!existingVol && dedupeByNumber) {
             existingVol = ctx.db.prepare(`
                 SELECT id, status FROM volumes
-                WHERE manga_id = ? AND LOWER(TRIM(volume_number)) = LOWER(?) AND COALESCE(type, 'volume') = ?
+                WHERE manga_id = ? AND LOWER(TRIM(volume_number)) = LOWER(?) AND type = ?
                 ORDER BY id
             `).get(mangaId, volNumStr, type);
         }
@@ -410,7 +419,7 @@ async function importRelease(ctx, { body }) {
             existingVol = ctx.db.prepare(`
                 SELECT id, status FROM volumes
                 WHERE manga_id = ? AND manga_passion_volume_id IS NULL AND LOWER(TRIM(volume_number)) = LOWER(?)
-                  AND COALESCE(type, 'volume') = ? AND notes IS ?
+                  AND type = ? AND notes IS ?
                 ORDER BY id
             `).get(mangaId, volNumStr, type, notes);
         }
@@ -423,7 +432,8 @@ async function importRelease(ctx, { body }) {
             if (effStatus === 'Fehlt' && ORDERED_STATUSES.includes(existingVol.status)) {
                 return { volumeId: existingVol.id, status: existingVol.status, skippedOwned: false, skippedOrdered: true, seriesCreated };
             }
-            ctx.db.prepare(`
+            // calendar data is source data: it goes to the catalog for everyone (core/lib/catalogWrite.js)
+            catalogWrite.track(ctx, 'volume', existingVol.id, () => ctx.db.prepare(`
                 UPDATE volumes
                 SET status = ?,
                     price = COALESCE(?, price),
@@ -433,7 +443,7 @@ async function importRelease(ctx, { body }) {
                     notes = COALESCE(notes, ?),
                     manga_passion_volume_id = COALESCE(manga_passion_volume_id, ?)
                 WHERE id = ?
-            `).run(effStatus, price, releaseDate, publisher, coverImage, notes, linkMpId, existingVol.id);
+            `).run(effStatus, price, releaseDate, publisher, coverImage, notes, linkMpId, existingVol.id), { source: true });
             return { volumeId: existingVol.id, status: effStatus, skippedOwned: false, seriesCreated };
         }
 

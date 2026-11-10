@@ -57,10 +57,11 @@ describe('shelfMoveConfirmText', () => {
   it('names each affected user with the counts, or says it in general without the preview', () => {
     const named = shelfMoveConfirmText({ title: 'Naruto', shelf: 'Zweites', affected: [{ user_id: 2, username: 'erika', owned: 3, read: 1 }] });
     expect(named).toContain('„Naruto“ nach „Zweites“ verschieben?');
-    expect(named).toContain('erika (3 Bände im Besitz, 1 Band gelesen)');
+    expect(named).toContain('erika (3 Bände im Besitz)');
+    expect(named).toContain('Lesemarkierungen bleiben erhalten.');
     expect(named).toContain('Das lässt sich nicht rückgängig machen.');
     const general = shelfMoveConfirmText({ title: 'Naruto', shelf: 'Zweites', affected: null });
-    expect(general).toContain('Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe;');
+    expect(general).toContain('Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe;');
   });
 });
 
@@ -90,7 +91,7 @@ describe('MangaHeroCard: shelf select', () => {
     const select = screen.getByLabelText('Regal');
     fireEvent.change(select, { target: { value: '3' } });
     let question = await screen.findByRole('dialog', { name: 'Reihe verschieben' });
-    expect(question.textContent).toContain('erika (3 Bände im Besitz, 5 Bände gelesen)');
+    expect(question.textContent).toContain('erika (3 Bände im Besitz)');
     expect(chosen()).toBe('1');
     fireEvent.click(within(question).getByRole('button', { name: 'Abbrechen' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Reihe verschieben' })).toBeNull());
@@ -116,7 +117,7 @@ describe('MangaHeroCard: shelf select', () => {
     renderCard();
     fireEvent.change(screen.getByLabelText('Regal'), { target: { value: '3' } });
     const question = await screen.findByRole('dialog', { name: 'Reihe verschieben' });
-    expect(question.textContent).toContain('Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe;');
+    expect(question.textContent).toContain('Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe;');
     expect(chosen()).toBe('1');
   });
 });
@@ -145,7 +146,7 @@ describe('MangaDetail: moving a series', () => {
     const select = await screen.findByLabelText('Regal');
     fireEvent.change(select, { target: { value: '3' } });
     const question = await screen.findByRole('dialog', { name: 'Reihe verschieben' });
-    expect(question.textContent).toContain('erika (1 Band im Besitz, 2 Bände gelesen)');
+    expect(question.textContent).toContain('erika (1 Band im Besitz)');
     fireEvent.click(within(question).getByRole('button', { name: 'Abbrechen' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Reihe verschieben' })).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /Speichern/ }));

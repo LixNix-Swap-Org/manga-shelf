@@ -415,22 +415,30 @@ const VOLUME_COLUMNS_V = VOLUME_COLUMNS.split(', ').map(c => `v.${c}`).join(', '
 function matchCollection(db, book, isbn13, shelfIds = null) {
     // shelfIds limits the match to these shelves (null: the whole database)
     const scope = shelfIds ? inShelves('m.shelf_id', shelfIds) : { sql: '1', params: [] };
-    const byIsbn = isbn13 ? db.prepare(`SELECT ${VOLUME_COLUMNS_V} FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.isbn = ? AND ${scope.sql} ORDER BY v.id LIMIT 1`).get(isbn13, ...scope.params) : null;
+    const byIsbn = isbn13 ? db.prepare(`SELECT ${VOLUME_COLUMNS_V} FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.isbn = ? AND ${scope.sql} ORDER BY CASE WHEN v.status = 'Vorhanden' THEN 1 ELSE 0 END, v.id LIMIT 1`).get(isbn13, ...scope.params) : null;
     if (byIsbn) {
         const manga = db.prepare('SELECT id, title, alt_title, publisher, cover_image, currency FROM mangas WHERE id = ?').get(byIsbn.manga_id);
         return { manga: manga || null, volume: byIsbn, reason: 'isbn', candidates: [], number_in_title: false };
     }
 
     const bookPublisher = normalizePublisher(book.publisher);
-    const scored = db.prepare(`SELECT m.id, m.title, m.alt_title, m.publisher, m.cover_image, m.currency FROM mangas m WHERE ${scope.sql} ORDER BY m.id`).all(...scope.params)
-        .map(m => ({
+    const allScored = db.prepare(`SELECT m.id, m.title, m.alt_title, m.publisher, m.cover_image, m.currency, m.catalog_series_id FROM mangas m WHERE ${scope.sql} ORDER BY m.id`).all(...scope.params)
+        .map(({ catalog_series_id: catalogId, ...m }) => ({
             manga: m,
+            catalogId: catalogId ?? null,
             score: titleMatchScore([book.series, book.title], m),
             rank: exactMatchRank(book, m),
             samePublisher: bookPublisher && normalizePublisher(m.publisher) === bookPublisher ? 1 : 0
         }))
         .filter(s => s.score > 0)
         .sort((a, b) => b.score - a.score || b.rank - a.rank || b.samePublisher - a.samePublisher);
+    const seenEditions = new Set();
+    const scored = allScored.filter(s => {
+        if (s.catalogId === null) return true;
+        if (seenEditions.has(s.catalogId)) return false;
+        seenEditions.add(s.catalogId);
+        return true;
+    });
     const [top, second] = scored;
     const unclear = top && second && (top.score < 100
         ? top.score - second.score < MIN_LEAD
@@ -445,17 +453,30 @@ function matchCollection(db, book, isbn13, shelfIds = null) {
             return key && key === titleKey(book.title) && normalizeVolumeNumber(key.split(' ').pop()) === normalizeVolumeNumber(book.volume_number);
         });
 
+    let matchedManga = top.manga;
     let volume = null;
     if (book.volume_number_known && !numberInTitle) {
         // "05" and "5" are the same volume, also for numbers stored before the catalogue numbers were normalised
         const wanted = String(normalizeVolumeNumber(book.volume_number)).toLowerCase();
-        volume = db.prepare(`
-            SELECT ${VOLUME_COLUMNS} FROM volumes
-            WHERE manga_id = ? AND COALESCE(type, 'volume') = 'volume'
-            ORDER BY id
-        `).all(top.manga.id).find(v => String(normalizeVolumeNumber(v.volume_number ?? '')).toLowerCase() === wanted) || null;
+        const sameEdition = top.catalogId !== null
+            ? allScored.filter(s => s.catalogId === top.catalogId).map(s => s.manga)
+            : [top.manga];
+        const matches = [];
+        for (const m of sameEdition) {
+            const v = db.prepare(`
+                SELECT ${VOLUME_COLUMNS} FROM volumes
+                WHERE manga_id = ? AND type = 'volume'
+                ORDER BY id
+            `).all(m.id).find(row => String(normalizeVolumeNumber(row.volume_number ?? '')).toLowerCase() === wanted);
+            if (v) matches.push({ manga: m, volume: v });
+        }
+        const picked = matches.find(x => x.volume.status !== 'Vorhanden') || matches[0];
+        if (picked) {
+            matchedManga = picked.manga;
+            volume = picked.volume;
+        }
     }
-    return { manga: top.manga, volume, reason: 'title', candidates: [], number_in_title: numberInTitle };
+    return { manga: matchedManga, volume, reason: 'title', candidates: [], number_in_title: numberInTitle };
 }
 
 module.exports = {

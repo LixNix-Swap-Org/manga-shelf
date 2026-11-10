@@ -405,3 +405,17 @@ test('basketTotals sums the bookable entries per currency, euro first', () => {
   assert.deepStrictEqual(totals, [{ currency: 'EUR', total: 14.45 }, { currency: 'USD', total: 10 }]);
   assert.deepStrictEqual(helpers.basketTotals([]), []);
 });
+
+test('classifyShopScan carries owned_elsewhere; elsewhereText names owned before ordered shelves', () => {
+  const elsewhere = [{ shelf_id: 2, shelf_name: 'Wohnzimmer', status: 'owned', owners: ['lena', 'ben'] }, { shelf_id: 3, shelf_name: 'Haus', status: 'owned', owners: [] }];
+  const claim = helpers.classifyShopScan('9783551000011', {
+    found: true, book: { volume_number: '4', volume_number_known: true }, matched_manga: { id: 9, title: 'Berserk' },
+    matched_volume: { id: 4, manga_id: 9, volume_number: '4', status: 'Vorbestellt', owned_elsewhere: elsewhere }
+  }, []);
+  assert.strictEqual(claim.kind, 'claim');
+  assert.deepStrictEqual(claim.elsewhere, elsewhere);
+  assert.strictEqual(helpers.elsewhereText(elsewhere), 'Schon vorhanden in: Wohnzimmer (lena, ben), Haus');
+  assert.strictEqual(helpers.elsewhereText([]), '');
+  const plain = helpers.classifyShopScan('9783551000011', { found: true, book: {}, matched_manga: { id: 9, title: 'Berserk' }, matched_volume: { id: 4, manga_id: 9, volume_number: '4', status: 'Vorbestellt' } }, []);
+  assert.strictEqual('elsewhere' in plain, false);
+});

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldExclamationPoint } from 'lucide-react';
 import { useApiKeys, listSyncProps } from '../components/modals/AccountModal';
 import ApiKeyCard from '../components/modals/ApiKeyCard';
 import TmdbAttribution from '../components/TmdbAttribution';
@@ -42,7 +42,7 @@ export default function SourcesPanel({ headingLevel = 3 }) {
       </p>
       {insecure && (
         <p role="note" className="flex items-start gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/40 rounded-xl p-3">
-          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <ShieldExclamationPoint className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
           <span>{t(INSECURE_STORAGE_TEXT)}</span>
         </p>
       )}

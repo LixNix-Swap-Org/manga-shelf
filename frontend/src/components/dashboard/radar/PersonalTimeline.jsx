@@ -5,7 +5,7 @@ import {
   selectVisibleRadarGroups, radarViewState, isOrderedStatus, UPCOMING_STATUS, deliveredLabel, formatReleaseDate,
   radarGroupLabel, radarCountdownLabel
 } from '../../../utils/radarHelpers';
-import { Package, Calendar, RefreshCw, Check, BuildingComplex, Coins, Clock, CircleAlert, SearchX } from 'lucide-react';
+import { Package, Calendar, RefreshCw, Check, BuildingComplex, Coins, Clock, CircleExclamationPoint, SearchX } from 'lucide-react';
 import RadarCover from './RadarCover';
 import { formatCount, formatEuro, formatMoney } from '../../../utils/format';
 import LanguagePill from '../../common/LanguagePill';
@@ -63,7 +63,7 @@ export default function PersonalTimeline({
       {view === 'error' && (
         <div role="alert" className="glass-panel p-10 rounded-2xl border border-rose-500/30 text-center">
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
-            <CircleAlert className="w-8 h-8" />
+            <CircleExclamationPoint className="w-8 h-8" />
           </div>
           <h3 className="text-base font-bold text-white mb-1">{t('Vorbestellungen konnten nicht geladen werden')}</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{radarError}</p>

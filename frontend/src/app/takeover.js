@@ -7,6 +7,8 @@ import { buildBackupZip, readBackupZip, restorableUploadName } from '../local/ba
 import { LOCAL_PASSWORD_HASH } from '../local/sanitize.js';
 import imageCheck from '../../../core/lib/imageCheck.js';
 import owners from '../../../core/lib/owners.js';
+import marks from '../../../core/lib/marks.js';
+import copies from '../../../core/lib/copies.js';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
 
@@ -144,8 +146,9 @@ function insertRow(conn, table, columns, row) {
 
 // computed by buildMangaDetail or the triggers, never copied: owned_volumes is counted again by the volume inserts,
 // and the device has only its own shelf 1, which the trigger gives every series without shelf_id
-const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value', 'shelf_id']);
-const SKIP_VOLUME = new Set(['number_sort', 'owners', 'owned_by_me', 'read_users', 'read_by', 'is_read']);
+// The catalog links (migration 41) are the server's ids: the device's triggers link its own catalog.
+const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value', 'shelf_id', 'catalog_series_id']);
+const SKIP_VOLUME = new Set(['number_sort', 'owners', 'copies', 'owned_by_me', 'read_users', 'read_by', 'is_read', 'catalog_volume_id']);
 const scalars = (row, skip) => Object.fromEntries(Object.entries(row).filter(([k, v]) => !skip.has(k) && (v === null || typeof v !== 'object')));
 const hasText = (v) => typeof v === 'string' && v.trim() !== '';
 
@@ -160,12 +163,9 @@ export function fillFromSnapshot(conn, snapshot) {
   conn.prepare("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, 'admin')").run(me.id, me.username, LOCAL_PASSWORD_HASH);
   const mangaCols = columnsOf(conn, 'mangas');
   const volumeCols = columnsOf(conn, 'volumes');
-  const insertOwner = conn.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition, created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
-  const insertRead = conn.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)');
-  const insertChapters = conn.prepare('INSERT OR REPLACE INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
   for (const manga of Object.values(snapshot.details || {})) {
     insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
-    if (manga.chapters_read > 0) insertChapters.run(manga.id, me.id, manga.chapters_read);
+    if (manga.chapters_read > 0) marks.setChapterProgress(conn, manga.id, me.id, manga.chapters_read);
     for (const v of manga.volumes || []) {
       const vol = scalars(v, SKIP_VOLUME);
       // buildMangaDetail fills images from the cover (and the cover from the images): only real lists are stored
@@ -173,13 +173,22 @@ export function fillFromSnapshot(conn, snapshot) {
       const derived = images.length === 1 && images[0] === v.cover_image;
       vol.images = images.length && !derived ? JSON.stringify(images) : null;
       insertRow(conn, 'volumes', volumeCols, vol);
+      const ownCopy = (v.copies || []).find((c) => c.owner_user_id === me.id);
       for (const o of v.owners || []) {
         if (o.user_id !== me.id) continue;
-        insertOwner.run(v.id, me.id, o.price ?? null, o.purchase_date ?? null, o.condition ?? null, hasText(o.created_at) ? o.created_at : null);
+        copies.addCopy(conn, v.id, me.id, {
+          price: ownCopy?.price ?? o.price,
+          purchase_date: ownCopy?.purchase_date ?? o.purchase_date,
+          condition: ownCopy?.condition ?? o.condition,
+          created_at: hasText(o.created_at) ? o.created_at : null,
+          ...(ownCopy?.lent_to ? { lent_to_name: ownCopy.lent_to, lent_at: ownCopy.lent_at ?? null } : {})
+        });
       }
+      // the volume insert gave an owned volume a household copy; without an own copy it counts as missing, as before copies
+      if (!copies.hasCopy(conn, v.id, me.id)) copies.dropHouseholdCopies(conn, v.id);
       if ((v.read_by || []).includes(me.id)) {
         const read = (v.read_users || []).find((r) => (r.user_id ?? r.id) === me.id);
-        insertRead.run(v.id, me.id, hasText(read?.read_at) ? read.read_at : null);
+        marks.addRead(conn, v.id, me.id, hasText(read?.read_at) ? read.read_at : null);
       }
       owners.syncStatusWithOwners(conn, v.id);
     }

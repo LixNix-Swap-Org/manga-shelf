@@ -333,8 +333,11 @@ function volumeAccess(ctx, volumeId, minRole = 'viewer') {
 
 // Tables whose rows belong to a shelf. A scoped statement names them only as {mangas}, {volumes}, … and gets a subselect
 // limited to the shelves; any other mention (bare, quoted, main.mangas, a comma join, a string) is refused.
+// {volume_reads} and {chapter_progress} are the marks as the shelf rows show them (the views of core/lib/marks.js, keyed
+// by volume_id / manga_id), so the views themselves are refused bare as well.
 const SCOPED_TABLES = ['mangas', 'volumes', 'volume_owners', 'volume_reads', 'chapter_progress', 'trash'];
-const BARE_SCOPED_TABLE = new RegExp(`(^|[^A-Za-z0-9_{$])(${SCOPED_TABLES.join('|')})(?![A-Za-z0-9_])`, 'i');
+// volume_copies (migration 44) is the table behind {volume_owners}: refused bare too
+const BARE_SCOPED_TABLE = new RegExp(`(^|[^A-Za-z0-9_{$])(${[...SCOPED_TABLES, 'shelf_volume_reads', 'shelf_chapter_progress', 'volume_copies'].join('|')})(?![A-Za-z0-9_])`, 'i');
 const SCOPED_TOKEN = new RegExp(`\\{(${SCOPED_TABLES.join('|')})\\}`, 'g');
 
 /**
@@ -349,8 +352,12 @@ function scopedTables(shelfIds) {
         mangas: `(SELECT * FROM mangas WHERE shelf_id IN (${list}))`,
         volumes: `(SELECT v_.* FROM volumes v_ JOIN mangas m_ ON m_.id = v_.manga_id WHERE ${inShelf})`,
         volume_owners: `(SELECT t_.* FROM volume_owners t_ ${volumesOf} WHERE ${inShelf})`,
-        volume_reads: `(SELECT t_.* FROM volume_reads t_ ${volumesOf} WHERE ${inShelf})`,
-        chapter_progress: `(SELECT t_.* FROM chapter_progress t_ JOIN mangas m_ ON m_.id = t_.manga_id WHERE ${inShelf})`,
+        volume_reads: `(SELECT v_.id AS volume_id, t_.user_id, t_.read_at FROM volume_reads t_
+            JOIN volumes v_ ON v_.catalog_volume_id = t_.catalog_volume_id JOIN mangas m_ ON m_.id = v_.manga_id
+            JOIN shelf_members s_ ON s_.shelf_id = m_.shelf_id AND s_.user_id = t_.user_id WHERE ${inShelf})`,
+        chapter_progress: `(SELECT m_.id AS manga_id, t_.user_id, t_.chapters_read, t_.updated_at FROM chapter_progress t_
+            JOIN mangas m_ ON m_.catalog_series_id = t_.catalog_series_id
+            JOIN shelf_members s_ ON s_.shelf_id = m_.shelf_id AND s_.user_id = t_.user_id WHERE ${inShelf})`,
         trash: `(SELECT * FROM trash WHERE shelf_id IN (${list}))`
     };
 }

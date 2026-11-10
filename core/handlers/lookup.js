@@ -9,6 +9,7 @@ const cache = require('../anime/cache');
 const { titleScore } = require('../anime/normalize');
 const access = require('../lib/access');
 const { lookupBookByIsbn, matchCollection } = require('../isbnLookup');
+const { ownedElsewhere } = require('../lib/ownedElsewhere');
 const { fetchImage } = require('../lib/imageCheck');
 const { anySignal } = require('../lib/signals');
 const { normalizeLanguage, isMpLanguage, workKeyOfHit } = require('../lib/language');
@@ -198,12 +199,15 @@ function withOwnership(ctx, volume, userId) {
         SELECT vo.user_id, u.username FROM volume_owners vo JOIN users u ON u.id = vo.user_id
         WHERE vo.volume_id = ? ORDER BY vo.created_at, vo.rowid
     `).all(volume.id);
+    // the same edition volume owned or ordered in another of the caller's shelves (only sent when there is one)
+    const elsewhere = ownedElsewhere(ctx, [volume.id]).get(volume.id);
     return {
         ...volume,
         type: extra.type ?? null,
         notes: extra.notes ?? null,
         owned_by_me: owners.some(o => o.user_id === userId),
-        owners: owners.map(o => o.username)
+        owners: owners.map(o => o.username),
+        ...(elsewhere ? { owned_elsewhere: elsewhere } : {})
     };
 }
 

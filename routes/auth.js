@@ -383,7 +383,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
         }
     }
 
-    // volume_reads go with the user; mangas/animes.updated_by are plain foreign keys and would block the delete otherwise
+    // reading marks and chapter progress go with the user (also by ON DELETE CASCADE); mangas/animes.updated_by are cleared first
     runTransaction(() => {
         // Shelves the user was the last owner of (owners that can act: admin or editor accounts) go to another member
         // who can, else to the deleting admin, otherwise their series would stay behind in a shelf nobody can open.
@@ -426,6 +426,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
             WHERE user_id = ? AND volume_id IN (SELECT volume_id FROM volume_owners WHERE user_id != ?)
         `).all(userId, userId).map(r => r.volume_id);
         db.prepare('DELETE FROM volume_reads WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM chapter_progress WHERE user_id = ?').run(userId);
         // A volume only this user owned goes to a member of its shelf (an owner first, the deleting admin only as a
         // member), so the collection does not shrink; without anyone left there it becomes "Fehlt"
         const sole = db.prepare(`
@@ -446,7 +447,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
             if (heir) addOwner(db, row.volume_id, heir.user_id, row);
             else ownerless.push(row.volume_id);
         }
-        db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM volume_copies WHERE owner_user_id = ?').run(userId);
         for (const volumeId of shared) purchaseDateFromRemainingOwners(db, volumeId);
         for (const volumeId of ownerless) syncStatusWithOwners(db, volumeId);
         db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);

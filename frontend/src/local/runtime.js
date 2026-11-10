@@ -7,6 +7,7 @@ import coreRoutes from '../../../core/routes.js';
 import errors from '../../../core/errors.js';
 import sqljs from '../../../core/adapters/sqljs.js';
 import trash from '../../../core/handlers/trash.js';
+import catalogMaintenance from '../../../core/lib/catalogMaintenance.js';
 import { createBlobFiles } from './files.js';
 import { createLocalCredentials } from './credentials.js';
 import { createLocalServer } from './localServer.js';
@@ -131,7 +132,14 @@ const REFERENCE_COLUMNS = {
   mangas: ['cover_image', 'banner_image', 'description', 'manga_passion_edition_data'],
   volumes: ['cover_image', 'images', 'notes'],
   animes: ['cover_image', 'banner_image'],
+  catalog_series: ['cover_image', 'banner_image', 'description'],
+  catalog_volumes: ['cover_image'],
   trash: ['payload']
+};
+// a catalog entry names an upload only while a row still links to it (services/uploadCleanup.js REFERENCE_WHERE)
+const REFERENCE_WHERE = {
+  catalog_series: 'EXISTS (SELECT 1 FROM mangas m WHERE m.catalog_series_id = catalog_series.id)',
+  catalog_volumes: 'EXISTS (SELECT 1 FROM volumes v WHERE v.catalog_volume_id = catalog_volumes.id)'
 };
 const TOKEN_NAME = /^[A-Za-z0-9._-]+$/;
 
@@ -142,7 +150,8 @@ export function uploadReferences(conn) {
     const present = new Set(conn.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
     const columns = wanted.filter((c) => present.has(c));
     if (!columns.length) continue;
-    for (const row of conn.prepare(`SELECT ${columns.join(', ')} FROM ${table}`).all()) {
+    const where = REFERENCE_WHERE[table] ? ` WHERE ${REFERENCE_WHERE[table]}` : '';
+    for (const row of conn.prepare(`SELECT ${columns.join(', ')} FROM ${table}${where}`).all()) {
       for (const c of columns) if (row[c]) values.push(String(row[c]));
     }
   }
@@ -404,6 +413,8 @@ export async function createLocalRuntime({
     if (follower || closed || replacing) return;
     try {
       trash.purgeTrash(ctx);
+      // catalog entries nothing shows or marks any more (core/lib/catalogMaintenance.js)
+      catalogMaintenance.purgeOrphans(ctx);
       // with navigator.locks unavailable another window may hold uploads this one does not know yet
       if (lock || !lockName) await dropUnreferencedUploads();
     } catch (err) {

@@ -555,12 +555,15 @@ function runDatabaseMaintenanceIfDue(now = Date.now()) {
     const { pruneCache } = require('../core/mangaPassion/client');
     const { createCtx } = require('../db');
     const prunedCacheRows = pruneCache(createCtx(), { force: true });
+    // catalog entries no row shows and nobody has marks on (core/lib/catalogMaintenance.js)
+    const catalog = require('../core/lib/catalogMaintenance').purgeOrphans(createCtx());
     const violations = db.prepare('SELECT "table" AS name, count(*) AS n FROM pragma_foreign_key_check GROUP BY "table" ORDER BY "table"').all();
     const outsideShelves = db.prepare('SELECT count(*) AS n FROM mangas WHERE shelf_id IS NULL OR shelf_id NOT IN (SELECT id FROM shelves)').get().n;
-    const report = { ms: Math.round(Number(process.hrtime.bigint() - started) / 1e6), prunedCacheRows, violations, outsideShelves };
+    const report = { ms: Math.round(Number(process.hrtime.bigint() - started) / 1e6), prunedCacheRows, catalog, violations, outsideShelves };
     if (violations.length) log.warn(`[Datenbank] Verletzte Fremdschlüssel: ${violations.map(v => `${v.name} ${v.n}`).join(', ')} (PRAGMA foreign_key_check)`);
     if (outsideShelves) log.warn(`[Datenbank] ${outsideShelves} Reihen liegen in keinem Regal und sind für niemanden sichtbar`);
     if (prunedCacheRows) log.info(`[Datenbank] ${prunedCacheRows} veraltete Manga-Passion-Cache-Einträge gelöscht`);
+    if (catalog.series || catalog.volumes) log.info(`[Katalog] ${catalog.series} Reihen und ${catalog.volumes} Bände ohne Regal und ohne Markierungen gelöscht`);
     log.debug(`[Datenbank] Wartung in ${report.ms} ms`);
     return report;
 }

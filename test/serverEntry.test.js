@@ -9,6 +9,8 @@ const { spawn } = require('child_process');
 
 // index.js reads its configuration once at load, so every case runs the app in its own child process.
 const ROOT = path.join(__dirname, '..');
+// the node_modules that really holds the dependencies: a git worktree may resolve them through NODE_PATH
+const NODE_MODULES = path.dirname(path.dirname(require.resolve('express/package.json')));
 const RESULT = '@@RESULT@@';
 const tmpDirs = [];
 
@@ -75,7 +77,7 @@ test('index.html in the app root: neither the database nor the source is served'
     for (const entry of ['index.js', 'db.js', 'mangaPassion.js', 'package.json', 'core', 'routes', 'middleware', 'services', 'utils']) {
         fs.cpSync(path.join(ROOT, entry), path.join(appDir, entry), { recursive: true });
     }
-    fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(appDir, 'node_modules'), 'junction');
+    fs.symlinkSync(NODE_MODULES, path.join(appDir, 'node_modules'), 'junction');
     fs.writeFileSync(path.join(appDir, 'index.html'), '<!doctype html><div id="root"></div>');
 
     const paths = ['/data/manga.db', '/db.js', '/package.json', '/middleware/auth.js', '/index.js', '/manga/1'];
@@ -196,7 +198,7 @@ function copyApp(prefix) {
     for (const entry of ['index.js', 'db.js', 'mangaPassion.js', 'package.json', 'core', 'routes', 'middleware', 'services', 'utils']) {
         fs.cpSync(path.join(ROOT, entry), path.join(appDir, entry), { recursive: true });
     }
-    fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(appDir, 'node_modules'), 'junction');
+    fs.symlinkSync(NODE_MODULES, path.join(appDir, 'node_modules'), 'junction');
     fs.writeFileSync(path.join(appDir, 'index.html'), '<!doctype html><div id="root"></div>');
     return appDir;
 }

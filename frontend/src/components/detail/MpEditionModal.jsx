@@ -1,6 +1,6 @@
 // Dialog to inspect, confirm, refresh or switch the Manga Passion edition linked to a series.
 import { useState, useEffect, useRef } from 'react';
-import { Globe, X, Check, RefreshCw, Sparkles, Search, CircleAlert } from 'lucide-react';
+import { Globe, X, Check, RefreshCw, Sparkles, Search, CircleExclamationPoint } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { readApiError } from '../../hooks/useVolumeActions';
 import { canFixVolumeCount, isGapEditionUnconfirmed } from '../../utils/volumeHelpers';
@@ -159,7 +159,7 @@ export default function MpEditionModal({
           )}
           {mpGapNotice && (
             <p role="status" className="text-[11px] text-slate-400 flex items-center gap-1.5">
-              <CircleAlert className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+              <CircleExclamationPoint className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
               <span>{mpGapNotice}</span>
             </p>
           )}

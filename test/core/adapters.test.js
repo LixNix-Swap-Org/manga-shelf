@@ -82,8 +82,9 @@ for (const kind of kinds) {
         const core = await createCore(kind);
         const { conn } = core;
         assert.equal(conn.prepare('SELECT max(version) AS v FROM schema_migrations').get().v, LATEST_SCHEMA_VERSION);
-        const tables = conn.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map(r => r.name);
-        for (const t of ['animes', 'api_cache', 'mangas', 'user_api_credentials', 'users', 'volume_owners', 'volume_reads', 'volumes']) {
+        // volume_owners is a view of volume_copies since migration 44
+        const tables = conn.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view') ORDER BY name").all().map(r => r.name);
+        for (const t of ['animes', 'api_cache', 'mangas', 'user_api_credentials', 'users', 'volume_copies', 'volume_owners', 'volume_reads', 'volumes']) {
             assert.ok(tables.includes(t), `${kind}: ${t} fehlt (${tables.join(', ')})`);
         }
         const manga = conn.prepare('INSERT INTO mangas (title) VALUES (?)').run('Trigger');

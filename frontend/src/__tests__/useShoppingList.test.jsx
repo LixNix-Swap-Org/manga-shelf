@@ -103,7 +103,7 @@ describe('useShoppingList', () => {
     });
     window.removeEventListener(PURCHASE_RECORDED_EVENT, created);
     expect(outcome).toEqual({ status: 'ok', error: '', httpStatus: 201 });
-    const [url, opts] = fetchMock.mock.calls.find(([u]) => u === '/api/volumes');
+    const [, opts] = fetchMock.mock.calls.find(([u]) => u === '/api/volumes');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({
       volume_number: '9', isbn: '9783551000011', price: 7, manga_id: 5, status: 'Vorhanden', purchase_date: localToday()

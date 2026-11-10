@@ -115,8 +115,8 @@ export const seriesDeleteConfirmText = (title) =>
   t('Möchtest du "{title}" wirklich löschen? Die Reihe kommt mit allen Bänden in den Papierkorb (30 Tage wiederherstellbar).', { title });
 
 /**
- * Users whose ownership and reading marks a move of the series into `shelfId` deletes (GET /api/mangas/:id/shelf-move):
- * [{ user_id, username, owned, read, chapters }], or null when the server cannot say (older server, no connection).
+ * Users whose ownership marks a move of the series into `shelfId` deletes (GET /api/mangas/:id/shelf-move):
+ * [{ user_id, username, owned, read, chapters }] (reads and chapters stay), or null when the server cannot say.
  */
 export async function loadShelfMovePreview(mangaId, shelfId) {
   try {
@@ -132,18 +132,12 @@ export async function loadShelfMovePreview(mangaId, shelfId) {
 /** The question before a move; `affected` as from loadShelfMovePreview (null: generic text). */
 export function shelfMoveConfirmText({ title, shelf, affected }) {
   if (!Array.isArray(affected)) {
-    return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf });
+    return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { title, shelf });
   }
   const people = affected
-    .map((a) => {
-      const counts = { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände'), read: formatCount(a.read, 'Band', 'Bände') };
-      // a webtoon: the chapter that goes too
-      return a.chapters > 0
-        ? t('{name} ({owned} im Besitz, {read} gelesen, bis Kapitel {chapter})', { ...counts, chapter: a.chapters })
-        : t('{name} ({owned} im Besitz, {read} gelesen)', counts);
-    })
+    .map((a) => t('{name} ({owned} im Besitz)', { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände') }))
     .join(', ');
-  return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitz- und Lesemarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { title, shelf, people });
+  return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { title, shelf, people });
 }
 
 /** "Genres nachladen": only for a German series linked to Manga Passion that has no tags yet (MP knows only German editions). */

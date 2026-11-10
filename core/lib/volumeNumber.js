@@ -14,7 +14,7 @@ function canonicalVolumeNumber(num, type) {
  * specials and unnumbered entries are extras). Never NULL, so NOT (...) works.
  */
 const regularNumberedSql = (v = 'v') =>
-    `(COALESCE(${v}.type, 'volume') = 'volume' AND ${v}.number_sort IS NOT NULL AND ${v}.number_sort >= 1 AND instr(${v}.volume_number, '.') = 0)`;
+    `(${v}.type = 'volume' AND ${v}.number_sort IS NOT NULL AND ${v}.number_sort >= 1 AND instr(${v}.volume_number, '.') = 0)`;
 
 /**
  * Display order of a series' entries: numbered regular volumes and Special Editions by number (a special with
@@ -23,16 +23,16 @@ const regularNumberedSql = (v = 'v') =>
  */
 const volumeOrderSql = (v = 'v') => `
     CASE
-        WHEN COALESCE(${v}.type, 'volume') IN ('volume', 'special_edition') AND ${v}.number_sort IS NOT NULL THEN 1
-        WHEN COALESCE(${v}.type, 'volume') = 'special' AND ${v}.sort_after IS NOT NULL THEN 1
-        WHEN COALESCE(${v}.type, 'volume') = 'special_edition' THEN 1.5
-        WHEN COALESCE(${v}.type, 'volume') = 'special' THEN 3
+        WHEN ${v}.type IN ('volume', 'special_edition') AND ${v}.number_sort IS NOT NULL THEN 1
+        WHEN ${v}.type = 'special' AND ${v}.sort_after IS NOT NULL THEN 1
+        WHEN ${v}.type = 'special_edition' THEN 1.5
+        WHEN ${v}.type = 'special' THEN 3
         ELSE 2
     END ASC,
-    COALESCE(CASE WHEN COALESCE(${v}.type, 'volume') = 'special' THEN ${v}.sort_after END, ${v}.number_sort, 999999) ASC,
+    COALESCE(CASE WHEN ${v}.type = 'special' THEN ${v}.sort_after END, ${v}.number_sort, 999999) ASC,
     CASE
-        WHEN COALESCE(${v}.type, 'volume') = 'volume' THEN 0
-        WHEN COALESCE(${v}.type, 'volume') = 'special_edition' THEN 1
+        WHEN ${v}.type = 'volume' THEN 0
+        WHEN ${v}.type = 'special_edition' THEN 1
         ELSE 2
     END ASC,
     ${v}.volume_number ASC`;

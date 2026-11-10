@@ -13,6 +13,27 @@ if (process.env.LOG_LEVEL === undefined) process.env.LOG_LEVEL = 'silent';
 const AdmZip = require('adm-zip');
 const dbm = require('../db');
 
+const { CATALOG_TRIGGERS } = require('../core/lib/catalog');
+const { MARK_FOLLOW_TRIGGERS, MARK_VIEWS } = require('../core/lib/marks');
+/**
+ * The catalog triggers (migration 41) and the mark views and triggers (migration 43) name most series and volume columns:
+ * a test that drops one of them drops these first.
+ */
+const dropCatalogTriggers = (conn) => {
+    for (const name of [...CATALOG_TRIGGERS, ...MARK_FOLLOW_TRIGGERS]) conn.exec(`DROP TRIGGER IF EXISTS ${name};`);
+    for (const name of MARK_VIEWS) conn.exec(`DROP VIEW IF EXISTS ${name};`);
+};
+/** applySchema without the migrations from `version` on (they are recorded as applied, so a test can delete and replay them). */
+function applySchemaBefore(conn, version) {
+    const schema = require('../core/schema');
+    schema.ensureMigrationsTable(conn);
+    for (const m of schema.migrationList().filter(m => m.version >= version)) {
+        conn.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(m.version, m.name);
+    }
+    schema.applySchema(conn);
+}
+const UP_TO_LATEST = (from) => Array.from({ length: dbm.LATEST_SCHEMA_VERSION - from + 1 }, (_, i) => from + i);
+
 const backupsDir = path.join(dataDir, 'backups');
 const safetySnapshots = () => (fs.existsSync(backupsDir) ? fs.readdirSync(backupsDir).filter(f => f.startsWith('vor-update-')).sort() : []);
 const db = () => dbm.db;
@@ -90,7 +111,7 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
     rerunMigration16();
     assert.equal(dbm.getConnectionGeneration(), generation + 1, 'reopening bumps the connection generation');
     const report = dbm.getLastMigrationReport();
-    assert.deepEqual(report.map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
+    assert.deepEqual(report.map(r => r.version), UP_TO_LATEST(16));
     assert.equal(report[0].changes, db().prepare('SELECT count(*) AS n FROM mangas').get().n, 'the backfill touched every series');
     for (const row of db().prepare("SELECT m.owned_volumes AS stored, (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id AND v.status = 'Vorhanden') AS counted FROM mangas m").all()) {
         assert.equal(row.stored, row.counted);
@@ -98,7 +119,8 @@ test('pending migrations with users: DB-only safety snapshot first, then a count
 
     const snapshots = safetySnapshots();
     assert.equal(snapshots.length, 1);
-    assert.match(snapshots[0], /^vor-update-v15-auf-v39-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
+    assert.match(snapshots[0], new RegExp(`^vor-update-v15-auf-v${dbm.LATEST_SCHEMA_VERSION}-\\d{4}`));
+    assert.match(snapshots[0], /^vor-update-v15-auf-v\d+-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.zip$/);
     const zip = new AdmZip(path.join(backupsDir, snapshots[0]));
     assert.deepEqual(zip.getEntries().map(e => e.entryName), ['manga.db']);
     const extracted = path.join(dataDir, 'temp', 'check.db');
@@ -134,6 +156,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     const original = path.join(dataDir, 'temp', 'alt.db');
     db().exec(`VACUUM INTO '${original.replace(/'/g, "''")}'`);
     const old = dbm.openRawDb(original);
+    dropCatalogTriggers(old);
     old.exec(`
         DROP TRIGGER trg_volumes_number_sort_ins;
         DROP TRIGGER trg_volumes_number_sort_upd;
@@ -151,7 +174,7 @@ test('migrate-dry-run migrates a copy and leaves the original untouched', () => 
     const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'migrate-dry-run.js'), original], {
         encoding: 'utf8', env: { ...process.env, DATA_DIR: '', LOG_LEVEL: 'silent' }
     });
-    assert.match(out, /Schema:\s+v14 -> v39/);
+    assert.match(out, new RegExp(`Schema:\\s+v14 -> v${dbm.LATEST_SCHEMA_VERSION}`));
     assert.match(out, /v15 add_volumes_number_sort: [\d.]+ Zeilen geändert, \d+ ms/);
     assert.match(out, /v16 maintain_mangas_owned_volumes_by_triggers: /);
     assert.match(out, /v17 add_mangas_wish_priority: /);
@@ -213,7 +236,7 @@ test('no safety snapshot, no migration: the start stops unless MIGRATE_WITHOUT_S
         delete process.env.MIGRATE_WITHOUT_SNAPSHOT;
         failing.mock.restore();
     }
-    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
+    assert.deepEqual(dbm.getLastMigrationReport().map(r => r.version), UP_TO_LATEST(16));
     assert.deepEqual(safetySnapshots(), before, 'migrated without a snapshot');
     assert.equal(require('../utils/config').readConfig({ MIGRATE_WITHOUT_SNAPSHOT: 'vielleicht' }).warnings.length, 1);
 });
@@ -242,12 +265,14 @@ test('migration 13 (v2.19.1 data): the oldest admin owns legacy Gelesen volumes 
         const vol = (n) => Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, ?, 'Gelesen')").run(manga, n).lastInsertRowid);
         const readByEditor = vol('1');
         const readByNobody = vol('2');
-        conn.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(readByEditor, editor);
+        conn.prepare('INSERT INTO volume_reads (catalog_volume_id, user_id) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?)').run(readByEditor, editor);
         conn.exec('DELETE FROM schema_migrations WHERE version >= 13');
 
         schema.runSequentialMigrations(conn);
         const owners = (id) => conn.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(id).map(r => r.user_id);
-        const readers = (id) => conn.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(id).map(r => r.user_id);
+        // the accounts are in no shelf here: the marks on the catalog, not the per-shelf view
+        const readers = (id) => conn.prepare(`SELECT r.user_id FROM volume_reads r JOIN volumes v ON v.catalog_volume_id = r.catalog_volume_id
+            WHERE v.id = ? ORDER BY r.user_id`).all(id).map(r => r.user_id);
         for (const id of [readByEditor, readByNobody]) {
             assert.equal(conn.prepare('SELECT status FROM volumes WHERE id = ?').get(id).status, 'Vorhanden');
             assert.deepEqual(owners(id), [admin]);
@@ -375,6 +400,7 @@ test('migration 27 turns language names into codes, adds region, work key, curre
     const conn = dbm.openRawDb(file);
     try {
         schema.applySchema(conn);
+        dropCatalogTriggers(conn);
         conn.exec(`
             DELETE FROM schema_migrations WHERE version >= 27;
             DROP INDEX idx_mangas_work_key;
@@ -395,7 +421,7 @@ test('migration 27 turns language names into codes, adds region, work key, curre
         const warnings = [];
         const log = { debug() {}, info() {}, error() {}, warn: (...args) => warnings.push(args.join(' ')) };
         const report = schema.runSequentialMigrations(conn, { log });
-        assert.deepEqual(report.map(r => r.version), [27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
+        assert.deepEqual(report.map(r => r.version), UP_TO_LATEST(27));
         const rows = conn.prepare('SELECT title, language, region, work_key, currency FROM mangas ORDER BY title').all().map(r => ({ ...r }));
         assert.deepEqual(rows.map(r => [r.title, r.language, r.region]), [
             ['A', 'de', null], ['B', 'en', null], ['C', 'en', null], ['D', 'ja', null], ['E', 'en', 'US'], ['F', 'de', null], ['G', 'de', null],
@@ -460,7 +486,7 @@ test('migration 28 adds kinds, TMDb columns and watched languages and rebuilds u
         const credentials = () => conn.prepare('SELECT * FROM user_api_credentials ORDER BY id').all().map(r => ({ ...r }));
         const before = credentials();
         const report = schema.runSequentialMigrations(conn);
-        assert.deepEqual(report.map(r => r.version), [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
+        assert.deepEqual(report.map(r => r.version), UP_TO_LATEST(28));
         assert.deepEqual(credentials(), before, 'every column of every row, ids included');
         conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'tmdb', 'enc-c')").run();
         assert.throws(() => conn.prepare("INSERT INTO user_api_credentials (user_id, provider, secret_enc) VALUES (7, 'tmdb', 'enc-d')").run(), /UNIQUE/);
@@ -477,7 +503,7 @@ test('migration 28 adds kinds, TMDb columns and watched languages and rebuilds u
         assert.throws(() => conn.exec("INSERT INTO animes (title, kind, tmdb_id, tmdb_kind) VALUES ('Doppelt', 'tv', 7, 'tv')"), /UNIQUE/);
 
         conn.exec('DELETE FROM schema_migrations WHERE version >= 28');
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39], 'a second run is harmless');
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(28), 'a second run is harmless');
         assert.equal(conn.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name LIKE 'user_api_credentials%'").get().n, 1);
     } finally {
         conn.close();
@@ -597,7 +623,9 @@ test('migration 32 puts every series and trash entry into shelf 1 and every acco
     const conn = dbm.openRawDb(file);
     const all = (sql) => conn.prepare(sql).all().map(r => ({ ...r }));
     try {
-        schema.applySchema(conn);
+        // without migration 42: its foreign key on mangas.shelf_id would keep the column from being dropped
+        applySchemaBefore(conn, 42);
+        dropCatalogTriggers(conn);
         conn.exec(`
             DROP TRIGGER trg_mangas_shelf_default;
             DROP TRIGGER trg_trash_shelf_default;
@@ -612,7 +640,7 @@ test('migration 32 puts every series and trash entry into shelf 1 and every acco
             INSERT INTO trash (id, kind, ref_id, manga_id, title, payload) VALUES (1, 'manga', 7, 7, 'Weg', '{}'), (2, 'volume', 9, 2, 'B', '{}');
         `);
         const report = schema.runSequentialMigrations(conn);
-        assert.deepEqual(report.map(r => r.version), [32, 33, 34, 35, 36, 37, 38, 39]);
+        assert.deepEqual(report.map(r => r.version), UP_TO_LATEST(32));
         assert.deepEqual(conn.prepare('SELECT DISTINCT shelf_id FROM mangas').all().map(r => r.shelf_id), [1]);
         assert.deepEqual(all('SELECT id, shelf_id FROM trash ORDER BY id'), [{ id: 1, shelf_id: 1 }, { id: 2, shelf_id: 1 }]);
         assert.equal(conn.prepare('SELECT owner_user_id FROM shelves WHERE id = 1').get().owner_user_id, 11);
@@ -640,7 +668,7 @@ test('migration 32 puts every series and trash entry into shelf 1 and every acco
         });
         const before = state();
         conn.exec('DELETE FROM schema_migrations WHERE version >= 32');
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [32, 33, 34, 35, 36, 37, 38, 39]);
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(32));
         const after = state();
         assert.deepEqual({ ...after, members: after.members.filter(m => m.user_id !== 14) }, before, 'a second run changes nothing that exists');
         assert.deepEqual(after.members.filter(m => m.user_id === 14), [{ shelf_id: 1, user_id: 14, role: 'editor' }], 'an account without a shelf joins shelf 1');
@@ -666,7 +694,7 @@ test('migration 33 adds rating_visibility (public), public_comment and users.def
             INSERT INTO animes (id, title) VALUES (31, 'Alt');
             INSERT INTO anime_progress (anime_id, user_id, status, score) VALUES (31, 21, 'Gesehen', 8);
         `);
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [33, 34, 35, 36, 37, 38, 39]);
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(33));
         const progress = () => ({ ...conn.prepare('SELECT rating_visibility, public_comment, score FROM anime_progress WHERE anime_id = 31 AND user_id = 21').get() });
         assert.deepEqual(progress(), { rating_visibility: 'public', public_comment: null, score: 8 });
         assert.equal(conn.prepare('SELECT default_anime_visibility AS v FROM users WHERE id = 21').get().v, 'public');
@@ -728,7 +756,7 @@ test('migrations 34 and 35 add animes.tags and anime_airings to existing rows an
             DELETE FROM schema_migrations WHERE version >= 34;
             INSERT INTO animes (id, title) VALUES (41, 'Alt');
         `);
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [34, 35, 36, 37, 38, 39]);
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(34));
         assert.equal(conn.prepare('SELECT tags FROM animes WHERE id = 41').get().tags, null);
         conn.prepare('INSERT INTO anime_airings (anime_id, episode, at) VALUES (41, 1, 1000)').run();
         assert.throws(() => conn.prepare('INSERT INTO anime_airings (anime_id, episode, at) VALUES (41, 1, 2000)').run(), 'one row per episode');
@@ -743,33 +771,44 @@ test('migrations 34 and 35 add animes.tags and anime_airings to existing rows an
     }
 });
 
-test('migration 36 adds mangas.format (print), mangas.total_chapters and chapter_progress, which cascades with its series', () => {
+test('migration 36 adds mangas.format (print), mangas.total_chapters and chapter_progress (on the catalog since 43)', () => {
     const schema = require('../core/schema');
     const file = path.join(dataDir, 'temp', 'webtoon.db');
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const conn = dbm.openRawDb(file);
     try {
         schema.applySchema(conn);
+        dropCatalogTriggers(conn);
         conn.exec(`
             DROP TABLE chapter_progress;
+            DROP TRIGGER trg_check_mangas_format_ins;
+            DROP TRIGGER trg_check_mangas_format_upd;
             ALTER TABLE mangas DROP COLUMN format;
             ALTER TABLE mangas DROP COLUMN total_chapters;
             DELETE FROM schema_migrations WHERE version >= 36;
             INSERT INTO users (id, username, password_hash, role) VALUES (31, 'gin', 'x', 'editor');
             INSERT INTO mangas (id, title) VALUES (41, 'Alt');
         `);
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [36, 37, 38, 39]);
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(36));
         assert.deepEqual({ ...conn.prepare('SELECT format, total_chapters FROM mangas WHERE id = 41').get() }, { format: 'print', total_chapters: null });
-        conn.exec("INSERT INTO mangas (id, title, format, total_chapters) VALUES (42, 'Neu', 'webtoon', 200); INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (42, 31, 150)");
+        const chapterOf = (mangaId) => conn.prepare(`SELECT p.chapters_read AS n FROM chapter_progress p JOIN mangas m ON m.catalog_series_id = p.catalog_series_id
+            WHERE m.id = ? AND p.user_id = 31`).get(mangaId)?.n ?? null;
+        const setChapter = (mangaId, n) => conn.prepare(`INSERT INTO chapter_progress (catalog_series_id, user_id, chapters_read)
+            SELECT catalog_series_id, 31, ? FROM mangas WHERE id = ?`).run(n, mangaId);
+        conn.exec("INSERT INTO mangas (id, title, format, total_chapters) VALUES (42, 'Neu', 'webtoon', 200)");
+        setChapter(42, 150);
         conn.exec('PRAGMA foreign_keys = ON; DELETE FROM mangas WHERE id = 42');
-        assert.equal(conn.prepare('SELECT count(*) AS n FROM chapter_progress').get().n, 0, 'progress goes with its series');
+        assert.equal(conn.prepare('SELECT count(*) AS n FROM chapter_progress').get().n, 1, 'the progress stays on the catalog series');
+        conn.exec("INSERT INTO mangas (id, title, format, total_chapters) VALUES (43, 'Neu', 'webtoon', 200)");
+        assert.equal(chapterOf(43), 150, 'the same edition added again shows it again');
 
-        conn.exec("UPDATE mangas SET format = 'webtoon', total_chapters = 12 WHERE id = 41; INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (41, 31, 3)");
+        conn.exec("UPDATE mangas SET format = 'webtoon', total_chapters = 12 WHERE id = 41");
+        setChapter(41, 3);
         conn.exec('DELETE FROM schema_migrations WHERE version >= 36');
         schema.runSequentialMigrations(conn);
         assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
         assert.deepEqual({ ...conn.prepare('SELECT format, total_chapters FROM mangas WHERE id = 41').get() }, { format: 'webtoon', total_chapters: 12 });
-        assert.equal(conn.prepare('SELECT chapters_read AS n FROM chapter_progress WHERE manga_id = 41').get().n, 3);
+        assert.equal(chapterOf(41), 3);
     } finally {
         conn.close();
         for (const suffix of ['', '-wal', '-shm']) fs.rmSync(file + suffix, { force: true });
@@ -782,7 +821,9 @@ test('migration 38 adds the works table, mangas.work_id and animes.work_id, kept
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const conn = dbm.openRawDb(file);
     try {
-        schema.applySchema(conn);
+        // migration 45 (anime links on the work) is held back: this test is about the animes.manga_id of its time
+        applySchemaBefore(conn, 45);
+        dropCatalogTriggers(conn);
         conn.exec(`
             DROP TRIGGER trg_mangas_work_insert;
             DROP TRIGGER trg_mangas_work_update;
@@ -791,12 +832,12 @@ test('migration 38 adds the works table, mangas.work_id and animes.work_id, kept
             ALTER TABLE mangas DROP COLUMN work_id;
             ALTER TABLE animes DROP COLUMN work_id;
             DROP TABLE works;
-            DELETE FROM schema_migrations WHERE version >= 38;
+            DELETE FROM schema_migrations WHERE version >= 38 AND version < 45;
             INSERT INTO mangas (id, title, work_key) VALUES (51, 'Frieren', 'anilist:118586'), (52, 'Frieren EN', 'anilist:118586'),
                 (53, 'Berserk', 'mal:2'), (54, 'Ohne Werk', NULL);
             INSERT INTO animes (id, title, manga_id) VALUES (61, 'Frieren', 52), (62, 'Ohne', 54), (63, 'Frei', NULL);
         `);
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [38, 39]);
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(38).filter(v => v < 45));
         const works = conn.prepare('SELECT id, work_key, anilist_id, mal_id FROM works ORDER BY work_key').all().map(r => ({ ...r }));
         assert.deepEqual(works.map(w => [w.work_key, w.anilist_id, w.mal_id]), [['anilist:118586', 118586, null], ['mal:2', null, 2]]);
         const frieren = works[0].id;
@@ -817,7 +858,7 @@ test('migration 38 adds the works table, mangas.work_id and animes.work_id, kept
         conn.exec("UPDATE mangas SET work_key = 'anilist:118586' WHERE id = 55");
         assert.equal(work('animes', 63), frieren);
 
-        conn.exec('DELETE FROM schema_migrations WHERE version >= 38');
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 38 AND version < 45');
         schema.runSequentialMigrations(conn);
         assert.equal(schema.appliedSchemaVersion(conn), schema.LATEST_SCHEMA_VERSION, 'a second run is harmless');
         assert.equal(conn.prepare('SELECT count(*) AS n FROM works').get().n, 3);
@@ -846,4 +887,166 @@ test('migration 39 adds data_versions with triggers that count writes per area a
     conn.prepare('DELETE FROM schema_migrations WHERE version = 39').run();
     assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [39], 'a second run is harmless');
     assert.equal(conn.prepare('SELECT count(*) AS n FROM data_versions').get().n, 2);
+});
+
+test('migration 40 sets missing volume types, keeps one household shelf and refuses unknown values', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const { VOLUME_STATUSES, VOLUME_TYPES, SERIES_FORMATS } = require('../core/lib/validate');
+    const { COLLECTING_STATUSES } = require('../core/handlers/mangas');
+    const conn = new DatabaseSync(':memory:');
+    schema.applySchema(conn);
+    // the state before migration 40: its triggers and index gone, a NULL type, a second household shelf, an outlier
+    for (const { name } of conn.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND (name LIKE 'trg_check_%' OR name LIKE 'trg_volumes_type_default_%')").all()) {
+        conn.exec(`DROP TRIGGER ${name}`);
+    }
+    conn.exec('DROP INDEX idx_shelves_one_default');
+    const manga = Number(conn.prepare("INSERT INTO mangas (title) VALUES ('Typen')").run().lastInsertRowid);
+    const untyped = Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, type) VALUES (?, '1', NULL)").run(manga).lastInsertRowid);
+    const odd = Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, '2', 'Verliehen')").run(manga).lastInsertRowid);
+    conn.prepare("INSERT INTO shelves (name, is_default) VALUES ('Zweites', 1)").run();
+    conn.prepare('DELETE FROM schema_migrations WHERE version = 40').run();
+    const warnings = [];
+    const log = { debug() {}, info() {}, warn: (m) => warnings.push(m), error() {} };
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log }).map(r => r.version), [40]);
+    assert.equal(conn.prepare('SELECT type FROM volumes WHERE id = ?').get(untyped).type, 'volume');
+    assert.deepEqual(conn.prepare('SELECT id FROM shelves WHERE is_default = 1').all().map(r => r.id), [1]);
+    assert.ok(warnings.some(w => /1 rows of volumes\.status/.test(w)), 'the stored outlier is named');
+    assert.ok(warnings.some(w => /2 household shelves/.test(w)));
+
+    const refuse = (sql, ...params) => assert.throws(() => conn.prepare(sql).run(...params), /invalid|UNIQUE/);
+    refuse("INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, '3', 'Verliehen')", manga);
+    refuse("INSERT INTO volumes (manga_id, volume_number, type) VALUES (?, '3', 'box')", manga);
+    refuse("UPDATE mangas SET collecting = 'irgendwann' WHERE id = ?", manga);
+    refuse("UPDATE mangas SET format = 'ebook' WHERE id = ?", manga);
+    refuse("INSERT INTO shelves (name, is_default) VALUES ('Drittes', 1)");
+    // the outlier stays editable as long as its status is not changed to another unknown value
+    conn.prepare("UPDATE volumes SET notes = 'bleibt' WHERE id = ?").run(odd);
+    conn.prepare("UPDATE volumes SET status = 'Verliehen' WHERE id = ?").run(odd);
+    conn.prepare("UPDATE volumes SET status = 'Fehlt' WHERE id = ?").run(odd);
+    // an empty type becomes a regular volume, NULL statuses and the legacy Gelesen pass
+    const empty = Number(conn.prepare("INSERT INTO volumes (manga_id, volume_number, type, status) VALUES (?, '4', '', NULL)").run(manga).lastInsertRowid);
+    assert.equal(conn.prepare('SELECT type FROM volumes WHERE id = ?').get(empty).type, 'volume');
+    conn.prepare("UPDATE volumes SET type = NULL, status = 'Gelesen' WHERE id = ?").run(empty);
+    assert.equal(conn.prepare('SELECT type FROM volumes WHERE id = ?').get(empty).type, 'volume');
+    // every value the app writes passes (the frozen lists cover core/lib/validate.js)
+    for (const status of VOLUME_STATUSES) conn.prepare('UPDATE volumes SET status = ? WHERE id = ?').run(status, empty);
+    for (const type of VOLUME_TYPES) conn.prepare('UPDATE volumes SET type = ? WHERE id = ?').run(type, empty);
+    for (const format of SERIES_FORMATS) conn.prepare('UPDATE mangas SET format = ? WHERE id = ?').run(format, manga);
+    for (const collecting of COLLECTING_STATUSES) conn.prepare('UPDATE mangas SET collecting = ? WHERE id = ?').run(collecting, manga);
+
+    conn.prepare('DELETE FROM schema_migrations WHERE version = 40').run();
+    assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [40], 'a second run is harmless');
+});
+
+test('migration 45 moves series links of anime onto the work, pins the chosen edition for its shelf and drops animes.manga_id', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 45);
+    conn.exec(`
+        DELETE FROM schema_migrations WHERE version = 45;
+        INSERT INTO shelves (id, name) VALUES (7, 'Zweites');
+        INSERT INTO mangas (id, title, work_key, shelf_id, language) VALUES (71, 'Frieren', 'anilist:118586', 1, 'de'), (72, 'Frieren EN', 'anilist:118586', 1, 'en'),
+            (73, 'Ohne Werk', NULL, 7, 'de');
+        INSERT INTO animes (id, title, manga_id) VALUES (81, 'Frieren', 72), (82, 'Ohne', 73), (83, 'Frei', NULL);
+    `);
+    const infos = [];
+    const log = { debug() {}, info: (m) => infos.push(m), warn() {}, error() {} };
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log }).map(r => r.version), [45]);
+    assert.ok(infos.some(line => /v45: 2 anime links -> links to the work, 1 series got a work of their own/.test(line)), infos.join('\n'));
+    assert.ok(!conn.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id'), 'the column is gone');
+    assert.equal(conn.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'idx_animes_manga'").get().n, 0);
+    const workOf = (table, id) => conn.prepare(`SELECT work_id FROM ${table} WHERE id = ?`).get(id).work_id;
+    const own = conn.prepare('SELECT work_key FROM mangas WHERE id = 73').get().work_key;
+    assert.match(own, /^manual:[0-9a-f]{24}$/, 'a series linked without a work gets a manual key of its own');
+    assert.deepEqual([workOf('animes', 81), workOf('animes', 82), workOf('animes', 83)], [workOf('mangas', 72), workOf('mangas', 73), null]);
+    const pins = conn.prepare("SELECT anime_id, work_id, scope_shelf_id, manga_id, hidden FROM anime_work_links WHERE origin = 'manual' ORDER BY anime_id").all().map(r => ({ ...r }));
+    assert.deepEqual(pins, [
+        { anime_id: 81, work_id: workOf('mangas', 72), scope_shelf_id: 1, manga_id: 72, hidden: 0 },
+        { anime_id: 82, work_id: workOf('mangas', 73), scope_shelf_id: 7, manga_id: 73, hidden: 0 }
+    ], 'the edition chosen so far stays the one its shelf sees');
+    assert.deepEqual(conn.prepare('PRAGMA foreign_key_check').all(), []);
+
+    // the new work trigger: a pinned series that moves to another work takes its pin along; the last edition of a work
+    // moving away takes the anime along
+    conn.exec("UPDATE mangas SET work_key = 'mal:2' WHERE id = 72");
+    const mal = workOf('mangas', 72);
+    assert.equal(conn.prepare('SELECT work_id FROM anime_work_links WHERE anime_id = 81 AND origin = \'manual\'').get().work_id, mal);
+    assert.equal(workOf('animes', 81), workOf('mangas', 71), 'Frieren DE still carries the work for everyone');
+    conn.exec("UPDATE mangas SET work_key = 'mal:2' WHERE id = 71");
+    assert.equal(workOf('animes', 81), mal, 'its last edition left the work: the anime follows');
+
+    // replays: 45 and the migrations that named animes.manga_id (18 and 38) run again on such a database
+    conn.exec('DELETE FROM schema_migrations WHERE version IN (18, 38, 45)');
+    assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [18, 38, 45], 'a second run is harmless');
+    assert.equal(conn.prepare("SELECT count(*) AS n FROM anime_work_links WHERE origin = 'manual'").get().n, 2);
+    assert.match(conn.prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_mangas_work_update'").get().sql, /anime_work_links/);
+    assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE name = 'trg_mangas_anime_pins_shelf'").get(), 'a pin moves with its series');
+});
+
+test('migration 46 keeps every value a row has: what differs from its catalog entry is local, catalog changes reach the rest', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 46);
+    conn.exec(`
+        DELETE FROM schema_migrations WHERE version = 46;
+        INSERT INTO shelves (id, name) VALUES (7, 'Zweites');
+        INSERT INTO mangas (id, title, publisher, description, tags, shelf_id, language) VALUES
+            (1, 'Kern 46', 'Carlsen Manga', 'Text eins', 'Action', 1, 'de'),
+            (2, 'Kern 46', 'Carlsen Manga', NULL, NULL, 7, 'de');
+        INSERT INTO volumes (id, manga_id, volume_number, pages, release_year, status) VALUES (11, 1, '1', 100, 2024, 'Fehlt'), (21, 2, '1', NULL, NULL, 'Fehlt');
+    `);
+    const infos = [];
+    const log = { debug() {}, info: (m) => infos.push(m), warn() {}, error() {} };
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log }).map(r => r.version), [46]);
+    assert.ok(infos.some(line => /v46: 1 series and 1 volumes keep values of their own/.test(line)), infos.join('\n'));
+    const rows = (table) => conn.prepare(`SELECT id, local_fields FROM ${table} ORDER BY id`).all().map(r => ({ ...r }));
+    assert.deepEqual(rows('mangas'), [{ id: 1, local_fields: null }, { id: 2, local_fields: '["description","tags"]' }]);
+    assert.deepEqual(rows('volumes'), [{ id: 11, local_fields: null }, { id: 21, local_fields: '["pages","release_year"]' }]);
+    const catalogId = conn.prepare('SELECT catalog_series_id AS id FROM mangas WHERE id = 1').get().id;
+    assert.deepEqual({ ...conn.prepare('SELECT tags, description FROM catalog_series WHERE id = ?').get(catalogId) }, { tags: 'Action', description: 'Text eins' });
+    assert.equal(conn.prepare('SELECT release_year FROM catalog_volumes WHERE id = (SELECT catalog_volume_id FROM volumes WHERE id = 11)').get().release_year, 2024);
+    // nothing a shelf showed changed
+    assert.deepEqual({ ...conn.prepare('SELECT description, tags FROM mangas WHERE id = 2').get() }, { description: null, tags: null });
+
+    // a catalog change reaches the rows where the field is not local; a raw row write stays in its row
+    conn.prepare("UPDATE catalog_series SET description = 'Neu', author = 'Autorin' WHERE id = ?").run(catalogId);
+    assert.deepEqual(conn.prepare('SELECT id, description, author FROM mangas ORDER BY id').all().map(r => ({ ...r })),
+        [{ id: 1, description: 'Neu', author: 'Autorin' }, { id: 2, description: null, author: 'Autorin' }]);
+    conn.exec("UPDATE mangas SET author = 'Nur hier' WHERE id = 1");
+    assert.equal(conn.prepare('SELECT author FROM catalog_series WHERE id = ?').get(catalogId).author, 'Autorin');
+    // a new row of the same edition links and keeps what differs local; the fill never reaches the other rows
+    conn.exec("INSERT INTO mangas (id, title, publisher, description, shelf_id, language) VALUES (3, 'Kern 46', 'Carlsen Manga', 'Eigener Text', 7, 'de')");
+    assert.equal(conn.prepare('SELECT catalog_series_id AS id FROM mangas WHERE id = 3').get().id, catalogId);
+    assert.equal(conn.prepare('SELECT local_fields FROM mangas WHERE id = 3').get().local_fields, '["author","description","tags"]');
+    assert.equal(conn.prepare('SELECT description FROM catalog_series WHERE id = ?').get(catalogId).description, 'Neu');
+    assert.deepEqual(conn.prepare('PRAGMA foreign_key_check').all(), []);
+    assert.equal(conn.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
+});
+
+test('migration 46: an entry only one row shows takes that row\'s values, so nothing a deleted series left stays in the catalog', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 46);
+    conn.exec(`
+        DELETE FROM schema_migrations WHERE version = 46;
+        INSERT INTO mangas (id, title, publisher, description, author, shelf_id, language) VALUES (1, 'Kern 46 Waise', 'Carlsen Manga', 'Text alt', 'Autorin alt', 1, 'de');
+        INSERT INTO volumes (id, manga_id, volume_number, pages, status) VALUES (11, 1, '1', 120, 'Fehlt');
+        -- stage 1 never cleared a catalog value: the deleted series' text stays when the next row of the edition comes
+        DELETE FROM mangas WHERE id = 1;
+        INSERT INTO mangas (id, title, publisher, shelf_id, language) VALUES (2, 'Kern 46 Waise', 'Carlsen Manga', 1, 'de');
+        INSERT INTO volumes (id, manga_id, volume_number, status) VALUES (21, 2, '1', 'Fehlt');
+    `);
+    const entry = (cols) => ({ ...conn.prepare(`SELECT ${cols} FROM catalog_series c JOIN mangas m ON m.catalog_series_id = c.id WHERE m.id = 2`).get() });
+    assert.deepEqual(entry('c.description, c.author'), { description: 'Text alt', author: 'Autorin alt' }, 'stage 1 left the old text');
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log: { debug() {}, info() {}, warn() {}, error() {} } }).map(r => r.version), [46]);
+    assert.deepEqual(entry('c.description, c.author, c.source_fields'), { description: null, author: null, source_fields: null });
+    assert.equal(conn.prepare('SELECT pages FROM catalog_volumes WHERE id = (SELECT catalog_volume_id FROM volumes WHERE id = 21)').get().pages, null);
+    assert.deepEqual(conn.prepare('SELECT id, local_fields FROM mangas UNION ALL SELECT id, local_fields FROM volumes').all().map(r => r.local_fields), [null, null]);
 });

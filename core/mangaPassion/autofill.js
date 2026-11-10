@@ -11,6 +11,7 @@ const {
 } = require('./classify');
 const { msg, payloadMsg } = require('../errors');
 const { MP_PAYLOAD, germanVolumes } = require('./gaps');
+const catalogWrite = require('../lib/catalogWrite');
 const cache = require('../anime/cache');
 
 const log = (ctx) => ctx.log.child('manga-passion');
@@ -240,7 +241,7 @@ function applyAutofillUpdates(ctx, pendingUpdates) {
       const current = ctx.db.prepare('SELECT * FROM volumes WHERE id = ?').get(uv.id);
       if (!current) continue; // deleted meanwhile
       const merged = AUTOFILL_COLUMNS.map(c => (current[c] !== uv[c] ? current[c] : next[c]));
-      updateStmt.run(...merged, uv.id);
+      catalogWrite.track(ctx, 'volume', uv.id, () => updateStmt.run(...merged, uv.id), { source: true });
       written++;
     }
   });

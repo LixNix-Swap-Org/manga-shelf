@@ -584,7 +584,8 @@ describe('"Vom Server holen" through the offline snapshot', () => {
     const rows = (sql) => { const r = copy.exec(sql)[0]; return r ? r.values : []; };
     expect(rows('SELECT owned_volumes FROM mangas')).toEqual([[1]]);
     expect(rows('SELECT id, status FROM volumes ORDER BY id')).toEqual([[70, 'Vorhanden'], [71, 'Fehlt'], [72, 'Fehlt']]);
-    expect(rows('SELECT volume_id, read_at FROM volume_reads ORDER BY volume_id')).toEqual([[70, '2025-04-01 20:00:00'], [71, null]]);
+    // marks on the catalog (migration 43); the profile joins its shelf on the first request, so not through the view
+    expect(rows('SELECT v.id, r.read_at FROM volume_reads r JOIN volumes v ON v.catalog_volume_id = r.catalog_volume_id ORDER BY v.id')).toEqual([[70, '2025-04-01 20:00:00'], [71, null]]);
     expect(rows('SELECT volume_id, user_id, price, purchase_date, condition, created_at FROM volume_owners')).toEqual([[70, 2, 6.5, '2025-03-01', 'gut', '2025-03-02 10:00:00']]);
     expect(rows('SELECT id, images FROM volumes ORDER BY id')).toEqual([[70, null], [71, null], [72, '["/uploads/a.png","/uploads/b.png"]']]);
     expect(rows('SELECT updated_by FROM mangas')).toEqual([[null]]);
@@ -788,7 +789,9 @@ describe('every write of the device reaches the store', () => {
   });
 
   it('a write during a retry that then succeeds is saved too', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    // Date too: the idle delay grows with the measured save time (runtime.js idleDelay), and a real clock lets a
+    // slow first save under load push the retry past advanceTimersByTimeAsync(0).
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     try {
       const base = memoryStore();
       let puts = 0;
@@ -804,11 +807,16 @@ describe('every write of the device reaches the store', () => {
           return base.put(s, key, value);
         }
       };
+      // the save waits an idle delay that grows with the measured save time: move the clock on in steps until the
+      // state is reached instead of betting on one step (a fixed step failed on a slow CI runner)
+      const until = async (reached, step = 50, limit = 10000) => {
+        for (let waited = 0; waited < limit && !reached(); waited += step) await vi.advanceTimersByTimeAsync(step);
+      };
       const rt = await newRuntime({ store, win: null, doc: null, locks: null });
       await rt.request('POST', '/api/mangas', { title: 'Eins' });
-      await vi.advanceTimersByTimeAsync(0);
+      await until(() => rt.status().saveError !== null);
       expect(rt.status().saveError).toBe('Speicher voll');
-      await vi.advanceTimersByTimeAsync(1000);
+      await until(() => typeof release === 'function');
       expect(release).toBeTypeOf('function');
       rt.useProfile({ name: 'Zweitprofil' });
       release();

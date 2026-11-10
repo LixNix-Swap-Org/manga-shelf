@@ -1,10 +1,14 @@
 // Trash: GET /trash, POST /trash/:id/restore, DELETE /trash/:id, DELETE /trash; purgeTrash for the scheduler.
+const { RELINKED_COLUMNS } = require('../lib/catalogMaintenance');
 const { msg, badRequest, notFound, conflict } = require('../errors');
 const { parsePositiveInt } = require('../lib/validate');
 const { TRASH_RETENTION_DAYS, sqlTimestamp } = require('../lib/trash');
 const { findDuplicate, duplicateError } = require('./volumes');
 const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners');
+const { addRead, setChapterProgress } = require('../lib/marks');
+const { addCopy, hasOwner, dropHouseholdCopies } = require('../lib/copies');
 const access = require('../lib/access');
+const animeLinks = require('../lib/animeLinks');
 const { qstr } = require('../lib/query');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('../lib/language');
 
@@ -109,7 +113,12 @@ function list(ctx, { query } = {}) {
     return { body: { items, retention_days: TRASH_RETENTION_DAYS } };
 }
 
-const columnsOf = (ctx, table) => new Set(ctx.db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
+// the catalog link and the local fields are left to the insert triggers: the stored entry may be gone (catalogMaintenance)
+const columnsOf = (ctx, table) => {
+    const columns = new Set(ctx.db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
+    for (const column of RELINKED_COLUMNS[table] || []) columns.delete(column);
+    return columns;
+};
 
 /** INSERT of the stored row with the columns the table still has (a later migration may add or drop some). */
 function insertRow(ctx, table, columns, row, overrides = {}) {
@@ -124,8 +133,6 @@ function insertRow(ctx, table, columns, row, overrides = {}) {
 function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
     const volumeCols = columnsOf(ctx, 'volumes');
     volumeCols.delete('number_sort');
-    const ownerCols = columnsOf(ctx, 'volume_owners');
-    const readCols = columnsOf(ctx, 'volume_reads');
     const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
     const isMember = (userId) => Boolean(member.get(shelfId, userId));
     const restoredIds = new Set();
@@ -136,16 +143,19 @@ function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
     const vanished = new Map();
     for (const o of owners) {
         if (!restoredIds.has(o.volume_id)) continue;
-        if (isMember(o.user_id)) insertRow(ctx, 'volume_owners', ownerCols, o);
+        if (isMember(o.user_id)) addCopy(ctx.db, o.volume_id, o.user_id, o);
         else if (!vanished.has(o.volume_id)) vanished.set(o.volume_id, o);
     }
-    for (const r of reads) if (restoredIds.has(r.volume_id) && isMember(r.user_id)) insertRow(ctx, 'volume_reads', readCols, r);
-    // an owned volume left without owners goes to the restoring admin (a member: restoring needs editor rights there),
-    // otherwise it is missing
-    const hasOwner = ctx.db.prepare('SELECT 1 AS ok FROM volume_owners WHERE volume_id = ? LIMIT 1');
+    // the catalog usually still holds these marks (they stay there, see core/lib/trash.js); an entry trashed before
+    // migration 43 brings them back. A mark the catalog has kept its date.
+    for (const r of reads) if (restoredIds.has(r.volume_id) && isMember(r.user_id)) addRead(ctx.db, r.volume_id, r.user_id, r.read_at ?? null);
+    // an owned volume left without owners goes to the restoring admin (a member: restoring needs editor rights there);
+    // otherwise one whose owners could not come back is missing, and one that had none keeps its household copy
+    // (the volume insert added it, core/lib/copies.js)
     for (const v of volumes) {
-        if (v.status !== OWNED_STATUS || hasOwner.get(v.id)) continue;
+        if (v.status !== OWNED_STATUS || hasOwner(ctx.db, v.id)) continue;
         if (ctx.user?.role === 'admin') addOwner(ctx.db, v.id, ctx.user.id, vanished.get(v.id) || v);
+        else if (vanished.has(v.id)) dropHouseholdCopies(ctx.db, v.id);
         else syncStatusWithOwners(ctx.db, v.id);
     }
 }
@@ -183,24 +193,32 @@ function restoreManga(ctx, entry, payload) {
     // an entry trashed before migration 27 still carries a language name ('Deutsch')
     const language = parseLanguage(manga.language);
     const edition = { language: (language && language.language) || DEFAULT_LANGUAGE, region: manga.region || (language && language.region) || null };
-    // the group may have been re-keyed or dissolved meanwhile: rejoin only a key a live series still carries
-    edition.work_key = manga.work_key && ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE work_key = ? LIMIT 1').get(manga.work_key) ? manga.work_key : null;
+    // the group may have been re-keyed or dissolved meanwhile: rejoin only a key a live series still carries, or one an anime
+    // link still names (the work outlives its last edition, core/lib/animeLinks.js)
+    edition.work_key = manga.work_key && (ctx.db.prepare('SELECT 1 AS ok FROM mangas WHERE work_key = ? LIMIT 1').get(manga.work_key)
+        || ctx.db.prepare(`SELECT 1 AS ok FROM works w WHERE w.work_key = ? AND (EXISTS (SELECT 1 FROM animes a WHERE a.work_id = w.id)
+            OR EXISTS (SELECT 1 FROM anime_work_links l WHERE l.work_id = w.id AND l.origin = 'manual' AND l.hidden = 0))`).get(manga.work_key)) ? manga.work_key : null;
     edition.shelf_id = restoreShelf(ctx, entry, manga);
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
     restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || [], edition.shelf_id);
-    // chapter progress comes back for members of the shelf only, like reads
-    const chapterCols = columnsOf(ctx, 'chapter_progress');
+    // chapter progress comes back for members of the shelf only, like reads; a chapter the catalog kept stays
     const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
     for (const c of Array.isArray(payload.chapters) ? payload.chapters : []) {
-        if (member.get(edition.shelf_id, c.user_id)) insertRow(ctx, 'chapter_progress', chapterCols, c, { manga_id: manga.id });
+        if (!member.get(edition.shelf_id, c.user_id) || !(Number(c.chapters_read) > 0)) continue;
+        setChapterProgress(ctx.db, manga.id, c.user_id, c.chapters_read, { updatedAt: c.updated_at, ifMissing: true });
     }
     // volumes of this series deleted on their own follow it, as on a move
     ctx.db.prepare("UPDATE trash SET shelf_id = ? WHERE kind = 'volume' AND manga_id = ?").run(edition.shelf_id, manga.id);
+    // an entry trashed before migration 45 lost the link of its anime with the series (manga_id): they link to its work again
+    // while they name no work; anime linked since then kept the work all along
     const animeIds = Array.isArray(payload.anime_ids) ? payload.anime_ids : [];
-    // work_id of the restored row comes from its work_key (trigger), never from the payload
-    const workId = (ctx.db.prepare('SELECT work_id FROM mangas WHERE id = ?').get(manga.id) || {}).work_id ?? null;
-    const relink = ctx.db.prepare('UPDATE animes SET manga_id = ?, work_id = ? WHERE id = ? AND manga_id IS NULL');
-    for (const animeId of animeIds) relink.run(manga.id, workId, animeId);
+    const unlinked = ctx.db.prepare('SELECT id FROM animes WHERE id = ? AND work_id IS NULL');
+    const orphans = animeIds.filter((animeId) => unlinked.get(animeId));
+    if (orphans.length) {
+        const workId = animeLinks.ensureWork(ctx, manga.id);
+        const relink = ctx.db.prepare('UPDATE animes SET work_id = ? WHERE id = ? AND work_id IS NULL');
+        for (const animeId of orphans) relink.run(workId, animeId);
+    }
 }
 
 function restoreVolume(ctx, entry, payload) {

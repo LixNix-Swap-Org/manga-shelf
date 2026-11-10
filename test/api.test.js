@@ -565,7 +565,7 @@ test('volumes: DELETE recounts, removes reads and owners, and answers 404 the se
 
     assert.equal((await editor('DELETE', `/volumes/${vol.id}`)).status, 200);
     assert.equal((await detailOf(id)).owned_volumes, 2);
-    assert.equal(rawDb().prepare('SELECT count(*) AS c FROM volume_reads WHERE volume_id = ?').get(vol.id).c, 0);
+    assert.equal(rawDb().prepare('SELECT count(*) AS c FROM shelf_volume_reads WHERE volume_id = ?').get(vol.id).c, 0);
     assert.equal(rawDb().prepare('SELECT count(*) AS c FROM volume_owners WHERE volume_id = ?').get(vol.id).c, 0);
     assert.equal((await editor('DELETE', `/volumes/${vol.id}`)).status, 404);
 });
@@ -597,7 +597,7 @@ test('volumes: batch-read skips schuber, missing and unnumbered entries; unknown
 
 test('volumes: unread answers previous_read_at and an undo restores the read with that date', async () => {
     const { db } = require('../db');
-    const readAt = (volumeId) => db.prepare('SELECT read_at FROM volume_reads WHERE volume_id = ? AND user_id = (SELECT id FROM users WHERE username = ?)')
+    const readAt = (volumeId) => db.prepare('SELECT read_at FROM shelf_volume_reads WHERE volume_id = ? AND user_id = (SELECT id FROM users WHERE username = ?)')
         .get(volumeId, 'ed')?.read_at ?? null;
     const id = await newSeries('Lesen Rueckgaengig');
     await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3 });
@@ -605,7 +605,7 @@ test('volumes: unread answers previous_read_at and an undo restores the read wit
     const idOf = (number) => vols.find(v => v.volume_number === number).id;
 
     await editor('POST', '/volumes/batch-read', { manga_id: id, up_to_volume: 3 });
-    db.prepare("UPDATE volume_reads SET read_at = '2023-02-03 04:05:06' WHERE volume_id = ?").run(idOf('1'));
+    db.prepare("UPDATE volume_reads SET read_at = '2023-02-03 04:05:06' WHERE catalog_volume_id = (SELECT catalog_volume_id FROM volumes WHERE id = ?)").run(idOf('1'));
     const unread = await editor('POST', `/volumes/${idOf('1')}/read`, { read: false });
     assert.deepEqual([unread.body.is_read, unread.body.previous_read_at], [false, '2023-02-03 04:05:06']);
     const again = await editor('POST', `/volumes/${idOf('1')}/read`, { read: false });
@@ -621,7 +621,7 @@ test('volumes: unread answers previous_read_at and an undo restores the read wit
     await editor('POST', `/volumes/${idOf('1')}/read`, { read: true, read_at: '2020-01-01 00:00:00' });
     assert.equal(readAt(idOf('1')), '2023-02-03 04:05:06', 'an existing read keeps its date');
 
-    db.prepare("UPDATE volume_reads SET read_at = '2022-12-24 18:00:00' WHERE volume_id = ?").run(idOf('2'));
+    db.prepare("UPDATE volume_reads SET read_at = '2022-12-24 18:00:00' WHERE catalog_volume_id = (SELECT catalog_volume_id FROM volumes WHERE id = ?)").run(idOf('2'));
     await editor('POST', `/volumes/${idOf('3')}/read`, { read: false });
     const batch = await editor('POST', '/volumes/batch-read', { manga_id: id, up_to_volume: 3, read: false });
     assert.deepEqual(batch.body.changed_ids.sort((a, b) => a - b), [idOf('1'), idOf('2')].sort((a, b) => a - b));
@@ -632,7 +632,7 @@ test('volumes: unread answers previous_read_at and an undo restores the read wit
 
 test('volumes: batch-read takes read_at for the newly read volumes; the toggle answer lists read_users with read_at', async () => {
     const { db } = require('../db');
-    const readAt = (volumeId) => db.prepare('SELECT read_at FROM volume_reads WHERE volume_id = ? AND user_id = (SELECT id FROM users WHERE username = ?)')
+    const readAt = (volumeId) => db.prepare('SELECT read_at FROM shelf_volume_reads WHERE volume_id = ? AND user_id = (SELECT id FROM users WHERE username = ?)')
         .get(volumeId, 'ed')?.read_at ?? null;
     const id = await newSeries('Lesen Datum');
     await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3 });
@@ -744,7 +744,7 @@ test('bulk: owners add/remove keep status and purchase date in sync; read only m
 
     res = await editor('POST', '/volumes/bulk', { ids, read: { read: true } });
     assert.deepEqual(res.body.read_skipped, [ids[0]]);
-    const reads = (vid) => rawDb().prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(vid).map(r => r.user_id);
+    const reads = (vid) => rawDb().prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ?').all(vid).map(r => r.user_id);
     assert.deepEqual(reads(ids[0]), []);
     assert.deepEqual(reads(ids[1]), [userList.ed]);
     res = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });
@@ -763,7 +763,7 @@ test('bulk: revert restores fields, owners and reads; a deleted volume comes bac
     await admin('POST', `/volumes/${ids[0]}/read`, { read: true, read_at: '2021-01-01 08:00:00' });
     const before = volumeRow(ids[0]);
     const ownersOf = (vid) => rawDb().prepare('SELECT user_id, price, purchase_date, created_at FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(vid).map(r => ({ ...r }));
-    const readsOf = (vid) => rawDb().prepare('SELECT user_id, read_at FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(vid).map(r => ({ ...r }));
+    const readsOf = (vid) => rawDb().prepare('SELECT user_id, read_at FROM shelf_volume_reads WHERE volume_id = ? ORDER BY user_id').all(vid).map(r => ({ ...r }));
     const ownersBefore = ownersOf(ids[0]);
     const readsBefore = readsOf(ids[0]);
 
@@ -848,7 +848,7 @@ test('bulk: an undo restores stored values the input rules would refuse (long co
     const condition = 'leichte Gebrauchsspuren '.repeat(10).trim();
     assert.equal((await editor('PUT', `/volumes/${ids[0]}`, { condition })).status, 200);
     rawDb().prepare('UPDATE volumes SET notes = ? WHERE id = ?').run('ä'.repeat(12000), ids[1]);
-    rawDb().prepare("UPDATE volume_owners SET purchase_date = '09.04.2021' WHERE volume_id = ?").run(ids[2]);
+    rawDb().prepare("UPDATE volume_copies SET purchase_date = '09.04.2021' WHERE volume_id = ? AND owner_user_id IS NOT NULL").run(ids[2]);
 
     let res = await editor('POST', '/volumes/bulk', { ids, set: { priority: 3 } });
     res = await editor('POST', '/volumes/bulk', { revert: res.body.undo_token });

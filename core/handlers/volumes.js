@@ -1,4 +1,5 @@
 // Volumes: create (single and batch), edit, delete, bulk edit (POST /volumes, /volumes/batch, /volumes/bulk, PUT/DELETE /volumes/:id).
+const { RELINKED_COLUMNS } = require('../lib/catalogMaintenance');
 const { normalizePublisher } = require('../lib/publishers');
 const { normalizeIsbn } = require('../lib/isbn');
 const {
@@ -7,10 +8,13 @@ const {
 } = require('../lib/owners');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const access = require('../lib/access');
+const catalogWrite = require('../lib/catalogWrite');
 const { resolveTargetUser } = access;
 const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = require('../errors');
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
+const { addRead, removeRead } = require('../lib/marks');
+const { hasOwner, removeCopy, followVolumeValue, setOwners } = require('../lib/copies');
 const { parseLanguage } = require('../lib/language');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseSortAfter, parseYear, parsePriority, isValidDate, parseDate,
@@ -69,7 +73,7 @@ const parseVolumeNumber = (val, type) => {
 /** Another entry of the series with the same type and number (case, spaces and a "Band " prefix ignored). */
 function findDuplicate(ctx, mangaId, volumeNumber, type, excludeId = null) {
     const key = volumeKey(volumeNumber, type);
-    const rows = ctx.db.prepare("SELECT id, status, volume_number, language FROM volumes WHERE manga_id = ? AND COALESCE(type, 'volume') = ?").all(mangaId, type);
+    const rows = ctx.db.prepare("SELECT id, status, volume_number, language FROM volumes WHERE manga_id = ? AND type = ?").all(mangaId, type);
     return rows.find(r => r.id !== excludeId && volumeKey(r.volume_number, type) === key) || null;
 }
 
@@ -272,7 +276,7 @@ function createBatch(ctx, { body }) {
     access.mangaAccess(ctx, mId, 'editor');
 
     // Special editions, Schuber and Specials carry their own numbers and never block a regular volume
-    const existing = ctx.db.prepare("SELECT volume_number FROM volumes WHERE manga_id = ? AND COALESCE(type, 'volume') = 'volume'").all(mId);
+    const existing = ctx.db.prepare("SELECT volume_number FROM volumes WHERE manga_id = ? AND type = 'volume'").all(mId);
     const existingSet = new Set(existing.map(v => volumeKey(v.volume_number, 'volume')));
 
     const insertStmt = ctx.db.prepare(`
@@ -397,16 +401,25 @@ function update(ctx, { params, body }) {
         // Owner rows copied the volume's price/date/condition; those still holding the old value follow the correction,
         // a different value set per owner stays
         for (const [column, next] of [['price', price], ['purchase_date', purchase_date], ['condition', condition]]) {
-            if (next !== vol[column]) {
-                ctx.db.prepare(`UPDATE volume_owners SET ${column} = ? WHERE volume_id = ? AND ${column} IS ?`).run(next, vol.id, vol[column]);
-            }
+            if (next !== vol[column]) followVolumeValue(ctx.db, vol.id, column, vol[column], next);
         }
         stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, language.value, sortAfterFor(volType, sortAfter.value ?? null), vol.id);
+        // the edition fields go to the catalog or stay local to this shelf (core/lib/catalogWrite.js)
+        catalogWrite.commit(ctx, 'volume', vol);
         syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
         if (markAsRead && status === OWNED_STATUS) markRead(ctx.db, vol.id, ctx.user.id);
     });
 
     return { body: { success: true } };
+}
+
+/** POST /volumes/:id/catalog-reset { fields? }: the volume takes the catalog values of its local fields (all or the named ones) again. */
+function catalogReset(ctx, { params, body }) {
+    const fields = catalogWrite.readResetFields(body, 'volume');
+    let local = null;
+    ctx.db.transaction(() => { local = catalogWrite.reset(ctx, 'volume', Number(params.id), fields); });
+    if (local === null) throw notFound('Band');
+    return { body: { success: true, local_fields: local } };
 }
 
 function remove(ctx, { params }) {
@@ -462,7 +475,7 @@ function parseReadOp(ctx, read) {
 }
 
 const ownerRows = (ctx, volumeId) => ctx.db.prepare(
-    'SELECT user_id, price, purchase_date, condition, created_at FROM volume_owners WHERE volume_id = ? ORDER BY created_at, rowid'
+    'SELECT user_id, price, purchase_date, condition, created_at, lent_to_user_id, lent_to_name, lent_at FROM volume_owners WHERE volume_id = ? ORDER BY created_at, rowid'
 ).all(volumeId);
 
 const BULK_SNAPSHOT_COLUMNS = ['manga_id', ...BULK_SET_FIELDS];
@@ -477,7 +490,7 @@ function bulkSnapshot(ctx, vol, { readUser, readOnly = false }) {
         : { id: vol.id, deleted: false, volume: Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null])), owners: ownerRows(ctx, vol.id) };
     if (readUser) {
         entry.read_user = readUser;
-        entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
+        entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM shelf_volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
     }
     return entry;
 }
@@ -487,11 +500,10 @@ function applyBulkSet(ctx, vol, set) {
     const keys = Object.keys(set);
     if (keys.length === 0) return;
     for (const column of OWNER_COLUMNS) {
-        if (column in set && set[column] !== vol[column]) {
-            ctx.db.prepare(`UPDATE volume_owners SET ${column} = ? WHERE volume_id = ? AND ${column} IS ?`).run(set[column], vol.id, vol[column]);
-        }
+        if (column in set && set[column] !== vol[column]) followVolumeValue(ctx.db, vol.id, column, vol[column], set[column]);
     }
     ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => set[k]), vol.id);
+    catalogWrite.commit(ctx, 'volume', vol);
     if ('status' in set) syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
 }
 
@@ -501,7 +513,7 @@ function applyBulkSet(ctx, vol, set) {
  */
 function applyOwnerOps(ctx, volumeId, { add, remove }, purchase = {}) {
     convertLegacyRead(ctx.db, volumeId, add[0] ?? ctx.user.id);
-    const hadOwners = Boolean(ctx.db.prepare('SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1').get(volumeId));
+    const hadOwners = hasOwner(ctx.db, volumeId);
     const vol = ctx.db.prepare('SELECT price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
     const given = OWNER_COLUMNS.filter((column) => purchase[column] !== undefined && purchase[column] !== null);
     const details = { ...vol, ...Object.fromEntries(given.map((column) => [column, purchase[column]])) };
@@ -509,25 +521,25 @@ function applyOwnerOps(ctx, volumeId, { add, remove }, purchase = {}) {
     for (const userId of add) addOwner(ctx.db, volumeId, userId, details);
     let removed = false;
     for (const userId of remove) {
-        if (ctx.db.prepare('DELETE FROM volume_owners WHERE volume_id = ? AND user_id = ?').run(volumeId, userId).changes > 0) removed = true;
+        if (removeCopy(ctx.db, volumeId, userId)) removed = true;
     }
     const status = syncStatusWithOwners(ctx.db, volumeId);
     if (removed && status === OWNED_STATUS) purchaseDateFromRemainingOwners(ctx.db, volumeId);
     if (!hadOwners && status === OWNED_STATUS && given.length) {
-        ctx.db.prepare(`UPDATE volumes SET ${given.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...given.map((c) => details[c]), volumeId);
+        catalogWrite.track(ctx, 'volume', volumeId, () => ctx.db.prepare(`UPDATE volumes SET ${given.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)
+            .run(...given.map((c) => details[c]), volumeId));
     }
 }
 
 /** Sets one reader's state; "read" only counts for owned volumes (as batch-read). Returns false when skipped. */
 function applyReadOp(ctx, volumeId, { userId, read, readAt }) {
     if (!read) {
-        ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(volumeId, userId);
+        removeRead(ctx.db, volumeId, userId);
         return true;
     }
     const status = ctx.db.prepare('SELECT status FROM volumes WHERE id = ?').get(volumeId)?.status;
     if (status !== OWNED_STATUS) return false;
-    if (readAt) ctx.db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)').run(volumeId, userId, readAt);
-    else ctx.db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(volumeId, userId);
+    addRead(ctx.db, volumeId, userId, readAt || undefined);
     return true;
 }
 
@@ -645,18 +657,14 @@ function takeUndo(ctx, token) {
     return entry;
 }
 
-function restoreOwners(ctx, volumeId, owners) {
-    ctx.db.prepare('DELETE FROM volume_owners WHERE volume_id = ?').run(volumeId);
-    const insert = ctx.db.prepare(`
-        INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition, created_at)
-        VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
-    `);
-    for (const o of owners) insert.run(volumeId, o.user_id, o.price, o.purchase_date, o.condition, o.created_at);
+// the copies change without passing through "no copy", which would make the volume 'Fehlt' and drop its purchase date;
+// `household: false` when owners were there and none may come back (the volume becomes 'Fehlt', as before copies)
+function restoreOwners(ctx, volumeId, owners, { household = true } = {}) {
+    setOwners(ctx.db, volumeId, owners, { household });
 }
 
 function restoreReads(ctx, volumeId, reads) {
-    const insert = ctx.db.prepare('INSERT OR REPLACE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
-    for (const r of reads) insert.run(volumeId, r.user_id, r.read_at);
+    for (const r of reads) addRead(ctx.db, volumeId, r.user_id, r.read_at ?? undefined, { replace: true });
 }
 
 // { revert: undo_token } restores exactly what that bulk edit changed: fields, owner rows, reads, and deleted volumes
@@ -679,7 +687,7 @@ function revertBulk(ctx, token) {
     const putOwners = (volumeId, owners, shelfId) => {
         const all = Array.isArray(owners) ? owners : [];
         const kept = members(all, shelfId);
-        restoreOwners(ctx, volumeId, kept);
+        restoreOwners(ctx, volumeId, kept, { household: all.length === 0 });
         if (kept.length < all.length) syncStatusWithOwners(ctx.db, volumeId);
     };
     const trashEntry = ctx.db.prepare("SELECT payload FROM trash WHERE id = ? AND kind = 'volume' AND ref_id = ?");
@@ -696,6 +704,7 @@ function revertBulk(ctx, token) {
     };
     const volumeColumns = new Set(ctx.db.prepare('PRAGMA table_info(volumes)').all().map((c) => c.name));
     volumeColumns.delete('number_sort');
+    for (const column of RELINKED_COLUMNS.volumes) volumeColumns.delete(column);
 
     const restored = [];
     const conflicts = [];
@@ -717,11 +726,12 @@ function revertBulk(ctx, token) {
                         const keys = BULK_SET_FIELDS.filter((k) => (snap.volume[k] ?? null) !== (stored[k] ?? null));
                         if (keys.length) {
                             ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => snap.volume[k] ?? null), snap.id);
+                            catalogWrite.commit(ctx, 'volume', stored);
                         }
                         putOwners(snap.id, snap.owners, shelfId);
                     }
                     if (snap.read_user) {
-                        ctx.db.prepare('DELETE FROM volume_reads WHERE volume_id = ? AND user_id = ?').run(snap.id, snap.read_user);
+                        removeRead(ctx.db, snap.id, snap.read_user);
                         restoreReads(ctx, snap.id, members(snap.reads, shelfId).filter((r) => r.user_id === snap.read_user));
                     }
                 }
@@ -758,6 +768,6 @@ function revertBulk(ctx, token) {
 }
 
 module.exports = {
-    create, createBatch, update, remove, bulk, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS, UNDO_TTL_MS, UNDO_PER_USER,
+    create, createBatch, update, catalogReset, remove, bulk, parseStatus, findDuplicate, duplicateError, FIELD_ERRORS, DATE_ERROR, MAX_BULK_IDS, UNDO_TTL_MS, UNDO_PER_USER,
     UNDO_BYTES_PER_USER, UNDO_BYTES_TOTAL
 };

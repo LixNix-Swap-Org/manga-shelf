@@ -60,14 +60,15 @@ const SHELF_VOLUMES = 'SELECT v.id FROM volumes v JOIN mangas g ON g.id = v.mang
 
 // Members with the role that counts (read-only accounts are viewers), their account role (`app_role`, which caps the
 // shelf role) and how many ownership and reading marks of this shelf they hold, plus the webtoons with their chapter
-// progress (`chapters`): what leaving or a removal deletes.
+// progress (`chapters`). Leaving or a removal deletes the ownership marks; reads and chapters stay on the catalog, hidden
+// from this shelf until its member is back.
 function membersOf(ctx, id) {
     return ctx.db.prepare(`
         SELECT m.user_id, u.username, CASE WHEN u.role IN ('visitor', 'guest') THEN 'viewer' ELSE m.role END AS role,
                u.role AS app_role,
                (SELECT count(*) FROM volume_owners vo WHERE vo.user_id = m.user_id AND vo.volume_id IN (${SHELF_VOLUMES})) AS owned,
-               (SELECT count(*) FROM volume_reads vr WHERE vr.user_id = m.user_id AND vr.volume_id IN (${SHELF_VOLUMES})) AS read_count,
-               (SELECT count(*) FROM chapter_progress cp JOIN mangas g ON g.id = cp.manga_id WHERE cp.user_id = m.user_id AND g.shelf_id = m.shelf_id) AS chapters
+               (SELECT count(*) FROM shelf_volume_reads vr WHERE vr.user_id = m.user_id AND vr.volume_id IN (${SHELF_VOLUMES})) AS read_count,
+               (SELECT count(*) FROM shelf_chapter_progress cp JOIN mangas g ON g.id = cp.manga_id WHERE cp.user_id = m.user_id AND g.shelf_id = m.shelf_id) AS chapters
         FROM shelf_members m JOIN users u ON u.id = m.user_id
         WHERE m.shelf_id = ?
         ORDER BY CASE WHEN u.role IN ('visitor', 'guest') THEN 2 WHEN m.role = 'owner' THEN 0 WHEN m.role = 'editor' THEN 1 ELSE 2 END,
@@ -189,17 +190,15 @@ function setMemberRole(ctx, { params, body }) {
 }
 
 /**
- * Whoever leaves a shelf no longer has access to it, so their ownership and reading marks on its volumes (and their
- * chapter progress on its webtoons) go too;
- * otherwise a volume would keep counting as owned (and read) by someone who cannot see it. A volume that loses its
- * last owner becomes "Fehlt".
+ * Whoever leaves a shelf no longer has access to it, so their ownership marks on its volumes go too; otherwise a volume
+ * would keep counting as owned by someone who cannot see it. A volume that loses its last owner becomes "Fehlt".
+ * Reading marks and chapter progress stay on the catalog: the shelf no longer shows them (only members' marks show) and
+ * shows them again when the user comes back.
  */
 function forgetMarks(ctx, shelfId, userId) {
     const inShelf = 'SELECT v.id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE m.shelf_id = ?';
     const owned = ctx.db.prepare(`SELECT volume_id FROM volume_owners WHERE user_id = ? AND volume_id IN (${inShelf})`).all(userId, shelfId).map(r => r.volume_id);
-    ctx.db.prepare(`DELETE FROM volume_owners WHERE user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
-    ctx.db.prepare(`DELETE FROM volume_reads WHERE user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
-    ctx.db.prepare('DELETE FROM chapter_progress WHERE user_id = ? AND manga_id IN (SELECT id FROM mangas WHERE shelf_id = ?)').run(userId, shelfId);
+    ctx.db.prepare(`DELETE FROM volume_copies WHERE owner_user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
     for (const volumeId of owned) {
         purchaseDateFromRemainingOwners(ctx.db, volumeId);
         syncStatusWithOwners(ctx.db, volumeId);
@@ -241,26 +240,24 @@ function moveTarget(ctx, rawManga, rawTarget) {
 }
 
 /**
- * Users whose marks on the series a move into `target` deletes (they are not members there), with their counts;
- * `chapters` is their chapter of a webtoon (0 without one).
+ * Users whose ownership marks on the series a move into `target` deletes (they are not members there), with their counts;
+ * `read` and `chapters` (their chapter of a webtoon, 0 without one) stay on the catalog and are only hidden there.
  */
 function marksLostOnMove(ctx, mangaId, target) {
     return ctx.db.prepare(`
         SELECT u.id AS user_id, u.username,
                (SELECT count(*) FROM volume_owners vo WHERE vo.user_id = u.id AND vo.volume_id IN (${IN_MANGA})) AS owned,
-               (SELECT count(*) FROM volume_reads vr WHERE vr.user_id = u.id AND vr.volume_id IN (${IN_MANGA})) AS read,
-               COALESCE((SELECT cp.chapters_read FROM chapter_progress cp WHERE cp.user_id = u.id AND cp.manga_id = ?), 0) AS chapters
+               (SELECT count(*) FROM shelf_volume_reads vr WHERE vr.user_id = u.id AND vr.volume_id IN (${IN_MANGA})) AS read,
+               COALESCE((SELECT cp.chapters_read FROM shelf_chapter_progress cp WHERE cp.user_id = u.id AND cp.manga_id = ?), 0) AS chapters
         FROM users u
         WHERE u.id NOT IN (${TARGET_MEMBERS})
-          AND (EXISTS (SELECT 1 FROM volume_owners vo WHERE vo.user_id = u.id AND vo.volume_id IN (${IN_MANGA}))
-               OR EXISTS (SELECT 1 FROM volume_reads vr WHERE vr.user_id = u.id AND vr.volume_id IN (${IN_MANGA}))
-               OR EXISTS (SELECT 1 FROM chapter_progress cp WHERE cp.user_id = u.id AND cp.manga_id = ?))
+          AND EXISTS (SELECT 1 FROM volume_owners vo WHERE vo.user_id = u.id AND vo.volume_id IN (${IN_MANGA}))
         ORDER BY u.username COLLATE NOCASE, u.id
-    `).all(mangaId, mangaId, mangaId, target, mangaId, mangaId, mangaId)
+    `).all(mangaId, mangaId, mangaId, target, mangaId)
         .map(r => ({ user_id: r.user_id, username: r.username, owned: r.owned, read: r.read, chapters: r.chapters }));
 }
 
-/** GET /mangas/:id/shelf-move?shelf_id=: whose ownership, reading and chapter marks PUT /mangas/:id/shelf would delete. */
+/** GET /mangas/:id/shelf-move?shelf_id=: whose ownership marks PUT /mangas/:id/shelf would delete. */
 function movePreview(ctx, { params, query }) {
     const { mangaId, target } = moveTarget(ctx, params.id, qstr(query && query.shelf_id));
     return { body: { manga_id: mangaId, shelf_id: target, affected: marksLostOnMove(ctx, mangaId, target) } };
@@ -268,8 +265,8 @@ function movePreview(ctx, { params, query }) {
 
 /**
  * PUT /mangas/:id/shelf { shelf_id }: the series (and so its volumes) moves; needs the owner role in the shelf it
- * leaves and editor rights in the target. Marks of users who are not members of the target are deleted (the move
- * preview names them).
+ * leaves and editor rights in the target. Ownership marks of users who are not members of the target are deleted (the
+ * move preview names them); their reads and chapters stay on the catalog, hidden in the target shelf.
  */
 function moveManga(ctx, { params, body }) {
     const { mangaId, target } = moveTarget(ctx, params.id, body.shelf_id);
@@ -277,9 +274,7 @@ function moveManga(ctx, { params, body }) {
         ctx.db.prepare('UPDATE mangas SET shelf_id = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?').run(target, ctx.user.id, mangaId);
         ctx.db.prepare('UPDATE trash SET shelf_id = ? WHERE manga_id = ?').run(target, mangaId);
         const owned = ctx.db.prepare(`SELECT DISTINCT volume_id FROM volume_owners WHERE volume_id IN (${IN_MANGA}) AND user_id NOT IN (${TARGET_MEMBERS})`).all(mangaId, target).map(r => r.volume_id);
-        ctx.db.prepare(`DELETE FROM volume_owners WHERE volume_id IN (${IN_MANGA}) AND user_id NOT IN (${TARGET_MEMBERS})`).run(mangaId, target);
-        ctx.db.prepare(`DELETE FROM volume_reads WHERE volume_id IN (${IN_MANGA}) AND user_id NOT IN (${TARGET_MEMBERS})`).run(mangaId, target);
-        ctx.db.prepare(`DELETE FROM chapter_progress WHERE manga_id = ? AND user_id NOT IN (${TARGET_MEMBERS})`).run(mangaId, target);
+        ctx.db.prepare(`DELETE FROM volume_copies WHERE volume_id IN (${IN_MANGA}) AND owner_user_id NOT IN (${TARGET_MEMBERS})`).run(mangaId, target);
         for (const volumeId of owned) {
             purchaseDateFromRemainingOwners(ctx.db, volumeId);
             syncStatusWithOwners(ctx.db, volumeId);

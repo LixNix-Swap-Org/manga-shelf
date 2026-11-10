@@ -40,7 +40,8 @@ function cleanName(value) {
 /** Rows whose publisher resolves to `target` with `aliases` take that spelling; returns the changed row counts. */
 function rewriteRows(ctx, aliases, target) {
     const changed = {};
-    for (const table of ['mangas', 'volumes']) {
+    // the catalog spells publishers the same way (its rows follow without the overlay: they were rewritten here already)
+    for (const table of ['mangas', 'volumes', 'catalog_series', 'catalog_volumes']) {
         changed[table] = 0;
         const rows = ctx.db.prepare(`SELECT DISTINCT publisher FROM ${table} WHERE publisher IS NOT NULL AND TRIM(publisher) <> ''`).all();
         const update = ctx.db.prepare(`UPDATE ${table} SET publisher = ? WHERE publisher = ?`);
@@ -84,7 +85,7 @@ function merge(ctx, { body }) {
         }
         changed = rewriteRows(ctx, aliases, to);
         // exact spellings of the target ("carlsen manga" -> "Carlsen Manga") are rewritten as well
-        for (const table of ['mangas', 'volumes']) {
+        for (const table of ['mangas', 'volumes', 'catalog_series', 'catalog_volumes']) {
             changed[table] += ctx.db.prepare(`UPDATE ${table} SET publisher = ? WHERE lower(trim(publisher)) = ? AND publisher <> ?`).run(to, toKey, to).changes;
         }
     });

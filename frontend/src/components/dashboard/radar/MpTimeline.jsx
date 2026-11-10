@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import { formatReleaseDate, isReleasedDate, mpCardActions, radarViewState, volumeStatusGroup } from '../../../utils/radarHelpers';
-import { Package, Calendar, Star, RefreshCw, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleAlert, Heart, CircleOff, CirclePause } from 'lucide-react';
+import { Package, Calendar, Star, RefreshCw, BuildingComplex, CircleCheck, ShoppingCart, Clock, CircleExclamationPoint, Heart, CircleOff, CirclePause } from 'lucide-react';
 import { formatCount, formatEuro } from '../../../utils/format';
 import RadarCover from './RadarCover';
 import { t, tc } from '../../../i18n/index.js';
@@ -155,7 +155,7 @@ export default function MpTimeline({
         {status}
         <div role="alert" className="glass-panel p-10 rounded-2xl border border-rose-500/30 text-center">
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
-            <CircleAlert className="w-8 h-8" />
+            <CircleExclamationPoint className="w-8 h-8" />
           </div>
           <h3 className="text-base font-bold text-white mb-1">{t('Neuerscheinungen für {month} nicht verfügbar', { month: monthLabel })}</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">{mpError}</p>

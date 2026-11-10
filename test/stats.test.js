@@ -38,7 +38,7 @@ test('response carries summary and the lists once, without legacy duplicates', a
     const id = await newSeries('Form Reihe', { publisher: 'Carlsen' });
     await addVolume(id, '1', { price: 7 });
     const body = await getStats();
-    assert.deepEqual(Object.keys(body).sort(), ['currencies', 'languages', 'owner_publishers', 'owner_stats', 'publishers', 'spending', 'summary', 'top_series', 'user_reading_stats']);
+    assert.deepEqual(Object.keys(body).sort(), ['currencies', 'languages', 'owner_publishers', 'owner_stats', 'publishers', 'shelf_reading', 'spending', 'summary', 'top_series', 'user_reading_stats']);
     assert.deepEqual(body.owner_publishers, [], 'one user: no owner x publisher breakdown');
     assert.equal(typeof body.summary.total_series, 'number');
     assert.ok(body.summary.collection_start_date);
@@ -442,7 +442,7 @@ test('reading over time: reads per month, backlog curve, years, streaks and the 
     const b1 = await addVolume(b, '1', { pages: 100 });
     const b2 = await addVolume(b, '2', { pages: 100 });
     await addVolume(a, '5', { status: 'Fehlt' });
-    const setRead = (volumeId, month) => db.prepare('INSERT OR REPLACE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)')
+    const setRead = (volumeId, month) => db.prepare('INSERT OR REPLACE INTO volume_reads (catalog_volume_id, user_id, read_at) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?, ?)')
         .run(volumeId, me, month ? `${month}-10 12:00:00` : null);
     setRead(aIds[0], monthKey(2));
     setRead(aIds[1], monthKey(1));

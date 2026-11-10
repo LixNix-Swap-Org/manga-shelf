@@ -1,21 +1,22 @@
 // Add-series dialog: lookup search, manual form and cover; also creates a volume scanned by ISBN.
 import { useState, useEffect, useRef, useId } from 'react';
-import { Plus, X, Sparkles, RefreshCw, TriangleAlert, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
+import { Plus, X, Sparkles, RefreshCw, TriangleExclamationPoint, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
 import { buildScanVolumePayload } from '../../utils/scanHelpers';
 import { MANGA_STATUSES, lookupMangaUrl } from '../../hooks/useMangaData';
 import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
 import useDialogA11y from '../../hooks/useDialogA11y';
-import { apiFetch, readJson, TIMEOUTS, assetImgProps, isAbortError } from '../../utils/api';
+import { apiFetch, readJson, TIMEOUTS, assetImgProps, isAbortError, get, post } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import FilePickerButton from '../common/FilePickerButton';
 import { askConfirm } from './askConfirm';
 import { prepareImageForUpload } from '../../utils/imageResize';
 import { PRIORITY_OPTIONS, DEFAULT_WISH_PRIORITY } from '../../utils/priority';
-import { t } from '../../i18n/index.js';
+import { t, tn, tc } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
 import FormatFields from '../common/FormatFields';
+import LanguagePill from '../common/LanguagePill';
 import { editionDefaults, editionLanguage, isMpEdition } from '../../utils/editions';
 import { foldText } from '../../utils/search';
 import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
@@ -96,6 +97,12 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   const [submitting, setSubmitting] = useState(false);
   const [shelves, setShelves] = useState([]);
   const [shelfId, setShelfId] = useState('');
+  // series of the caller's other shelves with the typed title (catalog stage c2): copying one takes its own values
+  const [shelfCount, setShelfCount] = useState(0);
+  const [copyHits, setCopyHits] = useState([]);
+  const [copyPick, setCopyPick] = useState(null);
+  const [copyVolumes, setCopyVolumes] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
@@ -399,10 +406,53 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   useEffect(() => {
     let alive = true;
     apiFetch('/api/shelves').then(readJson).then((data) => {
-      if (alive && Array.isArray(data?.shelves)) setShelves(data.shelves.filter(s => s.role !== 'viewer'));
+      if (!alive || !Array.isArray(data?.shelves)) return;
+      setShelves(data.shelves.filter(s => s.role !== 'viewer'));
+      setShelfCount(data.shelves.length);
     }).catch(() => {});
     return () => { alive = false; };
   }, []);
+
+  // only with a second shelf to copy from; asks after a pause in typing and drops an answer for an older title
+  const copyQuery = form.title.trim();
+  useEffect(() => {
+    setCopyPick(null);
+    if (!isOpen || createdManga || shelfCount < 2 || copyQuery.length < 2) {
+      setCopyHits([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ q: copyQuery });
+      if (shelfId) params.set('shelf_id', shelfId);
+      get(`/api/mangas/copy-candidates?${params}`, { signal: controller.signal })
+        .then((data) => setCopyHits(Array.isArray(data?.results) ? data.results : []))
+        .catch(() => { if (!controller.signal.aborted) setCopyHits([]); });
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isOpen, createdManga, shelfCount, copyQuery, shelfId]);
+
+  const copyFromShelf = async (hit) => {
+    if (copying || submitting) return;
+    setCopying(true);
+    setErrorMessage('');
+    try {
+      const data = await post('/api/mangas/copy', {
+        from: hit.id,
+        ...(shelfId ? { shelf_id: Number(shelfId) } : {}),
+        volumes: copyVolumes && hit.volume_count > 0
+      }, { fallback: t('Fehler beim Übernehmen der Reihe') });
+      handleClose();
+      if (onSuccess) onSuccess({ ...data, copied: true });
+    } catch (err) {
+      setErrorMessage(err?.message || t('Unbekannter Fehler'));
+    } finally {
+      setCopying(false);
+    }
+  };
 
   const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
@@ -438,7 +488,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       role="dialog"
       aria-modal="true"
       aria-label={t('Neuen Manga anlegen')}
-      data-busy={submitting ? 'true' : undefined}
+      data-busy={submitting || copying ? 'true' : undefined}
       tabIndex={-1}
       className="outline-none dialog-overlay z-50 bg-black/75 backdrop-blur-sm animate-fade-in"
     >
@@ -526,7 +576,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           {/* same title, language and format already in the collection: a hint with a way to it, creating stays allowed */}
           {!seriesLocked && duplicates.length > 0 && (
             <div id={`${ids}-duplicate`} role="status" className="bg-sky-500/10 border border-sky-500/30 text-sky-200 p-2.5 rounded-xl text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
-              <TriangleAlert className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
+              <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
               <span>{t('„{title}“ steht schon in deiner Sammlung.', { title: duplicates[0].title })}</span>
               {onOpenExisting && (
                 <button type="button" className="underline underline-offset-2 font-semibold hover:text-white" onClick={() => requestOpenExisting(duplicates[0])}>
@@ -536,10 +586,65 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
             </div>
           )}
 
+          {/* the same series in another own shelf: take it over with its values instead of searching again */}
+          {!seriesLocked && copyHits.length > 0 && (
+            <section aria-labelledby={`${ids}-copy`} className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 space-y-2" data-copy-hits="">
+              <h3 id={`${ids}-copy`} className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Library className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> {t('Aus deinen Regalen')}
+              </h3>
+              <ul className="space-y-2">
+                {copyHits.map((hit) => (
+                  <li key={hit.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white break-words">
+                        {hit.title} <LanguagePill language={hit.language} />
+                      </p>
+                      <p className="text-slate-400">
+                        {t('in „{shelf}“', { shelf: hit.shelf_name })} · {tn('{n} Band', '{n} Bände', hit.volume_count)}
+                      </p>
+                    </div>
+                    {copyPick !== hit.id ? (
+                      <button
+                        type="button"
+                        className="btn-secondary hit-44 px-3 py-1.5 text-xs"
+                        aria-label={t('Übernehmen: {title}', { title: hit.title })}
+                        onClick={() => { setCopyPick(hit.id); setCopyVolumes(false); }}
+                        disabled={copying || submitting}
+                      >
+                        {tc('copy', 'Übernehmen')}
+                      </button>
+                    ) : (
+                      <div className="w-full flex flex-wrap items-center gap-3">
+                        {hit.volume_count > 0 && (
+                          <span className="flex items-center gap-2">
+                            <input id={`${ids}-copy-volumes`} type="checkbox" checked={copyVolumes} onChange={(e) => setCopyVolumes(e.target.checked)} />
+                            <label htmlFor={`${ids}-copy-volumes`} className="text-slate-300">{t('Bände mitnehmen (als „Fehlt“)')}</label>
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-primary hit-44 px-3 py-1.5 text-xs"
+                          onClick={() => copyFromShelf(hit)}
+                          disabled={copying || submitting}
+                          aria-busy={copying || undefined}
+                        >
+                          {t('In dieses Regal übernehmen')}
+                        </button>
+                        <button type="button" className="hit-44 px-1 py-1 text-slate-400 hover:text-white underline underline-offset-2" onClick={() => setCopyPick(null)} disabled={copying}>
+                          {t('Abbrechen')}
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Lookup Error Banner */}
           {lookupError && (
             <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
-              <TriangleAlert className="w-4 h-4 shrink-0 text-amber-400" />
+              <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-amber-400" />
               <span>{lookupError}</span>
             </div>
           )}

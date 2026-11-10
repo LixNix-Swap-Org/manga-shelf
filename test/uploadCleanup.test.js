@@ -77,6 +77,15 @@ test('keeps files referenced in any form: JSON, markdown, HTML, absolute URLs, e
     assert.ok(exists(path.join('subdir', 'nested-old.jpg')), 'subdirectories are skipped');
 });
 
+// Speed is the CPU time of this process, not the wall clock: other processes on a busy machine (a parallel test
+// run, a build) stretched the wall clock past the limit although the cleanup itself was as fast as ever.
+function cpuMs(fn) {
+    const start = process.cpuUsage();
+    const result = fn();
+    const used = process.cpuUsage(start);
+    return { result, ms: (used.user + used.system) / 1000 };
+}
+
 test('many files and volumes are checked quickly', () => {
     const count = 20000;
     const manga = db.prepare("INSERT INTO mangas (title) VALUES ('Perf')").run();
@@ -92,11 +101,9 @@ test('many files and volumes are checked quickly', () => {
     }
     put('perf-orphan.jpg', 30);
 
-    const started = Date.now();
-    const result = cleanOrphanUploads({ dryRun: true });
-    const elapsed = Date.now() - started;
+    const { result, ms } = cpuMs(() => cleanOrphanUploads({ dryRun: true }));
     assert.deepEqual(result.files, ['perf-orphan.jpg']);
-    assert.ok(elapsed < 750, `cleanup took ${elapsed} ms`);
+    assert.ok(ms < 750, `cleanup took ${Math.round(ms)} ms CPU`);
 });
 
 test('the token index finds exactly the orphans a plain substring scan finds', () => {
@@ -149,11 +156,9 @@ test('many orphans do not fall back to one substring scan each', () => {
         fs.writeFileSync(file, 'x');
         fs.utimesSync(file, old, old);
     }
-    const started = Date.now();
-    const result = cleanOrphanUploads({ dryRun: true });
-    const elapsed = Date.now() - started;
+    const { result, ms } = cpuMs(() => cleanOrphanUploads({ dryRun: true }));
     assert.ok(result.removed >= 2000);
-    assert.ok(elapsed < 750, `cleanup took ${elapsed} ms`);
+    assert.ok(ms < 750, `cleanup took ${Math.round(ms)} ms CPU`);
 });
 
 test('files referenced by a retained undo snapshot stay; an unreadable undo snapshot stops the cleanup', () => {

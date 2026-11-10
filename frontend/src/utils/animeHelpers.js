@@ -668,7 +668,6 @@ export function mangaLinks(list, mangas) {
       linked.push({ anime, manga: byId.get(anime.manga_id) || null });
       return;
     }
-    if (anime.manga_linked_elsewhere) return;
     const keys = [anime.title, anime.title_de, anime.title_english, anime.title_romaji, anime.title_native].map(titleKey).filter(Boolean);
     const hit = rows.find((row) => row.keys.some((a) => keys.includes(a)))
       || rows.find((row) => row.keys.some((a) => keys.some((b) => titlePrefix(a, b))))

@@ -44,8 +44,9 @@ test('scopedCtx: only reads, protected tables only as {tokens} (bare, quoted, ma
         INSERT INTO users (id, username, password_hash) VALUES (1, 'u', 'x');
         INSERT INTO mangas (id, title, shelf_id) VALUES (1, 'Eins', 1), (2, 'Zwei', 2);
         INSERT INTO volumes (id, manga_id, volume_number) VALUES (1, 1, '1'), (2, 2, '1');
-        INSERT INTO volume_reads (volume_id, user_id) VALUES (1, 1), (2, 1);
-        INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (1, 1, 10), (2, 1, 20);
+        INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role) VALUES (1, 1, 'owner'), (2, 1, 'owner');
+        INSERT INTO volume_reads (catalog_volume_id, user_id) SELECT catalog_volume_id, 1 FROM volumes WHERE id IN (1, 2);
+        INSERT INTO chapter_progress (catalog_series_id, user_id, chapters_read) SELECT catalog_series_id, 1, id * 10 FROM mangas WHERE id IN (1, 2);
     `);
     const scoped = access.scopedCtx(createCtx({ db: dbFromConnection(conn) }), [2]).db;
     for (const sql of [
@@ -58,6 +59,8 @@ test('scopedCtx: only reads, protected tables only as {tokens} (bare, quoted, ma
         'SELECT count(*) AS n FROM volume_reads WHERE user_id = ?',
         'SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1',
         'SELECT count(*) AS n FROM chapter_progress WHERE user_id = ?',
+        'SELECT count(*) AS n FROM shelf_volume_reads WHERE user_id = ?',
+        'SELECT count(*) AS n FROM shelf_chapter_progress WHERE user_id = ?',
         'SELECT count(*) AS n FROM trash',
         'SELECT id FROM mangas',
         'SELECT count(*) AS n FROM {volume_reads} vr JOIN volumes v ON v.id = vr.volume_id',

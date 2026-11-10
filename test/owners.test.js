@@ -216,7 +216,7 @@ test('owners: migrateLegacyReadStatus stellt Altdaten um und zählt neu', async 
     const owned = seedVolume(id, '2', 'Gelesen');
     const missing = seedVolume(id, '3', 'Fehlt');
     const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(owned, edId);
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(owned, edId);
 
     assert.equal(migrateLegacyReadStatus(db), 2);
     const m = await detail(admin, id);
@@ -234,7 +234,7 @@ test('owners: migrateLegacyReadStatus stellt Altdaten um und zählt neu', async 
     const adminId = (await admin('GET', '/users')).body.find(u => u.username === 'admin').id;
     assert.equal(syncStatusWithOwners(db, ownerless), 'Vorhanden');
     assert.deepEqual(db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ?').all(ownerless).map(r => r.user_id), [adminId]);
-    assert.deepEqual(db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(ownerless).map(r => r.user_id), [adminId]);
+    assert.deepEqual(db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ?').all(ownerless).map(r => r.user_id), [adminId]);
     assert.equal(normalizeVolumeStatus(' gelesen '), 'Vorhanden');
     assert.equal(normalizeVolumeStatus('Bestellt'), 'Bestellt');
 });
@@ -246,8 +246,8 @@ test('owners: Besitz-Umschalten auf einem Altstatus-Gelesen-Band stellt erst um,
     const claimed = seedVolume(id, '1', 'Gelesen');
     const released = seedVolume(id, '2', 'Gelesen');
     const shared = seedVolume(id, '3', 'Gelesen');
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(shared, edId);
-    const reads = (volId) => db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(volId).map(r => r.user_id);
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(shared, edId);
+    const reads = (volId) => db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ? ORDER BY user_id').all(volId).map(r => r.user_id);
 
     let res = await editor('POST', `/volumes/${claimed}/owners`, { owned: true });
     assert.equal(res.status, 200);
@@ -277,13 +277,13 @@ test('owners: der einzige Besitzer eines Altstatus-Gelesen-Bands gibt ihn ab, be
     const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Remove' })).body.id;
     const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
     const vol = seedVolume(id, '1', 'Gelesen');
-    db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)').run(vol, edId);
+    db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id) VALUES (?, ?)').run(vol, edId);
 
     const res = await editor('POST', `/volumes/${vol}/owners`, { owned: false });
     assert.equal(res.status, 200);
     assert.equal(res.body.status, 'Fehlt');
     assert.deepEqual(res.body.owners, []);
-    assert.deepEqual(db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ?').all(vol).map(r => r.user_id), [edId]);
+    assert.deepEqual(db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ?').all(vol).map(r => r.user_id), [edId]);
 });
 
 test('owners: Kauf mit Datum auf einem herrenlosen Altstatus-Gelesen-Band speichert das Datum des Käufers', async () => {
@@ -477,19 +477,19 @@ test('owners: Altstatus Gelesen mit Lese-Einträgen behält genau diese (Datenqu
     const edId = users.find(u => u.username === 'ed').id;
     const visId = users.find(u => u.username === 'vis').id;
     const id = (await editor('POST', '/mangas', { title: 'Owners Gelesen Leser' })).body.id;
-    const readers = (vol) => db.prepare('SELECT user_id FROM volume_reads WHERE volume_id = ? ORDER BY user_id').all(vol).map(r => r.user_id);
+    const readers = (vol) => db.prepare('SELECT user_id FROM shelf_volume_reads WHERE volume_id = ? ORDER BY user_id').all(vol).map(r => r.user_id);
     const owners = (vol) => db.prepare('SELECT user_id FROM volume_owners WHERE volume_id = ? ORDER BY user_id').all(vol).map(r => r.user_id);
     const status = (vol) => db.prepare('SELECT status FROM volumes WHERE id = ?').get(vol).status;
 
     const viaFix = seedVolume(id, '1', 'Gelesen');
-    db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(viaFix, edId);
+    db.prepare('INSERT INTO volume_reads (catalog_volume_id, user_id) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?)').run(viaFix, edId);
     const fix = await editor('POST', '/maintenance/fix', { check: 'legacy_read' });
     assert.equal(fix.status, 200, JSON.stringify(fix.body));
     // the fix runs in the caller's shelves: a volume without owner goes to the caller, a member there (not the oldest admin)
     assert.deepEqual([status(viaFix), owners(viaFix), readers(viaFix)], ['Vorhanden', [edId], [edId]]);
 
     const viaOwner = seedVolume(id, '2', 'Gelesen');
-    db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(viaOwner, edId);
+    db.prepare('INSERT INTO volume_reads (catalog_volume_id, user_id) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?)').run(viaOwner, edId);
     assert.equal((await admin('POST', `/volumes/${viaOwner}/owners`, { user_id: visId, owned: true })).status, 200);
     assert.deepEqual([status(viaOwner), owners(viaOwner), readers(viaOwner)], ['Vorhanden', [visId], [edId]]);
 

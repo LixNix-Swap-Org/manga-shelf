@@ -86,8 +86,8 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
     let previous = null;
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
-    const insRead = db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)');
+    const insOwner = db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
+    const insRead = db.prepare('INSERT OR IGNORE INTO volume_reads (catalog_volume_id, user_id) SELECT catalog_volume_id, ? FROM volumes WHERE id = ?');
 
     for (let s = 0; s < series; s++) {
       const size = sizes[s];
@@ -156,7 +156,7 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
         }
         for (const userId of owners) { insOwner.run(volumeId, userId, price, purchase, condition); stats.owners++; }
         const readShare = [0.7, 0.4, 0.15];
-        for (let k = 0; k < users.length; k++) if (rand() < readShare[k]) { insRead.run(volumeId, users[k]); stats.reads++; }
+        for (let k = 0; k < users.length; k++) if (rand() < readShare[k]) { insRead.run(users[k], volumeId); stats.reads++; }
       }
     }
     db.exec("UPDATE mangas SET owned_volumes = (SELECT count(*) FROM volumes v WHERE v.manga_id = mangas.id AND v.status = 'Vorhanden')");
@@ -194,9 +194,9 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
       manga_passion_id, wish_priority, collecting, format, total_chapters, shelf_id, updated_by) VALUES (?, ?, ?, ?, 'de', 'EUR', ?, ?, ?, ?, ?, ?, ?, ?, 'aktiv', ?, ?, ?, ?)`);
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, price, release_date, release_year, condition, pages, purchase_date, status, notes, cover_image, type, priority, target_price)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
-    const insRead = db.prepare('INSERT INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)');
-    const insChapter = db.prepare('INSERT INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
+    const insOwner = db.prepare('INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)');
+    const insRead = db.prepare('INSERT OR IGNORE INTO volume_reads (catalog_volume_id, user_id, read_at) SELECT catalog_volume_id, ?, ? FROM volumes WHERE id = ?');
+    const insChapter = db.prepare('INSERT OR IGNORE INTO chapter_progress (catalog_series_id, user_id, chapters_read) SELECT catalog_series_id, ?, ? FROM mangas WHERE id = ?');
     const mangaId = {};
     for (const s of data.series) {
       mangaId[s.key] = Number(insManga.run(s.title, s.alt_title, s.author, s.publisher, s.status, s.tags, s.total_volumes, s.description, s.cover_image, s.banner_image,
@@ -207,13 +207,22 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
           v.cover_image, v.type, v.priority, v.target_price).lastInsertRowid);
         stats.volumes++;
         for (const o of v.owners) { insOwner.run(volumeId, userId[o.user], o.price, o.purchase_date, o.condition); stats.owners++; }
-        for (const r of v.reads) { insRead.run(volumeId, userId[r.user], r.read_at); stats.reads++; }
+        for (const r of v.reads) { insRead.run(userId[r.user], r.read_at, volumeId); stats.reads++; }
       }
-      for (const c of s.chapters) { insChapter.run(mangaId[s.key], userId[c.user], c.chapters_read); stats.chapters++; }
+      for (const c of s.chapters) { insChapter.run(userId[c.user], c.chapters_read, mangaId[s.key]); stats.chapters++; }
     }
     db.exec("UPDATE mangas SET owned_volumes = (SELECT count(*) FROM volumes v WHERE v.manga_id = mangas.id AND v.status = 'Vorhanden')");
 
     const insLink = db.prepare('INSERT INTO anime_links (anime_id, service, external_id, url) VALUES (?, ?, ?, ?)');
+    // an anime links to the work of its series (migration 45): a series without one gets a manual key derived from its fixture key
+    const workOf = (key) => {
+      const id = mangaId[key];
+      if (!id) return null;
+      const row = db.prepare('SELECT work_id FROM mangas WHERE id = ?').get(id);
+      if (row.work_id) return row.work_id;
+      db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?').run(manualWorkKey(crypto.createHash('sha256').update(`demo:${key}`).digest('hex')), id);
+      return db.prepare('SELECT work_id FROM mangas WHERE id = ?').get(id).work_id;
+    };
     const insProgress = db.prepare(`INSERT INTO anime_progress (anime_id, user_id, status, episodes_watched, score, started_at, finished_at, rating_visibility, public_comment)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const a of data.anime) {
@@ -224,7 +233,7 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
       }
       const columns = {
         ...snapshotColumns(meta, nowMs), anilist_id: meta.anilist_id, mal_id: meta.mal_id, kind: 'anime', tmdb_id: a.tmdb_id, tmdb_kind: a.tmdb_kind,
-        title: meta.title.preferred || meta.title.romaji, manga_id: mangaId[a.series], updated_by: userId.max,
+        title: meta.title.preferred || meta.title.romaji, work_id: workOf(a.series), updated_by: userId.max,
         cover_image: meta.cover_url, cover_source: meta.cover_url, banner_image: meta.banner_url, banner_source: meta.banner_url
       };
       const keys = Object.keys(columns);
@@ -284,8 +293,8 @@ function demoSummary(dataDir) {
       ownedVolumes: n("SELECT count(*) AS n FROM volumes WHERE status = 'Vorhanden'"),
       collectionValueEur: eur("SELECT sum(price) AS n FROM volumes WHERE status = 'Vorhanden'"),
       priceSumOfAllRowsEur: eur('SELECT sum(price) AS n FROM volumes'),
-      mangaWithoutAnime: n("SELECT count(*) AS n FROM mangas m WHERE m.format = 'print' AND m.wish_priority IS NULL AND NOT EXISTS (SELECT 1 FROM animes a WHERE a.manga_id = m.id)"),
-      mangaWithAnime: n('SELECT count(DISTINCT manga_id) AS n FROM animes WHERE manga_id IS NOT NULL'),
+      mangaWithoutAnime: n("SELECT count(*) AS n FROM mangas m WHERE m.format = 'print' AND m.wish_priority IS NULL AND (m.work_id IS NULL OR NOT EXISTS (SELECT 1 FROM animes a WHERE a.work_id = m.work_id))"),
+      mangaWithAnime: n('SELECT count(DISTINCT m.id) AS n FROM mangas m JOIN animes a ON a.work_id = m.work_id'),
       webtoons: n("SELECT count(*) AS n FROM mangas WHERE format = 'webtoon'"),
       shoppingListVolumes: n("SELECT count(*) AS n FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status IN ('Fehlt', 'Vorbestellt') AND m.wish_priority IS NULL"),
       wishlistVolumes: n("SELECT count(*) AS n FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status = 'Fehlt' AND m.wish_priority IS NOT NULL"),

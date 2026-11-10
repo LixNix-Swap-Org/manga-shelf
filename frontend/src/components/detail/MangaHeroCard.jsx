@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
-import { BookOpen, BuildingComplex, ChevronDown, CircleAlert, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X } from 'lucide-react';
+import { BookOpen, BuildingComplex, ChevronDown, CircleExclamationPoint, CircleCheck, Coins, Globe, Heart, Library, PenLine, RefreshCw, Save, Sparkles, Tag, Trash, Tv, Upload, X, ArrowRightLeft } from 'lucide-react';
 import { MANGA_STATUSES } from '../../hooks/useMangaData';
 import { assetImgProps, get } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
@@ -11,6 +11,7 @@ import { PRIORITY_OPTIONS, isWishedSeries, priorityBadgeClass, wishLabel } from 
 import { authorShelfPath, splitAuthors } from '../../utils/seriesMeta';
 import CollectingControl from './CollectingControl';
 import EditionSwitcher from './EditionSwitcher';
+import CatalogNotice from './CatalogNotice';
 import EditionFields from '../common/EditionFields';
 import FormatFields from '../common/FormatFields';
 import WebtoonPill from '../common/WebtoonPill';
@@ -363,6 +364,12 @@ export default function MangaHeroCard({
               </div>
             </div>
 
+            <CatalogNotice
+              manga={manga}
+              disabled={saving || isOffline}
+              onReset={async () => { endEdit(); await onEditionsChanged?.(); }}
+            />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor={`${ids}-title`} className="block text-xs font-semibold text-slate-400 mb-1">{tr('Titel der Reihe')}</label>
@@ -411,7 +418,7 @@ export default function MangaHeroCard({
             {/* Edit Lookup Error */}
             {editLookupError && (
               <div role="alert" className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
-                <CircleAlert className="w-4 h-4 shrink-0 text-amber-400" />
+                <CircleExclamationPoint className="w-4 h-4 shrink-0 text-amber-400" />
                 <span>{editLookupError}</span>
               </div>
             )}
@@ -874,6 +881,7 @@ export default function MangaHeroCard({
         <ConfirmDialog
           isOpen
           title={tr('Reihe verschieben')}
+          icon={ArrowRightLeft}
           message={shelfMove.text}
           confirmLabel={tr('Verschieben')}
           cancelLabel={tr('Abbrechen')}

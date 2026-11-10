@@ -5,6 +5,9 @@ const { normalizePublisher, resolvePublisher, publisherKey, loadPublisherAliases
 const { normalizeIsbn } = require('./lib/isbn');
 const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
+const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL, ADOPT_SERIES_SQL, ADOPT_VOLUME_SQL } = require('./lib/catalog');
+const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
+const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, OWNERS_VIEW_LENT_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -48,6 +51,97 @@ const numberSortExpr = (col) => {
 // works (migration 38): the source ids a work key names, and the trigger body that keeps mangas.work_id on its key
 const WORK_ANILIST_SQL = (col) => `CASE WHEN ${col} LIKE 'anilist:%' THEN CAST(substr(${col}, 9) AS INTEGER) END`;
 const WORK_MAL_SQL = (col) => `CASE WHEN ${col} LIKE 'mal:%' THEN CAST(substr(${col}, 5) AS INTEGER) END`;
+/**
+ * Rebuilds `table` from its stored DDL as changed by `transform` (12-step procedure; the migration runs with foreign keys
+ * off, see `foreignKeys: false`). Columns, rows, AUTOINCREMENT state, indexes and the table's own triggers stay;
+ * `dropColumns` names columns the new definition leaves out (their values are not copied).
+ */
+function rebuildTable(d, table, transform, { dropColumns = [] } = {}) {
+    const stored = d.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
+    if (!stored) throw new Error(`${table}: table missing`);
+    const ddl = transform(stored.sql);
+    const head = new RegExp(`^CREATE TABLE\\s+(?:IF NOT EXISTS\\s+)?["\`]?${table}["\`]?`, 'i');
+    if (!head.test(ddl)) throw new Error(`${table}: unexpected table definition`);
+    if (ddl === stored.sql) return false;   // already in that shape (a replayed migration)
+    const extras = d.prepare("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, rowid").all(table);
+    const seq = d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'").get()
+        ? d.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(table)?.seq ?? null : null;
+    const columns = d.prepare(`PRAGMA table_info(${table})`).all().filter(c => !dropColumns.includes(c.name)).map(c => `"${c.name}"`).join(', ');
+    const tmp = `${table}_rebuild`;
+    d.exec(ddl.replace(head, `CREATE TABLE ${tmp}`));
+    d.exec(`INSERT INTO ${tmp} (${columns}) SELECT ${columns} FROM ${table};`);
+    d.exec(`DROP TABLE ${table};`);
+    // other tables' triggers name the dropped table: the legacy rename neither rewrites nor re-checks them
+    d.exec('PRAGMA legacy_alter_table = ON;');
+    try { d.exec(`ALTER TABLE ${tmp} RENAME TO ${table};`); } finally { d.exec('PRAGMA legacy_alter_table = OFF;'); }
+    for (const { sql } of extras) d.exec(sql);
+    if (seq !== null) {
+        d.prepare('DELETE FROM sqlite_sequence WHERE name = ?').run(table);
+        d.prepare(`INSERT INTO sqlite_sequence (name, seq) SELECT ?, max(?, COALESCE((SELECT max(rowid) FROM ${table}), 0))`).run(table, seq);
+    }
+    return true;
+}
+
+/** Replaces `pattern` in a DDL text exactly once; throws when it is not there (an unexpected definition). */
+function replaceOnce(sql, pattern, replacement, what) {
+    const matches = sql.match(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`));
+    if (!matches || matches.length !== 1) throw new Error(`${what}: expected exactly one match of ${pattern}`);
+    return sql.replace(pattern, replacement);
+}
+
+/**
+ * Migration 13 with the SQL of its time (volume_reads by volume_id; owners.js writes catalog marks since migration 43):
+ * every volume with the legacy status 'Gelesen' becomes 'Vorhanden'. Without an owner the oldest admin owns it; without a
+ * read entry its owners become its readers. Returns the count. Frozen.
+ */
+function convertLegacyReadStatusV13(d) {
+    const rows = d.prepare("SELECT id FROM volumes WHERE LOWER(TRIM(status)) = LOWER('Gelesen')").all();
+    if (!rows.length) return 0;
+    const fallback = d.prepare("SELECT id FROM users ORDER BY CASE WHEN role = 'admin' THEN 0 ELSE 1 END, id LIMIT 1").get()?.id ?? null;
+    for (const { id } of rows) {
+        const vol = d.prepare('SELECT price, purchase_date, condition FROM volumes WHERE id = ?').get(id);
+        if (!d.prepare('SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1').get(id) && fallback) {
+            d.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition) VALUES (?, ?, ?, ?, ?)')
+                .run(id, fallback, vol.price ?? null, vol.purchase_date ?? null, vol.condition ?? null);
+        }
+        if (!d.prepare('SELECT 1 FROM volume_reads WHERE volume_id = ? LIMIT 1').get(id)) {
+            d.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) SELECT volume_id, user_id FROM volume_owners WHERE volume_id = ? ORDER BY created_at, rowid').run(id);
+        }
+        d.prepare("UPDATE volumes SET status = 'Vorhanden' WHERE id = ?").run(id);
+    }
+    return rows.length;
+}
+
+/** The data_versions triggers of `table` (migration 39) for `scope`. */
+const dataVersionTriggersSql = (table, scope) => [['ins', 'INSERT'], ['upd', 'UPDATE'], ['del', 'DELETE']].map(([suffix, event]) => `
+    CREATE TRIGGER IF NOT EXISTS trg_dv_${table}_${suffix} AFTER ${event} ON ${table} BEGIN
+        UPDATE data_versions SET version = version + 1 WHERE scope = '${scope}';
+    END;`).join('\n');
+
+/**
+ * trg_mangas_work_update since migration 45 (anime links on the work, no animes.manga_id): the last edition of a work moved to
+ * another key (a merge of work groups) takes the anime links of the old work along; a shelf link naming the series follows it.
+ */
+const WORK_UPDATE_TRIGGER_SQL = () => `
+    CREATE TRIGGER trg_mangas_work_update AFTER UPDATE OF work_key ON mangas BEGIN
+        ${WORK_TRIGGER_BODY}
+        UPDATE animes SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+            WHERE OLD.work_id IS NOT NULL AND work_id = OLD.work_id AND NEW.work_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM mangas WHERE work_id = OLD.work_id);
+        UPDATE OR IGNORE anime_work_links SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+            WHERE origin = 'manual' AND OLD.work_id IS NOT NULL AND work_id = OLD.work_id AND NEW.work_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM mangas WHERE work_id = OLD.work_id);
+        UPDATE OR IGNORE anime_work_links SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+            WHERE origin = 'manual' AND manga_id = NEW.id AND NEW.work_key IS NOT NULL;
+    END;`;
+/** A shelf pin (migration 45) moves with the series it names: the shelf that holds the edition now shows its link. */
+const ANIME_PIN_SHELF_TRIGGER_SQL = `
+    CREATE TRIGGER IF NOT EXISTS trg_mangas_anime_pins_shelf AFTER UPDATE OF shelf_id ON mangas WHEN NEW.shelf_id IS NOT OLD.shelf_id BEGIN
+        UPDATE OR IGNORE anime_work_links SET scope_shelf_id = NEW.shelf_id
+         WHERE origin = 'manual' AND hidden = 0 AND manga_id = NEW.id AND scope_shelf_id = OLD.shelf_id;
+        -- the target shelf already pins that work: its own choice stays
+        DELETE FROM anime_work_links WHERE origin = 'manual' AND hidden = 0 AND manga_id = NEW.id AND scope_shelf_id = OLD.shelf_id;
+    END;`;
 const WORK_TRIGGER_BODY = `INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
                             SELECT NEW.work_key, ${WORK_ANILIST_SQL('NEW.work_key')}, ${WORK_MAL_SQL('NEW.work_key')} WHERE NEW.work_key IS NOT NULL;
                         UPDATE mangas SET work_id = (SELECT id FROM works WHERE work_key = NEW.work_key) WHERE id = NEW.id;`;
@@ -135,9 +229,10 @@ function migrationList(log = silentLog) {
                     CREATE INDEX IF NOT EXISTS idx_volumes_manga_id ON volumes (manga_id);
                     CREATE INDEX IF NOT EXISTS idx_volumes_status ON volumes (status);
                     CREATE INDEX IF NOT EXISTS idx_volume_reads_user ON volume_reads (user_id);
-                    CREATE INDEX IF NOT EXISTS idx_volume_reads_vol ON volume_reads (volume_id);
                     CREATE INDEX IF NOT EXISTS idx_mangas_passion_id ON mangas (manga_passion_id);
                 `);
+                // migration 12 drops it again; a replay on marks keyed by the catalog (migration 43) has no volume_id
+                if (!marksOnCatalog(d)) d.exec('CREATE INDEX IF NOT EXISTS idx_volume_reads_vol ON volume_reads (volume_id);');
             }
         },
         {
@@ -232,6 +327,8 @@ function migrationList(log = silentLog) {
             up: (d) => {
                 // Ownership per user: several people can own the same volume. volumes.status = 'Vorhanden' stays
                 // "at least one owner"; existing volumes are assigned to the oldest admin.
+                // replayed after migration 44: ownership lives in volume_copies, volume_owners is a view of it
+                if (copiesInPlace(d)) return;
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS volume_owners (
                         volume_id INTEGER NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
@@ -268,7 +365,8 @@ function migrationList(log = silentLog) {
             version: 13,
             name: 'convert_legacy_gelesen_status',
             up: (d) => {
-                const converted = migrateLegacyReadStatus(d);
+                // replayed on a database whose marks are on the catalog already (migration 43): the current rules of owners.js
+                const converted = marksOnCatalog(d) ? migrateLegacyReadStatus(d) : convertLegacyReadStatusV13(d);
                 if (converted) log.info(`[Database Migration] Converted ${converted} volumes with legacy status 'Gelesen' to 'Vorhanden' plus a read entry`);
             }
         },
@@ -370,9 +468,12 @@ function migrationList(log = silentLog) {
                         expires_at INTEGER NOT NULL
                     );
                     CREATE INDEX IF NOT EXISTS idx_anime_progress_user ON anime_progress (user_id);
-                    CREATE INDEX IF NOT EXISTS idx_animes_manga ON animes (manga_id);
                     CREATE INDEX IF NOT EXISTS idx_animes_next_check ON animes (next_check_at);
                 `);
+                // the series link went to the work in migration 45: a replay on such a database has no column to index
+                if (d.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id')) {
+                    d.exec('CREATE INDEX IF NOT EXISTS idx_animes_manga ON animes (manga_id);');
+                }
             }
         },
         {
@@ -758,11 +859,19 @@ function migrationList(log = silentLog) {
                     INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
                         SELECT DISTINCT work_key, ${WORK_ANILIST_SQL('work_key')}, ${WORK_MAL_SQL('work_key')} FROM mangas WHERE work_key IS NOT NULL;
                     UPDATE mangas SET work_id = (SELECT w.id FROM works w WHERE w.work_key = mangas.work_key);
-                    UPDATE animes SET work_id = (SELECT m.work_id FROM mangas m WHERE m.id = animes.manga_id) WHERE manga_id IS NOT NULL;
                     DROP TRIGGER IF EXISTS trg_mangas_work_insert;
                     CREATE TRIGGER trg_mangas_work_insert AFTER INSERT ON mangas BEGIN
                         ${WORK_TRIGGER_BODY}
                     END;
+                `);
+                // replayed after migration 45 (no animes.manga_id): that migration's form of the update trigger
+                if (!d.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id')) {
+                    d.exec('DROP TRIGGER IF EXISTS trg_mangas_work_update;');
+                    d.exec(WORK_UPDATE_TRIGGER_SQL());
+                    return;
+                }
+                d.exec(`
+                    UPDATE animes SET work_id = (SELECT m.work_id FROM mangas m WHERE m.id = animes.manga_id) WHERE manga_id IS NOT NULL;
                     DROP TRIGGER IF EXISTS trg_mangas_work_update;
                     CREATE TRIGGER trg_mangas_work_update AFTER UPDATE OF work_key ON mangas BEGIN
                         ${WORK_TRIGGER_BODY}
@@ -791,6 +900,8 @@ function migrationList(log = silentLog) {
                 };
                 for (const [scope, tables] of Object.entries(areas)) {
                     for (const table of tables) {
+                        // replayed after migration 44: volume_owners is a view (volume_copies carries the triggers)
+                        if (d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = ?").get(table)) continue;
                         for (const [suffix, event] of [['ins', 'INSERT'], ['upd', 'UPDATE'], ['del', 'DELETE']]) {
                             d.exec(`CREATE TRIGGER IF NOT EXISTS trg_dv_${table}_${suffix} AFTER ${event} ON ${table} BEGIN
                                 UPDATE data_versions SET version = version + 1 WHERE scope = '${scope}';
@@ -805,6 +916,387 @@ function migrationList(log = silentLog) {
                             UPDATE data_versions SET version = version + 1 WHERE scope = 'collection';
                         END;`);
                 }
+            }
+        },
+        {
+            version: 40,
+            name: 'harden_value_columns',
+            up: (d) => {
+                // A volume without a type is a regular volume: stored as such, so queries compare type directly
+                // (and the index on manga_id, type, number_sort applies)
+                d.exec("UPDATE volumes SET type = 'volume' WHERE type IS NULL OR TRIM(type) = '';");
+                // One household shelf: older code could only ever create shelf 1 as the default, keep the lowest one
+                const defaults = d.prepare('SELECT id FROM shelves WHERE is_default = 1 ORDER BY id').all();
+                if (defaults.length > 1) {
+                    log.warn(`[Database] ${defaults.length} household shelves found; shelf ${defaults[0].id} stays the household shelf.`);
+                    d.prepare('UPDATE shelves SET is_default = 0 WHERE is_default = 1 AND id <> ?').run(defaults[0].id);
+                }
+                d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_shelves_one_default ON shelves (is_default) WHERE is_default = 1;');
+                // The value lists of core/lib/validate.js as a safety net under every write path (handlers, CSV import,
+                // raw SQL of the seeder and the takeover). Frozen here: a new value needs a migration that replaces
+                // the triggers. An unchanged stored value passes an UPDATE, so older rows stay editable.
+                const checks = [
+                    // NULL passes (NOT IN is NULL); an empty type becomes 'volume' through the trigger below
+                    // 'Gelesen' is the legacy status that migration 13, the quality check and convertLegacyRead still handle
+                    ['volumes', 'status', "'Vorhanden', 'Fehlt', 'Vorbestellt', 'Erscheint bald', 'Bestellt', 'Gelesen'"],
+                    ['volumes', 'type', "'volume', 'special_edition', 'schuber', 'special'", "TRIM(NEW.type) <> ''"],
+                    ['mangas', 'collecting', "'aktiv', 'pausiert', 'abgebrochen'"],
+                    ['mangas', 'format', "'print', 'webtoon'"]
+                ];
+                for (const [table, column, values, extra] of checks) {
+                    const bad = `NEW.${column} NOT IN (${values})${extra ? ` AND ${extra}` : ''}`;
+                    const stored = d.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${bad.replace(/NEW\./g, '')}`).get().n;
+                    if (stored) log.warn(`[Database] ${stored} rows of ${table}.${column} hold a value outside the list; they stay as they are.`);
+                    d.exec(`
+                        CREATE TRIGGER IF NOT EXISTS trg_check_${table}_${column}_ins BEFORE INSERT ON ${table} WHEN ${bad} BEGIN
+                            SELECT RAISE(ABORT, 'invalid ${table}.${column}');
+                        END;
+                        CREATE TRIGGER IF NOT EXISTS trg_check_${table}_${column}_upd BEFORE UPDATE OF ${column} ON ${table}
+                            WHEN NEW.${column} IS NOT OLD.${column} AND ${bad} BEGIN
+                            SELECT RAISE(ABORT, 'invalid ${table}.${column}');
+                        END;
+                    `);
+                }
+                // an explicit NULL type (raw SQL, an older offline snapshot in the takeover) becomes a regular volume
+                d.exec(`
+                    CREATE TRIGGER IF NOT EXISTS trg_volumes_type_default_ins AFTER INSERT ON volumes
+                        WHEN NEW.type IS NULL OR TRIM(NEW.type) = '' BEGIN
+                        UPDATE volumes SET type = 'volume' WHERE id = NEW.id;
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS trg_volumes_type_default_upd AFTER UPDATE OF type ON volumes
+                        WHEN NEW.type IS NULL OR TRIM(NEW.type) = '' BEGIN
+                        UPDATE volumes SET type = 'volume' WHERE id = NEW.id;
+                    END;
+                `);
+            }
+        },
+        {
+            version: 41,
+            name: 'add_catalog',
+            up: (d) => {
+                // Global catalog, stage 1 (core/lib/catalog.js): one row per edition and per volume of it for every shelf that
+                // holds it; mangas/volumes point to it and triggers keep the link on every write path. anime_work_links: anime <-> work
+                // n:m (the work of the linked series, AniList/MAL relations, later manual links of a shelf)
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS catalog_series (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        work_id INTEGER REFERENCES works(id),
+                        title TEXT NOT NULL,
+                        title_key TEXT NOT NULL,
+                        publisher TEXT,
+                        publisher_key TEXT NOT NULL DEFAULT '',
+                        language TEXT NOT NULL DEFAULT 'de',
+                        region TEXT,
+                        format TEXT NOT NULL DEFAULT 'print',
+                        alt_title TEXT, author TEXT, pub_status TEXT,
+                        total_volumes INTEGER, total_chapters INTEGER,
+                        list_currency TEXT NOT NULL DEFAULT 'EUR',
+                        description TEXT, cover_image TEXT, banner_image TEXT,
+                        mp_series_id INTEGER,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_series_mp ON catalog_series (mp_series_id) WHERE mp_series_id IS NOT NULL;
+                    CREATE INDEX IF NOT EXISTS idx_catalog_series_match ON catalog_series (title_key, language, format, publisher_key);
+                    CREATE INDEX IF NOT EXISTS idx_catalog_series_work ON catalog_series (work_id);
+                    CREATE TABLE IF NOT EXISTS catalog_volumes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        series_id INTEGER NOT NULL REFERENCES catalog_series(id),
+                        volume_type TEXT NOT NULL DEFAULT 'volume',
+                        volume_number TEXT NOT NULL,
+                        number_sort REAL,
+                        sort_after REAL,
+                        isbn TEXT, language TEXT, publisher TEXT, release_date TEXT, pages INTEGER,
+                        list_price REAL,
+                        mp_volume_id INTEGER,
+                        cover_image TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (series_id, volume_type, volume_number)
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_volumes_isbn ON catalog_volumes (isbn) WHERE isbn IS NOT NULL;
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_volumes_mp ON catalog_volumes (mp_volume_id) WHERE mp_volume_id IS NOT NULL;
+                    CREATE INDEX IF NOT EXISTS idx_catalog_volumes_order ON catalog_volumes (series_id, volume_type, number_sort);
+                    CREATE INDEX IF NOT EXISTS idx_catalog_volumes_release ON catalog_volumes (release_date) WHERE release_date IS NOT NULL;
+                    CREATE TRIGGER IF NOT EXISTS trg_catalog_volumes_number_sort_ins AFTER INSERT ON catalog_volumes BEGIN
+                        UPDATE catalog_volumes SET number_sort = ${numberSortExpr('NEW.volume_number')} WHERE id = NEW.id;
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS trg_catalog_volumes_number_sort_upd AFTER UPDATE OF volume_number ON catalog_volumes BEGIN
+                        UPDATE catalog_volumes SET number_sort = ${numberSortExpr('NEW.volume_number')} WHERE id = NEW.id;
+                    END;
+                    CREATE TABLE IF NOT EXISTS catalog_merge_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        kind TEXT NOT NULL,
+                        catalog_id INTEGER,
+                        old_ids TEXT NOT NULL,
+                        detail TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE TABLE IF NOT EXISTS anime_work_links (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        anime_id INTEGER NOT NULL REFERENCES animes(id) ON DELETE CASCADE,
+                        work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+                        relation TEXT NOT NULL CHECK (relation IN ('SOURCE', 'ADAPTATION', 'SPIN_OFF', 'SIDE_STORY', 'ALTERNATIVE', 'OTHER')),
+                        origin TEXT NOT NULL DEFAULT 'manual' CHECK (origin IN ('collection', 'anilist', 'mal', 'manual')),
+                        scope_shelf_id INTEGER REFERENCES shelves(id) ON DELETE CASCADE,
+                        hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1) AND (hidden = 0 OR scope_shelf_id IS NOT NULL)),
+                        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_anime_work_links_unique ON anime_work_links (anime_id, work_id, relation, COALESCE(scope_shelf_id, 0));
+                    CREATE INDEX IF NOT EXISTS idx_anime_work_links_work ON anime_work_links (work_id, anime_id);
+                `);
+                const mangaCols = new Set(d.prepare('PRAGMA table_info(mangas)').all().map(c => c.name));
+                if (!mangaCols.has('catalog_series_id')) d.exec('ALTER TABLE mangas ADD COLUMN catalog_series_id INTEGER REFERENCES catalog_series(id);');
+                const volumeCols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
+                if (!volumeCols.has('catalog_volume_id')) d.exec('ALTER TABLE volumes ADD COLUMN catalog_volume_id INTEGER REFERENCES catalog_volumes(id);');
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_mangas_catalog ON mangas (catalog_series_id);
+                    CREATE INDEX IF NOT EXISTS idx_volumes_catalog ON volumes (catalog_volume_id);
+                `);
+                backfillCatalog(d, log);
+                d.exec(CATALOG_TRIGGERS_SQL);
+                d.exec(ANIME_LINK_TRIGGERS_SQL);
+            }
+        },
+        {
+            version: 42,
+            name: 'add_missing_foreign_keys',
+            foreignKeys: false,
+            up: (d) => {
+                // Columns added by ALTER TABLE without REFERENCES (mangas.shelf_id, trash.shelf_id, shelves.owner_user_id) and
+                // user references without an ON DELETE get their foreign keys through a rebuild. Rows pointing nowhere are
+                // repaired first (logged): a series into shelf 1, a trash entry likewise, a missing user becomes NULL.
+                const repairs = [
+                    ['mangas without a shelf -> shelf 1', 'UPDATE mangas SET shelf_id = 1 WHERE shelf_id IS NULL OR shelf_id NOT IN (SELECT id FROM shelves)'],
+                    ['trash entries without a shelf -> shelf 1', 'UPDATE trash SET shelf_id = 1 WHERE shelf_id IS NULL OR shelf_id NOT IN (SELECT id FROM shelves)'],
+                    ['shelf owners without an account -> NULL', 'UPDATE shelves SET owner_user_id = NULL WHERE owner_user_id IS NOT NULL AND owner_user_id NOT IN (SELECT id FROM users)'],
+                    ['series editors without an account -> NULL', 'UPDATE mangas SET updated_by = NULL WHERE updated_by IS NOT NULL AND updated_by NOT IN (SELECT id FROM users)'],
+                    ['anime editors without an account -> NULL', 'UPDATE animes SET updated_by = NULL WHERE updated_by IS NOT NULL AND updated_by NOT IN (SELECT id FROM users)']
+                ];
+                if (!d.prepare('SELECT 1 FROM shelves WHERE id = 1').get()) d.exec("INSERT INTO shelves (id, name, is_default) VALUES (1, 'Sammlung', 1);");
+                for (const [what, sql] of repairs) {
+                    const changed = d.prepare(sql).run().changes;
+                    if (changed) log.warn(`[Database Migration] v42: ${changed} ${what}`);
+                }
+                const withForeignKeys = (sql, keys) => {
+                    let out = sql;
+                    const clauses = [];
+                    for (const [col, target] of Object.entries(keys)) {
+                        // drop an existing column-level or table-level reference of the column, then name it once at the end
+                        out = out.replace(new RegExp(`(\\b${col}\\s+INTEGER)\\s+REFERENCES\\s+\\w+\\s*\\(\\s*id\\s*\\)(\\s+ON\\s+DELETE\\s+(SET\\s+NULL|CASCADE|RESTRICT|NO\\s+ACTION))?`, 'i'), '$1');
+                        out = out.replace(new RegExp(`,\\s*FOREIGN\\s+KEY\\s*\\(\\s*${col}\\s*\\)\\s*REFERENCES\\s+\\w+\\s*\\(\\s*id\\s*\\)(\\s+ON\\s+DELETE\\s+(SET\\s+NULL|CASCADE|RESTRICT|NO\\s+ACTION))?`, 'i'), '');
+                        clauses.push(`FOREIGN KEY (${col}) REFERENCES ${target}`);
+                    }
+                    return replaceOnce(out, /\)\s*$/, `,\n            ${clauses.join(',\n            ')}\n        )`, 'table definition');
+                };
+                const targets = {
+                    shelves: { owner_user_id: 'users(id) ON DELETE SET NULL' },
+                    mangas: { shelf_id: 'shelves(id) ON DELETE RESTRICT', updated_by: 'users(id) ON DELETE SET NULL' },
+                    trash: { shelf_id: 'shelves(id) ON DELETE CASCADE' },
+                    animes: { updated_by: 'users(id) ON DELETE SET NULL' }
+                };
+                for (const [table, keys] of Object.entries(targets)) {
+                    // a replayed migration finds the keys in place and leaves the table alone
+                    const present = d.prepare(`PRAGMA foreign_key_list(${table})`).all();
+                    const done = Object.entries(keys).every(([col, target]) => present.some(f => f.from === col
+                        && `${f.table}(${f.to})`.toLowerCase() === target.split(' ')[0].toLowerCase()
+                        && f.on_delete === target.split(' ON DELETE ')[1]));
+                    if (!done) rebuildTable(d, table, sql => withForeignKeys(sql, keys));
+                }
+            }
+        },
+        {
+            version: 43,
+            name: 'marks_on_catalog',
+            up: (d) => {
+                // Reading marks and chapter progress move from the shelf rows to the catalog (core/lib/marks.js): volume_reads
+                // by catalog_volume_id, chapter_progress by catalog_series_id. Rows of shelves holding the same edition merge
+                // (earliest read, highest chapter). The views shelf_volume_reads/shelf_chapter_progress show them per row.
+                for (const name of MARK_VIEWS) d.exec(`DROP VIEW IF EXISTS ${name};`);
+                for (const name of MARK_FOLLOW_TRIGGERS) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+                // each table once (a replayed migration finds it keyed by the catalog already)
+                const move = (table, { keyed, ddl, unlinkedSql, copySql, hiddenSql }) => {
+                    if (keyed(d)) return;
+                    const unlinked = d.prepare(unlinkedSql).get().n;
+                    if (unlinked) throw new Error(`${table}: ${unlinked} rows of series or volumes without a catalog entry`);
+                    const before = d.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
+                    const hidden = d.prepare(hiddenSql).get().n;
+                    d.exec(`${ddl.replace('{name}', `${table}_catalog`)}; ${copySql}; DROP TABLE ${table};`);
+                    // nothing else names the table; the legacy rename does not re-check the triggers of other tables
+                    d.exec('PRAGMA legacy_alter_table = ON;');
+                    try { d.exec(`ALTER TABLE ${table}_catalog RENAME TO ${table};`); } finally { d.exec('PRAGMA legacy_alter_table = OFF;'); }
+                    const after = d.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
+                    if (before) log.info(`[Database Migration] v43: ${table} ${before} -> ${after} rows on the catalog (${hidden} of users outside the shelf, kept hidden)`);
+                };
+                const outsideShelf = (alias, mangaAlias) => `NOT EXISTS (SELECT 1 FROM shelf_members sm WHERE sm.shelf_id = ${mangaAlias}.shelf_id AND sm.user_id = ${alias}.user_id)`;
+                move('volume_reads', {
+                    keyed: marksOnCatalog,
+                    ddl: `CREATE TABLE {name} (
+                            catalog_volume_id INTEGER NOT NULL REFERENCES catalog_volumes(id),
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (catalog_volume_id, user_id)
+                        )`,
+                    unlinkedSql: 'SELECT count(*) AS n FROM volume_reads r JOIN volumes v ON v.id = r.volume_id WHERE v.catalog_volume_id IS NULL',
+                    hiddenSql: `SELECT count(*) AS n FROM volume_reads r JOIN volumes v ON v.id = r.volume_id JOIN mangas m ON m.id = v.manga_id WHERE ${outsideShelf('r', 'm')}`,
+                    copySql: `INSERT INTO volume_reads_catalog (catalog_volume_id, user_id, read_at)
+                        SELECT v.catalog_volume_id, r.user_id, MIN(r.read_at) FROM volume_reads r JOIN volumes v ON v.id = r.volume_id
+                        GROUP BY v.catalog_volume_id, r.user_id`
+                });
+                move('chapter_progress', {
+                    keyed: chaptersOnCatalog,
+                    ddl: `CREATE TABLE {name} (
+                            catalog_series_id INTEGER NOT NULL REFERENCES catalog_series(id),
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            chapters_read INTEGER NOT NULL,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (catalog_series_id, user_id)
+                        )`,
+                    unlinkedSql: 'SELECT count(*) AS n FROM chapter_progress p JOIN mangas m ON m.id = p.manga_id WHERE m.catalog_series_id IS NULL',
+                    hiddenSql: `SELECT count(*) AS n FROM chapter_progress p JOIN mangas m ON m.id = p.manga_id WHERE ${outsideShelf('p', 'm')}`,
+                    copySql: `INSERT INTO chapter_progress_catalog (catalog_series_id, user_id, chapters_read, updated_at)
+                        SELECT m.catalog_series_id, p.user_id, MAX(p.chapters_read), MAX(p.updated_at) FROM chapter_progress p JOIN mangas m ON m.id = p.manga_id
+                        GROUP BY m.catalog_series_id, p.user_id`
+                });
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_volume_reads_user ON volume_reads (user_id);
+                    CREATE INDEX IF NOT EXISTS idx_chapter_progress_user ON chapter_progress (user_id);
+                    ${dataVersionTriggersSql('volume_reads', 'collection')}
+                    ${dataVersionTriggersSql('chapter_progress', 'collection')}
+                    ${MARK_VIEWS_SQL}
+                    ${MARK_FOLLOW_TRIGGERS_SQL}
+                `);
+            }
+        },
+        {
+            version: 44,
+            name: 'add_volume_copies',
+            up: (d) => {
+                // Copies instead of an owner flag (core/lib/copies.js): every owner row becomes a personal copy, an owned
+                // volume without owner a household copy; triggers keep volumes.status on the copies from now on and
+                // volume_owners becomes a view of the personal copies (the shape every reader and the API know).
+                for (const name of COPY_TRIGGERS) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+                d.exec(COPIES_TABLE_SQL);
+                const ownersTable = d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'volume_owners'").get();
+                let personal = 0;
+                if (ownersTable) {
+                    personal = d.prepare(`INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at)
+                        SELECT o.volume_id, o.user_id, o.price, o.purchase_date, o.condition, COALESCE(o.created_at, CURRENT_TIMESTAMP)
+                        FROM volume_owners o
+                        WHERE NOT EXISTS (SELECT 1 FROM volume_copies c WHERE c.volume_id = o.volume_id AND c.owner_user_id = o.user_id)
+                        ORDER BY o.created_at, o.rowid`).run().changes;
+                    d.exec('DROP TABLE volume_owners;');
+                }
+                d.exec('DROP VIEW IF EXISTS volume_owners;');
+                const household = d.prepare(`INSERT INTO volume_copies (volume_id, purchase_price, purchase_date, condition, created_at)
+                    SELECT v.id, v.price, v.purchase_date, v.condition, COALESCE(v.created_at, CURRENT_TIMESTAMP) FROM volumes v
+                    WHERE v.status = 'Vorhanden' AND NOT EXISTS (SELECT 1 FROM volume_copies c WHERE c.volume_id = v.id)
+                    ORDER BY v.id`).run().changes;
+                // owners on a volume with another status: the volume becomes owned (the cleanup fix status_from_owners did that)
+                const owned = d.prepare(`UPDATE volumes SET status = 'Vorhanden'
+                    WHERE status IS NOT 'Vorhanden' AND lower(trim(COALESCE(status, ''))) <> 'gelesen'
+                      AND EXISTS (SELECT 1 FROM volume_copies c WHERE c.volume_id = volumes.id)`).run().changes;
+                d.exec(`
+                    ${OWNERS_VIEW_SQL}
+                    ${dataVersionTriggersSql('volume_copies', 'collection')}
+                    ${COPY_TRIGGERS_SQL}
+                `);
+                if (personal || household || owned) {
+                    log.info(`[Database Migration] v44: ${personal} owner rows -> personal copies, ${household} owned volumes without owner -> household copies, ${owned} volumes with owners but another status -> 'Vorhanden'`);
+                }
+            }
+        },
+        {
+            version: 45,
+            name: 'anime_links_on_works',
+            foreignKeys: false,
+            up: (d) => {
+                // The series link of an anime is a link to its work (core/lib/animeLinks.js): animes.work_id for everyone, shelf
+                // rows in anime_work_links (origin 'manual', scope_shelf_id) that name the chosen edition (manga_id) or hide the
+                // link for that shelf. animes.manga_id goes: a series linked without a work gets a manual key of its own first.
+                const linkCols = new Set(d.prepare('PRAGMA table_info(anime_work_links)').all().map(c => c.name));
+                if (!linkCols.has('manga_id')) d.exec('ALTER TABLE anime_work_links ADD COLUMN manga_id INTEGER REFERENCES mangas(id) ON DELETE SET NULL;');
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_anime_work_links_shelf ON anime_work_links (scope_shelf_id, anime_id) WHERE scope_shelf_id IS NOT NULL;
+                    CREATE INDEX IF NOT EXISTS idx_anime_work_links_manga ON anime_work_links (manga_id) WHERE manga_id IS NOT NULL;
+                `);
+                if (d.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id')) {
+                    const keyed = d.prepare(`UPDATE mangas SET work_key = 'manual:' || lower(hex(randomblob(12)))
+                        WHERE work_key IS NULL AND id IN (SELECT manga_id FROM animes WHERE manga_id IS NOT NULL)`).run().changes;
+                    d.exec(`UPDATE animes SET work_id = (SELECT m.work_id FROM mangas m WHERE m.id = animes.manga_id)
+                        WHERE manga_id IS NOT NULL AND EXISTS (SELECT 1 FROM mangas m WHERE m.id = animes.manga_id);`);
+                    // the edition chosen so far stays the one its shelf sees
+                    const pinned = d.prepare(`INSERT OR IGNORE INTO anime_work_links (anime_id, work_id, relation, origin, scope_shelf_id, hidden, manga_id)
+                        SELECT a.id, m.work_id, 'SOURCE', 'manual', m.shelf_id, 0, m.id FROM animes a JOIN mangas m ON m.id = a.manga_id
+                         WHERE m.work_id IS NOT NULL AND m.shelf_id IS NOT NULL`).run().changes;
+                    if (keyed || pinned) log.info(`[Database Migration] v45: ${pinned} anime links -> links to the work, ${keyed} series got a work of their own`);
+                    d.exec('DROP INDEX IF EXISTS idx_animes_manga;');
+                    rebuildTable(d, 'animes', (sql) => replaceOnce(sql, /\s*\bmanga_id\s+INTEGER\s+REFERENCES\s+mangas\s*\(\s*id\s*\)\s+ON\s+DELETE\s+SET\s+NULL\s*,/i, '', 'animes.manga_id'),
+                        { dropColumns: ['manga_id'] });
+                }
+                d.exec('DROP TRIGGER IF EXISTS trg_mangas_work_update;');
+                d.exec(WORK_UPDATE_TRIGGER_SQL());
+                d.exec(ANIME_PIN_SHELF_TRIGGER_SQL);
+            }
+        },
+        {
+            version: 46,
+            name: 'catalog_owns_editions',
+            up: (d) => {
+                // Catalog stage 3 (core/lib/catalog.js, core/lib/catalogWrite.js): the catalog owns the edition data. The rows keep
+                // their columns as a copy a shelf can override per field (local_fields); a catalog change flows into every row
+                // where the field is not local, a row write reaches the catalog only through catalogWrite.js. Everything a row
+                // has that differs from its entry is local from the start, so no shelf sees another value than before.
+                const cols = (t) => new Set(d.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name));
+                if (!cols('catalog_series').has('tags')) d.exec('ALTER TABLE catalog_series ADD COLUMN tags TEXT;');
+                if (!cols('catalog_volumes').has('release_year')) d.exec('ALTER TABLE catalog_volumes ADD COLUMN release_year INTEGER;');
+                if (!cols('mangas').has('local_fields')) d.exec('ALTER TABLE mangas ADD COLUMN local_fields TEXT;');
+                if (!cols('volumes').has('local_fields')) d.exec('ALTER TABLE volumes ADD COLUMN local_fields TEXT;');
+                // the overlay fields whose catalog value came from a source (Manga Passion): the only values a reset may show
+                if (!cols('catalog_series').has('source_fields')) d.exec('ALTER TABLE catalog_series ADD COLUMN source_fields TEXT;');
+                if (!cols('catalog_volumes').has('source_fields')) d.exec('ALTER TABLE catalog_volumes ADD COLUMN source_fields TEXT;');
+                // the new catalog columns from the rows, the way the stage 1 backfill picked: the first row that has one
+                d.exec(`
+                    UPDATE catalog_series SET tags = (SELECT m.tags FROM mangas m WHERE m.catalog_series_id = catalog_series.id
+                        AND m.tags IS NOT NULL AND trim(m.tags) <> '' ORDER BY m.id LIMIT 1) WHERE tags IS NULL
+                        AND EXISTS (SELECT 1 FROM mangas m WHERE m.catalog_series_id = catalog_series.id AND m.tags IS NOT NULL AND trim(m.tags) <> '');
+                    UPDATE catalog_volumes SET release_year = (SELECT v.release_year FROM volumes v WHERE v.catalog_volume_id = catalog_volumes.id
+                        AND v.release_year IS NOT NULL ORDER BY v.id LIMIT 1) WHERE release_year IS NULL
+                        AND EXISTS (SELECT 1 FROM volumes v WHERE v.catalog_volume_id = catalog_volumes.id AND v.release_year IS NOT NULL);
+                `);
+                for (const name of ['trg_mangas_catalog_insert', 'trg_mangas_catalog_identity', 'trg_mangas_catalog_shared', 'trg_mangas_catalog_relink',
+                    'trg_volumes_catalog_insert', 'trg_volumes_catalog_identity', 'trg_volumes_catalog_shared',
+                    'trg_catalog_series_overlay', 'trg_catalog_volumes_overlay']) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+                // an entry only one row shows takes that row's values (stage 1 kept values of rows deleted since), then
+                // whatever a row of a shared entry has of its own is local
+                d.exec(`
+                    ${ADOPT_SERIES_SQL('(SELECT m2.id FROM mangas m2 WHERE m2.catalog_series_id = catalog_series.id ORDER BY m2.id LIMIT 1)')}
+                    ${ADOPT_VOLUME_SQL('(SELECT v2.id FROM volumes v2 WHERE v2.catalog_volume_id = catalog_volumes.id ORDER BY v2.id LIMIT 1)')}
+                    ${MARK_SERIES_LOCAL('1 = 1')}
+                    ${MARK_VOLUMES_LOCAL('1 = 1')}
+                `);
+                d.exec(CATALOG_TRIGGERS_V3_SQL);
+                const series = d.prepare('SELECT count(*) AS n FROM mangas WHERE local_fields IS NOT NULL').get().n;
+                const volumes = d.prepare('SELECT count(*) AS n FROM volumes WHERE local_fields IS NOT NULL').get().n;
+                if (series || volumes) log.info(`[Database Migration] v46: ${series} series and ${volumes} volumes keep values of their own (local fields)`);
+            }
+        },
+        {
+            version: 47,
+            name: 'add_copy_lending',
+            up: (d) => {
+                // who borrowed a copy: an account (lent_to_user_id; lent_to_name keeps its name should the account go) or a
+                // person without one (lent_to_name only), since lent_at (YYYY-MM-DD). Nothing is lent after the migration.
+                const cols = new Set(d.prepare('PRAGMA table_info(volume_copies)').all().map(c => c.name));
+                if (!cols.has('lent_to_user_id')) d.exec('ALTER TABLE volume_copies ADD COLUMN lent_to_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;');
+                if (!cols.has('lent_to_name')) d.exec('ALTER TABLE volume_copies ADD COLUMN lent_to_name TEXT;');
+                if (!cols.has('lent_at')) d.exec('ALTER TABLE volume_copies ADD COLUMN lent_at TEXT;');
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_volume_copies_lent_to ON volume_copies (lent_to_user_id) WHERE lent_to_user_id IS NOT NULL;
+                    DROP VIEW IF EXISTS volume_owners;
+                    ${OWNERS_VIEW_LENT_SQL}
+                `);
             }
         }
     ];
@@ -823,10 +1315,10 @@ function ensureMigrationsTable(database) {
 }
 
 /** Migrations not yet recorded in schema_migrations (all of them for a database without that table). */
-function pendingMigrations(database, log) {
+function pendingMigrations(database, log, list = migrationList(log)) {
     const tracked = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'").get();
     const applied = new Set(tracked ? database.prepare('SELECT version FROM schema_migrations').all().map(r => r.version) : []);
-    return migrationList(log).filter(m => !applied.has(m.version));
+    return list.filter(m => !applied.has(m.version));
 }
 
 function appliedSchemaVersion(database) {
@@ -854,11 +1346,12 @@ function acceptNewerSchema(database) {
 
 /**
  * Applies pending migrations, each in its own transaction, and returns what ran: [{ version, name, changes, ms }].
- * options.beforeMigrations(database, pending) runs once before the first one (the server snapshots there).
+ * options.beforeMigrations(database, pending) runs once before the first one (the server snapshots there);
+ * options.migrations replaces migrationList() (tests only).
  */
 function runSequentialMigrations(database, options = {}) {
     const log = options.log || silentLog;
-    const pending = pendingMigrations(database, log);
+    const pending = pendingMigrations(database, log, options.migrations || migrationList(log));
     const fresh = isFreshDatabase(database);
     ensureMigrationsTable(database);
     if (!pending.length) return [];
@@ -874,15 +1367,29 @@ function runSequentialMigrations(database, options = {}) {
         const started = Date.now();
         const changesBefore = totalChanges();
         const bumpsBefore = versionBumps();
+        // a migration that rebuilds tables runs with foreign keys off (PRAGMA foreign_keys is a no-op inside a transaction, so
+        // it is switched before BEGIN) and must leave no violation behind; the previous setting comes back either way
+        const keysOff = mig.foreignKeys === false;
+        const keysWereOn = keysOff && Boolean(database.prepare('PRAGMA foreign_keys').get()?.foreign_keys);
+        if (keysWereOn) database.exec('PRAGMA foreign_keys = OFF;');
         database.exec('BEGIN TRANSACTION;');
         try {
             mig.up(database);
+            if (keysOff) {
+                const violations = database.prepare('PRAGMA foreign_key_check').all();
+                if (violations.length) {
+                    const sample = violations.slice(0, 5).map(v => `${v.table}#${v.rowid} -> ${v.parent}`).join(', ');
+                    throw new Error(`foreign key violations after the migration (${violations.length}): ${sample}`);
+                }
+            }
             database.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(mig.version, mig.name);
             database.exec('COMMIT;');
         } catch (err) {
             try { database.exec('ROLLBACK;'); } catch (rbErr) { log.warn('[Database Migration] ROLLBACK failed:', rbErr.message); }
             log.error(`[Database Migration] Failed migration v${mig.version} (${mig.name}):`, err);
             throw err;
+        } finally {
+            if (keysWereOn) database.exec('PRAGMA foreign_keys = ON;');
         }
         // minus the schema_migrations row itself and the counter updates of the data version triggers
         const entry = { version: mig.version, name: mig.name, changes: totalChanges() - changesBefore - 1 - (versionBumps() - bumpsBefore), ms: Date.now() - started };
