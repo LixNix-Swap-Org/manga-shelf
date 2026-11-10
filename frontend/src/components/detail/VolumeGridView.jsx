@@ -1,4 +1,4 @@
-import { BookCheck, BookOpen, BuildingComplex, Calendar, Camera, Check, CircleAlert, Coins, FileText, Package, PenLine, Plus, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
+import { BookCheck, BookOpen, BuildingComplex, Calendar, Camera, Check, CircleExclamationPoint, Coins, FileText, Package, PenLine, Plus, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
 import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges, { ownerColor, readerInitials } from './OwnerBadges';
@@ -106,7 +106,7 @@ export default function VolumeGridView({
 
                     <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5 text-[11px]">
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-bold text-amber-300 bg-amber-950/60 border border-amber-500/30 text-[10px]">
-                        <CircleAlert className="w-3 h-3 text-amber-400" />
+                        <CircleExclamationPoint className="w-3 h-3 text-amber-400" />
                         {gapLabel(gapsOfficial)}
                       </span>
 

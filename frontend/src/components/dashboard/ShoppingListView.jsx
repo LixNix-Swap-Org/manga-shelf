@@ -28,9 +28,9 @@ import useProgressiveList from '../../hooks/useProgressiveList';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import CoverImage from '../common/CoverImage';
 import {
-  ShoppingCart, RefreshCw, Search, X, CircleCheck, CircleAlert, SearchX,
+  ShoppingCart, RefreshCw, Search, X, CircleCheck, CircleExclamationPoint, SearchX,
   BookOpen, BuildingComplex, Check, WifiOff, ScanBarcode, Heart, Share2, Copy, Printer,
-  Users, Info, CircleQuestionMark, Clock, TriangleAlert, CirclePlus, PackageCheck
+  Users, Info, CircleQuestionMark, Clock, TriangleExclamationPoint, CirclePlus, PackageCheck
 } from 'lucide-react';
 import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
@@ -761,7 +761,7 @@ export default function ShoppingListView({
           <ul className="space-y-1.5">
             {scanned.map((e) => {
               const [icon, color] = KIND_STYLE[e.kind] || KIND_STYLE.unknown;
-              const Marker = e.done ? (e.queued ? Clock : Check) : (e.failed ? TriangleAlert : icon);
+              const Marker = e.done ? (e.queued ? Clock : Check) : (e.failed ? TriangleExclamationPoint : icon);
               const recheck = !e.done && !booking && !isOfflineMode && (e.kind === 'offline' || e.offline);
               return (
                 <li key={e.isbn} className={`text-xs flex items-start gap-2 ${color}`} data-kind={e.kind}>
@@ -980,7 +980,7 @@ export default function ShoppingListView({
       {loadFailed && (
         <div id="shop-load-error" className="glass-panel p-10 rounded-3xl border border-rose-500/30 text-center max-w-lg mx-auto" role="alert">
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto mb-4">
-            <CircleAlert className="w-7 h-7 text-rose-400" aria-hidden="true" />
+            <CircleExclamationPoint className="w-7 h-7 text-rose-400" aria-hidden="true" />
           </div>
           <h3 className="text-lg font-bold text-white">{t('Einkaufsliste konnte nicht geladen werden')}</h3>
           <p className="text-xs text-slate-400 mt-2 leading-relaxed">

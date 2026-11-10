@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Coins, Calendar, ShoppingCart, CircleCheck, Clock, PackageCheck, CircleAlert } from 'lucide-react';
+import { X, Coins, Calendar, ShoppingCart, CircleCheck, Clock, PackageCheck, CircleExclamationPoint } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { readApiError, notifyTrashed } from '../../hooks/useVolumeActions';
 import { getRegularGapMeta } from '../../utils/volumeHelpers';
@@ -203,7 +203,7 @@ export default function GapFillModal({
 
         {gapEditionUnconfirmed && meta && (
           <p className="mb-3 p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-200 flex items-start gap-2">
-            <CircleAlert className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
+            <CircleExclamationPoint className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
             <span>{t('Die Manga-Passion-Edition ist nur vorgeschlagen. Preis, Termin und Cover werden erst nach „Edition bestätigen“ übernommen.')}</span>
           </p>
         )}

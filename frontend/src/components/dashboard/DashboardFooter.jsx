@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, WifiOff, CircleCheck, Clock, ShieldAlert, HardDrive, TriangleAlert } from 'lucide-react';
+import { Download, WifiOff, CircleCheck, Clock, ShieldExclamationPoint, HardDrive, TriangleExclamationPoint } from 'lucide-react';
 import { formatAge } from '../../utils/offlineStore';
 import { APP_VERSION } from './dashboardShell';
 import { formatCount } from '../../utils/format';
@@ -97,7 +97,7 @@ export default function DashboardFooter({
         </span>
         {device.error ? (
           <span role="status" className="inline-flex items-center gap-1.5 text-amber-300 font-medium">
-            <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
+            <TriangleExclamationPoint className="w-3.5 h-3.5" aria-hidden="true" />
             {tr('Nicht gespeichert')}
           </span>
         ) : device.savedAt ? (
@@ -149,7 +149,7 @@ export default function DashboardFooter({
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-medium bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20"
       >
-        <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+        <ShieldExclamationPoint className="w-3.5 h-3.5" aria-hidden="true" />
         {tr('Offline-Modus, App-Installation und Live-Scanner brauchen HTTPS – Anleitung')}
       </a>
     ) : insecure && (
