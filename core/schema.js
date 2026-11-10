@@ -1298,6 +1298,15 @@ function migrationList(log = silentLog) {
                     ${OWNERS_VIEW_LENT_SQL}
                 `);
             }
+        },
+        {
+            version: 48,
+            name: 'add_anime_share_activity',
+            up: (d) => {
+                // whether others see by name what an account watches (status, episodes) and its public ratings; 1 = shared
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!cols.has('share_anime_activity')) d.exec('ALTER TABLE users ADD COLUMN share_anime_activity INTEGER NOT NULL DEFAULT 1;');
+            }
         }
     ];
 }
