@@ -198,7 +198,7 @@ function setMemberRole(ctx, { params, body }) {
 function forgetMarks(ctx, shelfId, userId) {
     const inShelf = 'SELECT v.id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE m.shelf_id = ?';
     const owned = ctx.db.prepare(`SELECT volume_id FROM volume_owners WHERE user_id = ? AND volume_id IN (${inShelf})`).all(userId, shelfId).map(r => r.volume_id);
-    ctx.db.prepare(`DELETE FROM volume_owners WHERE user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
+    ctx.db.prepare(`DELETE FROM volume_copies WHERE owner_user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
     for (const volumeId of owned) {
         purchaseDateFromRemainingOwners(ctx.db, volumeId);
         syncStatusWithOwners(ctx.db, volumeId);
@@ -274,7 +274,7 @@ function moveManga(ctx, { params, body }) {
         ctx.db.prepare('UPDATE mangas SET shelf_id = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?').run(target, ctx.user.id, mangaId);
         ctx.db.prepare('UPDATE trash SET shelf_id = ? WHERE manga_id = ?').run(target, mangaId);
         const owned = ctx.db.prepare(`SELECT DISTINCT volume_id FROM volume_owners WHERE volume_id IN (${IN_MANGA}) AND user_id NOT IN (${TARGET_MEMBERS})`).all(mangaId, target).map(r => r.volume_id);
-        ctx.db.prepare(`DELETE FROM volume_owners WHERE volume_id IN (${IN_MANGA}) AND user_id NOT IN (${TARGET_MEMBERS})`).run(mangaId, target);
+        ctx.db.prepare(`DELETE FROM volume_copies WHERE volume_id IN (${IN_MANGA}) AND owner_user_id NOT IN (${TARGET_MEMBERS})`).run(mangaId, target);
         for (const volumeId of owned) {
             purchaseDateFromRemainingOwners(ctx.db, volumeId);
             syncStatusWithOwners(ctx.db, volumeId);

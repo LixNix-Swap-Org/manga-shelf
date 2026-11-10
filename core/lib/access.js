@@ -331,7 +331,8 @@ function volumeAccess(ctx, volumeId, minRole = 'viewer') {
 // {volume_reads} and {chapter_progress} are the marks as the shelf rows show them (the views of core/lib/marks.js, keyed
 // by volume_id / manga_id), so the views themselves are refused bare as well.
 const SCOPED_TABLES = ['mangas', 'volumes', 'volume_owners', 'volume_reads', 'chapter_progress', 'trash'];
-const BARE_SCOPED_TABLE = new RegExp(`(^|[^A-Za-z0-9_{$])(${[...SCOPED_TABLES, 'shelf_volume_reads', 'shelf_chapter_progress'].join('|')})(?![A-Za-z0-9_])`, 'i');
+// volume_copies (migration 44) is the table behind {volume_owners}: refused bare too
+const BARE_SCOPED_TABLE = new RegExp(`(^|[^A-Za-z0-9_{$])(${[...SCOPED_TABLES, 'shelf_volume_reads', 'shelf_chapter_progress', 'volume_copies'].join('|')})(?![A-Za-z0-9_])`, 'i');
 const SCOPED_TOKEN = new RegExp(`\\{(${SCOPED_TABLES.join('|')})\\}`, 'g');
 
 /**

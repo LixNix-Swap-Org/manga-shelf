@@ -5,6 +5,7 @@ const { TRASH_RETENTION_DAYS, sqlTimestamp } = require('../lib/trash');
 const { findDuplicate, duplicateError } = require('./volumes');
 const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners');
 const { addRead, setChapterProgress } = require('../lib/marks');
+const { addCopy, hasOwner, dropHouseholdCopies } = require('../lib/copies');
 const access = require('../lib/access');
 const { qstr } = require('../lib/query');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('../lib/language');
@@ -109,7 +110,6 @@ function insertRow(ctx, table, columns, row, overrides = {}) {
 function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
     const volumeCols = columnsOf(ctx, 'volumes');
     volumeCols.delete('number_sort');
-    const ownerCols = columnsOf(ctx, 'volume_owners');
     const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
     const isMember = (userId) => Boolean(member.get(shelfId, userId));
     const restoredIds = new Set();
@@ -120,18 +120,19 @@ function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
     const vanished = new Map();
     for (const o of owners) {
         if (!restoredIds.has(o.volume_id)) continue;
-        if (isMember(o.user_id)) insertRow(ctx, 'volume_owners', ownerCols, o);
+        if (isMember(o.user_id)) addCopy(ctx.db, o.volume_id, o.user_id, o);
         else if (!vanished.has(o.volume_id)) vanished.set(o.volume_id, o);
     }
     // the catalog usually still holds these marks (they stay there, see core/lib/trash.js); an entry trashed before
     // migration 43 brings them back. A mark the catalog has kept its date.
     for (const r of reads) if (restoredIds.has(r.volume_id) && isMember(r.user_id)) addRead(ctx.db, r.volume_id, r.user_id, r.read_at ?? null);
-    // an owned volume left without owners goes to the restoring admin (a member: restoring needs editor rights there),
-    // otherwise it is missing
-    const hasOwner = ctx.db.prepare('SELECT 1 AS ok FROM volume_owners WHERE volume_id = ? LIMIT 1');
+    // an owned volume left without owners goes to the restoring admin (a member: restoring needs editor rights there);
+    // otherwise one whose owners could not come back is missing, and one that had none keeps its household copy
+    // (the volume insert added it, core/lib/copies.js)
     for (const v of volumes) {
-        if (v.status !== OWNED_STATUS || hasOwner.get(v.id)) continue;
+        if (v.status !== OWNED_STATUS || hasOwner(ctx.db, v.id)) continue;
         if (ctx.user?.role === 'admin') addOwner(ctx.db, v.id, ctx.user.id, vanished.get(v.id) || v);
+        else if (vanished.has(v.id)) dropHouseholdCopies(ctx.db, v.id);
         else syncStatusWithOwners(ctx.db, v.id);
     }
 }

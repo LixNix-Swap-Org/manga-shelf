@@ -447,7 +447,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
             if (heir) addOwner(db, row.volume_id, heir.user_id, row);
             else ownerless.push(row.volume_id);
         }
-        db.prepare('DELETE FROM volume_owners WHERE user_id = ?').run(userId);
+        db.prepare('DELETE FROM volume_copies WHERE owner_user_id = ?').run(userId);
         for (const volumeId of shared) purchaseDateFromRemainingOwners(db, volumeId);
         for (const volumeId of ownerless) syncStatusWithOwners(db, volumeId);
         db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);

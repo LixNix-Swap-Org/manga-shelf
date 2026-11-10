@@ -31,7 +31,7 @@ function insertTrash(ctx, { kind, refId, mangaId, title, payload, shelfId }) {
 }
 
 function deleteVolumeRows(ctx, volumeId) {
-    ctx.db.prepare('DELETE FROM volume_owners WHERE volume_id = ?').run(volumeId);
+    ctx.db.prepare('DELETE FROM volume_copies WHERE volume_id = ?').run(volumeId);
     ctx.db.prepare('DELETE FROM volumes WHERE id = ?').run(volumeId);
 }
 

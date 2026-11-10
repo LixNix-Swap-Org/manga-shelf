@@ -7,6 +7,7 @@ const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
 const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL } = require('./lib/catalog');
 const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
+const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -301,6 +302,8 @@ function migrationList(log = silentLog) {
             up: (d) => {
                 // Ownership per user: several people can own the same volume. volumes.status = 'Vorhanden' stays
                 // "at least one owner"; existing volumes are assigned to the oldest admin.
+                // replayed after migration 44: ownership lives in volume_copies, volume_owners is a view of it
+                if (copiesInPlace(d)) return;
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS volume_owners (
                         volume_id INTEGER NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
@@ -861,6 +864,8 @@ function migrationList(log = silentLog) {
                 };
                 for (const [scope, tables] of Object.entries(areas)) {
                     for (const table of tables) {
+                        // replayed after migration 44: volume_owners is a view (volume_copies carries the triggers)
+                        if (d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = ?").get(table)) continue;
                         for (const [suffix, event] of [['ins', 'INSERT'], ['upd', 'UPDATE'], ['del', 'DELETE']]) {
                             d.exec(`CREATE TRIGGER IF NOT EXISTS trg_dv_${table}_${suffix} AFTER ${event} ON ${table} BEGIN
                                 UPDATE data_versions SET version = version + 1 WHERE scope = '${scope}';
@@ -1126,6 +1131,44 @@ function migrationList(log = silentLog) {
                     ${MARK_VIEWS_SQL}
                     ${MARK_FOLLOW_TRIGGERS_SQL}
                 `);
+            }
+        },
+        {
+            version: 44,
+            name: 'add_volume_copies',
+            up: (d) => {
+                // Copies instead of an owner flag (core/lib/copies.js): every owner row becomes a personal copy, an owned
+                // volume without owner a household copy; triggers keep volumes.status on the copies from now on and
+                // volume_owners becomes a view of the personal copies (the shape every reader and the API know).
+                for (const name of COPY_TRIGGERS) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+                d.exec(COPIES_TABLE_SQL);
+                const ownersTable = d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'volume_owners'").get();
+                let personal = 0;
+                if (ownersTable) {
+                    personal = d.prepare(`INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at)
+                        SELECT o.volume_id, o.user_id, o.price, o.purchase_date, o.condition, COALESCE(o.created_at, CURRENT_TIMESTAMP)
+                        FROM volume_owners o
+                        WHERE NOT EXISTS (SELECT 1 FROM volume_copies c WHERE c.volume_id = o.volume_id AND c.owner_user_id = o.user_id)
+                        ORDER BY o.created_at, o.rowid`).run().changes;
+                    d.exec('DROP TABLE volume_owners;');
+                }
+                d.exec('DROP VIEW IF EXISTS volume_owners;');
+                const household = d.prepare(`INSERT INTO volume_copies (volume_id, purchase_price, purchase_date, condition, created_at)
+                    SELECT v.id, v.price, v.purchase_date, v.condition, COALESCE(v.created_at, CURRENT_TIMESTAMP) FROM volumes v
+                    WHERE v.status = 'Vorhanden' AND NOT EXISTS (SELECT 1 FROM volume_copies c WHERE c.volume_id = v.id)
+                    ORDER BY v.id`).run().changes;
+                // owners on a volume with another status: the volume becomes owned (the cleanup fix status_from_owners did that)
+                const owned = d.prepare(`UPDATE volumes SET status = 'Vorhanden'
+                    WHERE status IS NOT 'Vorhanden' AND lower(trim(COALESCE(status, ''))) <> 'gelesen'
+                      AND EXISTS (SELECT 1 FROM volume_copies c WHERE c.volume_id = volumes.id)`).run().changes;
+                d.exec(`
+                    ${OWNERS_VIEW_SQL}
+                    ${dataVersionTriggersSql('volume_copies', 'collection')}
+                    ${COPY_TRIGGERS_SQL}
+                `);
+                if (personal || household || owned) {
+                    log.info(`[Database Migration] v44: ${personal} owner rows -> personal copies, ${household} owned volumes without owner -> household copies, ${owned} volumes with owners but another status -> 'Vorhanden'`);
+                }
             }
         }
     ];

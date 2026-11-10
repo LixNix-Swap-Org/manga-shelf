@@ -12,6 +12,7 @@ const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = r
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
 const { addRead, removeRead } = require('../lib/marks');
+const { hasOwner, removeCopy, followVolumeValue, setOwners } = require('../lib/copies');
 const { parseLanguage } = require('../lib/language');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseSortAfter, parseYear, parsePriority, isValidDate, parseDate,
@@ -398,9 +399,7 @@ function update(ctx, { params, body }) {
         // Owner rows copied the volume's price/date/condition; those still holding the old value follow the correction,
         // a different value set per owner stays
         for (const [column, next] of [['price', price], ['purchase_date', purchase_date], ['condition', condition]]) {
-            if (next !== vol[column]) {
-                ctx.db.prepare(`UPDATE volume_owners SET ${column} = ? WHERE volume_id = ? AND ${column} IS ?`).run(next, vol.id, vol[column]);
-            }
+            if (next !== vol[column]) followVolumeValue(ctx.db, vol.id, column, vol[column], next);
         }
         stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, language.value, sortAfterFor(volType, sortAfter.value ?? null), vol.id);
         syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
@@ -488,9 +487,7 @@ function applyBulkSet(ctx, vol, set) {
     const keys = Object.keys(set);
     if (keys.length === 0) return;
     for (const column of OWNER_COLUMNS) {
-        if (column in set && set[column] !== vol[column]) {
-            ctx.db.prepare(`UPDATE volume_owners SET ${column} = ? WHERE volume_id = ? AND ${column} IS ?`).run(set[column], vol.id, vol[column]);
-        }
+        if (column in set && set[column] !== vol[column]) followVolumeValue(ctx.db, vol.id, column, vol[column], set[column]);
     }
     ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => set[k]), vol.id);
     if ('status' in set) syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
@@ -502,7 +499,7 @@ function applyBulkSet(ctx, vol, set) {
  */
 function applyOwnerOps(ctx, volumeId, { add, remove }, purchase = {}) {
     convertLegacyRead(ctx.db, volumeId, add[0] ?? ctx.user.id);
-    const hadOwners = Boolean(ctx.db.prepare('SELECT 1 FROM volume_owners WHERE volume_id = ? LIMIT 1').get(volumeId));
+    const hadOwners = hasOwner(ctx.db, volumeId);
     const vol = ctx.db.prepare('SELECT price, purchase_date, condition FROM volumes WHERE id = ?').get(volumeId);
     const given = OWNER_COLUMNS.filter((column) => purchase[column] !== undefined && purchase[column] !== null);
     const details = { ...vol, ...Object.fromEntries(given.map((column) => [column, purchase[column]])) };
@@ -510,7 +507,7 @@ function applyOwnerOps(ctx, volumeId, { add, remove }, purchase = {}) {
     for (const userId of add) addOwner(ctx.db, volumeId, userId, details);
     let removed = false;
     for (const userId of remove) {
-        if (ctx.db.prepare('DELETE FROM volume_owners WHERE volume_id = ? AND user_id = ?').run(volumeId, userId).changes > 0) removed = true;
+        if (removeCopy(ctx.db, volumeId, userId)) removed = true;
     }
     const status = syncStatusWithOwners(ctx.db, volumeId);
     if (removed && status === OWNED_STATUS) purchaseDateFromRemainingOwners(ctx.db, volumeId);
@@ -645,13 +642,10 @@ function takeUndo(ctx, token) {
     return entry;
 }
 
-function restoreOwners(ctx, volumeId, owners) {
-    ctx.db.prepare('DELETE FROM volume_owners WHERE volume_id = ?').run(volumeId);
-    const insert = ctx.db.prepare(`
-        INSERT INTO volume_owners (volume_id, user_id, price, purchase_date, condition, created_at)
-        VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
-    `);
-    for (const o of owners) insert.run(volumeId, o.user_id, o.price, o.purchase_date, o.condition, o.created_at);
+// the copies change without passing through "no copy", which would make the volume 'Fehlt' and drop its purchase date;
+// `household: false` when owners were there and none may come back (the volume becomes 'Fehlt', as before copies)
+function restoreOwners(ctx, volumeId, owners, { household = true } = {}) {
+    setOwners(ctx.db, volumeId, owners, { household });
 }
 
 function restoreReads(ctx, volumeId, reads) {
@@ -678,7 +672,7 @@ function revertBulk(ctx, token) {
     const putOwners = (volumeId, owners, shelfId) => {
         const all = Array.isArray(owners) ? owners : [];
         const kept = members(all, shelfId);
-        restoreOwners(ctx, volumeId, kept);
+        restoreOwners(ctx, volumeId, kept, { household: all.length === 0 });
         if (kept.length < all.length) syncStatusWithOwners(ctx.db, volumeId);
     };
     const trashEntry = ctx.db.prepare("SELECT payload FROM trash WHERE id = ? AND kind = 'volume' AND ref_id = ?");
