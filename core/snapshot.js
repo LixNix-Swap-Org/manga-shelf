@@ -124,16 +124,20 @@ function usersOfSeries(users, members, manga, userId, volumes, readsByVolume, ow
 // other editions of a work (same work_key): what the edition switcher shows
 const EDITIONS_SELECT = `
         SELECT m.id, m.title, m.language, m.region, m.currency, m.publisher, m.cover_image, m.owned_volumes,
-               (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id) AS volume_count, m.work_key, m.shelf_id
+               (SELECT count(*) FROM volumes v WHERE v.manga_id = m.id) AS volume_count, m.work_key, m.shelf_id, m.catalog_series_id
         FROM mangas m`;
 const EDITIONS_ORDER = 'ORDER BY m.language, m.id';
 
-/** The other editions of `manga` from rows of its work (any order), in the detail shape. */
+/**
+ * The other editions of `manga` from rows of its work (any order), in the detail shape. A row of the same catalog entry
+ * (the same edition in another shelf, e.g. a copy from POST /mangas/copy) is no other edition and stays out.
+ */
 function editionsOf(manga, rows) {
     if (!manga.work_key) return [];
-    return rows.filter(r => r.work_key === manga.work_key && r.id !== manga.id)
+    const entry = manga.catalog_series_id ?? null;
+    return rows.filter(r => r.work_key === manga.work_key && r.id !== manga.id && (entry === null || r.catalog_series_id !== entry))
         .sort((a, b) => (a.language < b.language ? -1 : a.language > b.language ? 1 : a.id - b.id))
-        .map(({ work_key, shelf_id, ...edition }) => edition);
+        .map(({ work_key, shelf_id, catalog_series_id, ...edition }) => edition);
 }
 
 /** GET /mangas/:id `editions`: the other series sharing the work key of `manga`. */

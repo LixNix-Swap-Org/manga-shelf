@@ -278,6 +278,7 @@
   "Aufräumen fehlgeschlagen": "Pulizia non riuscita",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "La pulizia è bloccata: l’elenco delle immagini di uno snapshot di backup non è leggibile.",
   "Aus CSV importieren": "Importa da CSV",
+  "Aus deinen Regalen": "Dai tuoi scaffali",
   "Aus deinen Reihen": "Dalle tue serie",
   "Aus dem Sendeplatz geschätzt": "Stimato dalla fascia oraria di messa in onda",
   "Aus der App": "Dall’app",
@@ -554,12 +555,15 @@
   "Bände": "Volumi",
   "Bände / Fortschritt": "Volumi / progresso",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "Arricchire i volumi è possibile solo dopo aver confermato l’edizione.",
+  "Bände aus deinen Regalen übernehmen": "Copia volumi dai tuoi scaffali",
   "Bände durchsuchen": "Cerca nei volumi",
   "Bände generieren": "Genera volumi",
   "Bände hinzufügen": "Aggiungi volumi",
   "Bände im Besitz": "Volumi posseduti",
   "Bände mit Besitzer, aber nicht im Besitz": "Volumi con proprietario ma non posseduti",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Mostra prima i volumi con priorità alta nella lista dei desideri",
+  "Bände mitnehmen (als „Fehlt“)": "Includi i volumi (come “Mancante”)",
+  "Bände übernehmen": "Copia volumi",
   "Bände-Checkliste": "Checklist dei volumi",
   "CSV herunterladen": "Scarica CSV",
   "CSV-Datei auswählen": "Scegli file CSV",
@@ -820,6 +824,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Impossibile mostrare questa vista. Di solito basta ricaricare.",
   "Diese Ausgabe lösen": "Scollega questa edizione",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Questa edizione si trova anche in un altro scaffale. Le tue modifiche valgono solo per questo scaffale.",
+  "Diese Ausgabe steht schon in diesem Regal": "Questa edizione è già su questo scaffale",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Questi volumi li possiedono altri utenti in serie che collezioni anche tu.",
   "Diese ISBN gehört zu „{title}“.": "Questo ISBN appartiene a “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Questo ISBN corrisponde a un’altra serie della collezione.",
@@ -829,6 +834,7 @@
     "many": "Questa serie ha {n} di capitoli: non di più.",
     "other": "Questa serie ha {n} capitoli: non di più."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "Questa serie non è la stessa edizione o non ha volumi mancanti",
   "Diese Reihe ist nicht in der Sammlung.": "Questa serie non è nella collezione.",
   "Diese Reihe sammelst du nicht mehr": "Non collezioni più questa serie",
   "Diese Reihe steht auf deiner Wunschliste": "Questa serie è nella tua lista dei desideri",
@@ -1071,6 +1077,8 @@
   "Fehler beim Zurücksetzen": "Errore durante il ripristino",
   "Fehler beim automatischen Ausfüllen": "Errore nella compilazione automatica",
   "Fehler beim Ändern des Status": "Errore nel cambio di stato",
+  "Fehler beim Übernehmen der Bände": "Errore durante la copia dei volumi",
+  "Fehler beim Übernehmen der Reihe": "Errore durante la copia della serie",
   "Fehler beim Übernehmen des Bands": "Errore nell’acquisizione del volume",
   "Fehler-ID: {ref}": "ID errore: {ref}",
   "Fehlerhafte Zeilen": "Righe errate",
@@ -1361,6 +1369,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Questo mese non esce nessun episodio dei tuoi anime. Appena sarà nota una data, apparirà qui.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "In questo periodo nulla è stato segnato come letto con una data.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "Questa settimana non esce nessun episodio dei tuoi anime. Appena sarà nota una data, apparirà qui.",
+  "In dieses Regal übernehmen": "Copia su questo scaffale",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Inserisci questa riga in {file}, poi riavvia il container:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Aggiungi questa riga in {file}, avvia il server e ripristina subito {backup} nella finestra Backup; non modificare nulla prima. Poi rimuovi di nuovo la riga.",
   "In {file} diese Zeile eintragen:": "Aggiungi questa riga in {file}:",
@@ -2883,6 +2892,7 @@
   "beschädigt": "danneggiato",
   "bisher {n} erschienen": "{n} usciti finora",
   "collecting::Pausiert": "In pausa",
+  "copy::Übernehmen": "Copia",
   "das Backup von vor dem Update fehlt": "manca il backup precedente all’aggiornamento",
   "das Backup von vor dem Update wurde verändert": "il backup precedente all’aggiornamento è stato modificato",
   "diesen Band": "questo volume",
@@ -2909,6 +2919,7 @@
   "fehlt ({count})": "manca ({count})",
   "festgelegt": "impostato",
   "freier Speicher unbekannt": "spazio libero sconosciuto",
+  "from muss die ID einer Reihe sein": "from deve essere l'ID di una serie",
   "gehört zu einem anderen Manga-Shelf-Server": "appartiene a un altro server Manga Shelf",
   "gelesen": "letto",
   "gelöscht": "– eliminazione eseguita",
@@ -2936,6 +2947,7 @@
     "many": "tra {n} giorni",
     "other": "tra {n} giorni"
   },
+  "in „{shelf}“": "in “{shelf}”",
   "kein Inhaltsverzeichnis gefunden": "nessun indice trovato",
   "kein JPG, PNG, WebP, GIF oder AVIF": "non è JPG, PNG, WebP, GIF o AVIF",
   "kein Manga-Shelf-Server": "non è un server Manga Shelf",
@@ -3012,7 +3024,9 @@
     "many": "file orfani",
     "other": "file orfani"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids deve essere un elenco da 1 a {max} ID di volumi",
   "volume_numbers Array ist erforderlich": "L’array volume_numbers è obbligatorio",
+  "volumes muss true oder false sein": "volumes deve essere true o false",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "modifica in coda",
     "many": "modifiche in coda",
@@ -3176,10 +3190,30 @@
     "many": "{n} volumi creati",
     "other": "{n} volumi creati"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "Qui manca {n} volume di “{shelf}”.",
+    "many": "Qui mancano {n} volumi di “{shelf}”.",
+    "other": "Qui mancano {n} volumi di “{shelf}”."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "{n} volume esce oggi",
     "many": "{n} volumi escono oggi",
     "other": "{n} volumi escono oggi"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "{n} volume verrà aggiunto qui come “Mancante”.",
+    "many": "{n} volumi verranno aggiunti qui come “Mancante”.",
+    "other": "{n} volumi verranno aggiunti qui come “Mancante”."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "{n} volume copiato",
+    "many": "{n} volumi copiati",
+    "other": "{n} volumi copiati"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} volume",
+    "many": "{n} volumi",
+    "other": "{n} volumi"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} volume",
@@ -3463,6 +3497,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Cerca con “Aggiungi anime” su AniList o MyAnimeList oppure crea una voce a mano.",
   "Übernatürlich": "Soprannaturale",
   "Übernehmen": "Applica",
+  "Übernehmen: {title}": "Copia: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Riprende titolo, autore, generi, descrizione, numero di volumi e copertina; volumi e possesso restano separati per ogni edizione.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Acquisisce i tuoi progressi da AniList e invia da qui ad AniList i nuovi episodi. Vince il numero di episodi più alto, mai all’indietro.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Acquisisce gli episodi visti dalla tua cronologia di Crunchyroll nella tua lista anime. Vince il numero di episodi più alto, mai all’indietro.",

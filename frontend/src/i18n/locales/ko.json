@@ -270,6 +270,7 @@
   "Aufräumen fehlgeschlagen": "정리에 실패했어요",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "정리할 수 없어요: 백업 스냅샷의 이미지 목록을 읽을 수 없어요.",
   "Aus CSV importieren": "CSV에서 가져오기",
+  "Aus deinen Regalen": "내 책장에서",
   "Aus deinen Reihen": "내 시리즈 중",
   "Aus dem Sendeplatz geschätzt": "방송 시간대로 추정",
   "Aus der App": "앱에서",
@@ -524,12 +525,15 @@
   "Bände": "권",
   "Bände / Fortschritt": "권 / 진행 상황",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "판을 확인한 후에야 권을 보강할 수 있어요.",
+  "Bände aus deinen Regalen übernehmen": "내 책장에서 권 가져오기",
   "Bände durchsuchen": "권 검색",
   "Bände generieren": "권 생성",
   "Bände hinzufügen": "권 추가",
   "Bände im Besitz": "보유 권",
   "Bände mit Besitzer, aber nicht im Besitz": "보유자가 있지만 보유가 아닌 권",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "위시 우선순위가 높은 권을 먼저 표시",
+  "Bände mitnehmen (als „Fehlt“)": "권도 가져오기 (“미보유”로)",
+  "Bände übernehmen": "권 가져오기",
   "Bände-Checkliste": "권 체크리스트",
   "CSV herunterladen": "CSV 다운로드",
   "CSV-Datei auswählen": "CSV 파일 선택",
@@ -786,6 +790,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "이 화면을 표시하지 못했어요. 새로고침하면 대부분 해결돼요.",
   "Diese Ausgabe lösen": "이 판 연결 해제",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "이 판은 다른 책장에도 있습니다. 변경 사항은 이 책장에만 적용됩니다.",
+  "Diese Ausgabe steht schon in diesem Regal": "이 판본은 이미 이 책장에 있어요",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "이 권들은 내가 수집하는 시리즈에서 다른 사용자가 갖고 있어요.",
   "Diese ISBN gehört zu „{title}“.": "이 ISBN은 “{title}”의 것이에요.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "이 ISBN은 컬렉션의 다른 시리즈와 일치해요.",
@@ -793,6 +798,7 @@
   "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
     "other": "이 시리즈는 {n}화까지 있습니다. 더 입력할 수 없습니다."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "이 시리즈는 같은 판본이 아니거나 빠진 권이 없어요",
   "Diese Reihe ist nicht in der Sammlung.": "이 시리즈는 컬렉션에 없어요.",
   "Diese Reihe sammelst du nicht mehr": "더 이상 수집하지 않는 시리즈예요",
   "Diese Reihe steht auf deiner Wunschliste": "위시리스트에 있는 시리즈예요",
@@ -1031,6 +1037,8 @@
   "Fehler beim Zurücksetzen": "되돌리는 중 오류가 발생했습니다",
   "Fehler beim automatischen Ausfüllen": "자동 채우기 중 오류가 발생했어요",
   "Fehler beim Ändern des Status": "상태를 변경하는 중 오류가 발생했어요",
+  "Fehler beim Übernehmen der Bände": "권을 가져오는 중 오류가 발생했어요",
+  "Fehler beim Übernehmen der Reihe": "시리즈를 가져오는 중 오류가 발생했어요",
   "Fehler beim Übernehmen des Bands": "권을 가져오는 중 오류가 발생했어요",
   "Fehler-ID: {ref}": "오류 ID: {ref}",
   "Fehlerhafte Zeilen": "오류가 있는 줄",
@@ -1313,6 +1321,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "이번 달에는 내 애니의 새 에피소드가 없습니다. 일정이 알려지면 여기에 표시됩니다.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "이 기간에는 날짜와 함께 읽음으로 표시된 항목이 없어요.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "이번 주에는 내 애니의 새 에피소드가 없습니다. 일정이 알려지면 여기에 표시됩니다.",
+  "In dieses Regal übernehmen": "이 책장으로 가져오기",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "{file}에 이 줄을 추가한 뒤 컨테이너를 다시 시작해 주세요:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "{file}에 다음 줄을 추가하고 서버를 시작한 뒤, 바로 백업 대화상자에서 {backup} 파일을 복원해 주세요. 그 전에는 아무것도 바꾸지 마세요. 그런 다음 이 줄을 다시 삭제해 주세요.",
   "In {file} diese Zeile eintragen:": "{file}에 다음 줄을 추가해 주세요:",
@@ -2793,6 +2802,7 @@
   "beschädigt": "손상됨",
   "bisher {n} erschienen": "지금까지 {n}권 발매",
   "collecting::Pausiert": "일시 중지",
+  "copy::Übernehmen": "가져오기",
   "das Backup von vor dem Update fehlt": "업데이트 전 백업이 없음",
   "das Backup von vor dem Update wurde verändert": "업데이트 전 백업이 변경됨",
   "diesen Band": "이 권",
@@ -2817,6 +2827,7 @@
   "fehlt ({count})": "미보유 ({count})",
   "festgelegt": "설정됨",
   "freier Speicher unbekannt": "여유 공간을 알 수 없음",
+  "from muss die ID einer Reihe sein": "from은 시리즈 ID여야 해요",
   "gehört zu einem anderen Manga-Shelf-Server": "다른 Manga Shelf 서버에 속해 있어요",
   "gelesen": "읽음",
   "gelöscht": "삭제됨",
@@ -2840,6 +2851,7 @@
   "in {n} Tag|in {n} Tagen": {
     "other": "{n}일 후"
   },
+  "in „{shelf}“": "“{shelf}”에 있음",
   "kein Inhaltsverzeichnis gefunden": "목차를 찾지 못했어요",
   "kein JPG, PNG, WebP, GIF oder AVIF": "JPG, PNG, WebP, GIF, AVIF가 아니에요",
   "kein Manga-Shelf-Server": "Manga Shelf 서버가 아니에요",
@@ -2910,7 +2922,9 @@
   "verwaiste Datei|verwaiste Dateien": {
     "other": "사용되지 않는 파일"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids는 권 ID 1~{max}개의 목록이어야 해요",
   "volume_numbers Array ist erforderlich": "volume_numbers 배열이 필요해요",
+  "volumes muss true oder false sein": "volumes는 true 또는 false여야 해요",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "other": "건의 대기 중 변경이"
   },
@@ -3060,8 +3074,20 @@
   "{n} Band angelegt|{n} Bände angelegt": {
     "other": "{n}권 생성됨"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "other": "“{shelf}”의 {n}권이 여기에는 없어요."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "other": "오늘 {n}권 발매"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "other": "{n}권을 여기에 “미보유”로 추가해요."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "other": "{n}권 가져옴"
+  },
+  "{n} Band|{n} Bände": {
+    "other": "{n}권"
   },
   "{n} Bände|{n} Bände": {
     "other": "{n}권"
@@ -3265,6 +3291,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "“애니메이션 추가”에서 AniList나 MyAnimeList를 검색하거나 항목을 직접 만들어 주세요.",
   "Übernatürlich": "초자연",
   "Übernehmen": "적용",
+  "Übernehmen: {title}": "가져오기: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "제목, 저자, 장르, 설명, 권수, 표지를 가져와요. 권과 보유 현황은 판마다 따로 유지돼요.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "AniList의 진행 상황을 가져오고 여기서 본 새 에피소드를 AniList로 보내요. 에피소드 수가 더 큰 쪽이 우선하며 뒤로 가지 않아요.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Crunchyroll 시청 기록의 시청 에피소드를 애니메이션 목록에 반영해요. 에피소드 수가 더 큰 쪽이 우선하며 뒤로 가지 않아요.",

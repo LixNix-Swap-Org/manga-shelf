@@ -13,15 +13,15 @@ export function useShelves(userId, enabled = true) {
   return enabled && known ? shelvesOf(scope) : null;
 }
 
-// viewer: true while the signed-in user is only a viewer of the given shelf; movableShelves: target shelves when the user owns this shelf and can write to at least one other shelf.
+// viewer: true while the signed-in user is only a viewer of the given shelf; movableShelves: target shelves when the user owns this shelf and can write to at least one other shelf; shelfCount: how many shelves the user belongs to (0 until known).
 export function useShelfAccess(shelfId, enabled, userId) {
   const shelves = useShelves(userId, Boolean(enabled && shelfId));
   return useMemo(() => {
     const list = Array.isArray(shelves) ? shelves : [];
     const shelf = list.find((s) => s.id === shelfId);
-    if (!shelf) return { viewer: false, movableShelves: [] };
+    if (!shelf) return { viewer: false, movableShelves: [], shelfCount: list.length };
     const editable = list.filter((s) => s.role !== 'viewer');
-    return { viewer: shelf.role === 'viewer', movableShelves: shelf.role === 'owner' && editable.length > 1 ? editable : [] };
+    return { viewer: shelf.role === 'viewer', movableShelves: shelf.role === 'owner' && editable.length > 1 ? editable : [], shelfCount: list.length };
   }, [shelves, shelfId]);
 }
 

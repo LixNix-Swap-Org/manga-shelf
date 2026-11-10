@@ -270,6 +270,7 @@
   "Aufräumen fehlgeschlagen": "整理に失敗しました",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "整理はロックされています: バックアップのスナップショットの画像リストを読み取れません。",
   "Aus CSV importieren": "CSVからインポート",
+  "Aus deinen Regalen": "あなたの本棚から",
   "Aus deinen Reihen": "あなたのシリーズから",
   "Aus dem Sendeplatz geschätzt": "放送枠から推定",
   "Aus der App": "アプリから",
@@ -524,12 +525,15 @@
   "Bände": "巻",
   "Bände / Fortschritt": "巻数 / 進捗",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "版を確定するまで、巻の補完はできません。",
+  "Bände aus deinen Regalen übernehmen": "あなたの本棚から巻を取り込む",
   "Bände durchsuchen": "巻を検索",
   "Bände generieren": "巻を生成",
   "Bände hinzufügen": "巻を追加",
   "Bände im Besitz": "所持している巻",
   "Bände mit Besitzer, aber nicht im Besitz": "所有者がいるのに所持になっていない巻",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "ウィッシュ優先度の高い巻を先に表示",
+  "Bände mitnehmen (als „Fehlt“)": "巻も取り込む（「未所持」として）",
+  "Bände übernehmen": "巻を取り込む",
   "Bände-Checkliste": "巻チェックリスト",
   "CSV herunterladen": "CSVをダウンロード",
   "CSV-Datei auswählen": "CSVファイルを選択",
@@ -786,6 +790,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "この画面を表示できませんでした。再読み込みすると、たいてい直ります。",
   "Diese Ausgabe lösen": "この版のリンクを解除",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "この版は別の本棚にもあります。変更はこの本棚にだけ適用されます。",
+  "Diese Ausgabe steht schon in diesem Regal": "この版はすでにこの本棚にあります",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "これらの巻は、あなたも集めているシリーズで他のユーザーが所持しています。",
   "Diese ISBN gehört zu „{title}“.": "このISBNは「{title}」のものです。",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "このISBNは、コレクション内の別のシリーズに一致します。",
@@ -793,6 +798,7 @@
   "Diese Reihe hat {n} Kapitel – mehr geht nicht.|Diese Reihe hat {n} Kapitel – mehr geht nicht.": {
     "other": "このシリーズは全{n}話です。それ以上は入力できません。"
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "このシリーズは同じ版ではないか、足りない巻がありません",
   "Diese Reihe ist nicht in der Sammlung.": "このシリーズはコレクションにありません。",
   "Diese Reihe sammelst du nicht mehr": "このシリーズはもう集めていません",
   "Diese Reihe steht auf deiner Wunschliste": "このシリーズはウィッシュリストにあります",
@@ -1031,6 +1037,8 @@
   "Fehler beim Zurücksetzen": "リセット中にエラーが発生しました",
   "Fehler beim automatischen Ausfüllen": "自動入力中にエラーが発生しました",
   "Fehler beim Ändern des Status": "ステータスの変更中にエラーが発生しました",
+  "Fehler beim Übernehmen der Bände": "巻の取り込み中にエラーが発生しました",
+  "Fehler beim Übernehmen der Reihe": "シリーズの取り込み中にエラーが発生しました",
   "Fehler beim Übernehmen des Bands": "巻の取り込み中にエラーが発生しました",
   "Fehler-ID: {ref}": "エラーID: {ref}",
   "Fehlerhafte Zeilen": "エラーのある行",
@@ -1313,6 +1321,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "今月はあなたのアニメの新しい話はありません。日付が分かりしだいここに表示されます。",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "この期間に、日付付きで既読にした巻はありません。",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "今週はあなたのアニメの新しい話はありません。日付が分かりしだいここに表示されます。",
+  "In dieses Regal übernehmen": "この本棚に取り込む",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "{file}に次の行を追加し、コンテナを再起動してください:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "{file}に次の行を追加してサーバーを起動し、すぐにバックアップのダイアログで{backup}を復元してください。それまでは何も変更しないでください。復元後は、この行を削除してください。",
   "In {file} diese Zeile eintragen:": "{file}に次の行を追加してください:",
@@ -2793,6 +2802,7 @@
   "beschädigt": "破損",
   "bisher {n} erschienen": "これまでに{n}巻発売",
   "collecting::Pausiert": "一時停止中",
+  "copy::Übernehmen": "取り込む",
   "das Backup von vor dem Update fehlt": "アップデート前のバックアップがありません",
   "das Backup von vor dem Update wurde verändert": "アップデート前のバックアップが変更されています",
   "diesen Band": "この巻",
@@ -2817,6 +2827,7 @@
   "fehlt ({count})": "未所持({count})",
   "festgelegt": "設定済み",
   "freier Speicher unbekannt": "空き容量不明",
+  "from muss die ID einer Reihe sein": "from はシリーズの ID である必要があります",
   "gehört zu einem anderen Manga-Shelf-Server": "別のManga Shelfサーバーのものです",
   "gelesen": "既読",
   "gelöscht": "削除しました",
@@ -2840,6 +2851,7 @@
   "in {n} Tag|in {n} Tagen": {
     "other": "{n}日後"
   },
+  "in „{shelf}“": "「{shelf}」",
   "kein Inhaltsverzeichnis gefunden": "目次が見つかりません",
   "kein JPG, PNG, WebP, GIF oder AVIF": "JPG、PNG、WebP、GIF、AVIFのいずれでもありません",
   "kein Manga-Shelf-Server": "Manga Shelfサーバーではありません",
@@ -2910,7 +2922,9 @@
   "verwaiste Datei|verwaiste Dateien": {
     "other": "孤立ファイル"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids は 1〜{max} 件の巻 ID のリストである必要があります",
   "volume_numbers Array ist erforderlich": "volume_numbers配列が必要です",
+  "volumes muss true oder false sein": "volumes は true か false である必要があります",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "other": "保留中の変更"
   },
@@ -3060,8 +3074,20 @@
   "{n} Band angelegt|{n} Bände angelegt": {
     "other": "{n}巻を追加しました"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "other": "「{shelf}」の {n} 巻がここにありません。"
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "other": "今日 {n} 巻発売"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "other": "{n} 巻を「未所持」としてここに追加します。"
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "other": "{n} 巻を取り込みました"
+  },
+  "{n} Band|{n} Bände": {
+    "other": "{n} 巻"
   },
   "{n} Bände|{n} Bände": {
     "other": "{n}巻"
@@ -3265,6 +3291,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "「アニメを追加」からAniListまたはMyAnimeListで検索するか、項目を手動で作成してください。",
   "Übernatürlich": "超自然",
   "Übernehmen": "適用",
+  "Übernehmen: {title}": "取り込む: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "タイトル、作者、ジャンル、説明、巻数、表紙を引き継ぎます。巻と所有状況は版ごとに別々のままです。",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "AniListから進捗を取り込み、ここで見た新しい話をAniListに送ります。話数は多いほうが優先され、減ることはありません。",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Crunchyrollの履歴から視聴済みの話を、アニメリストに取り込みます。話数は多いほうが優先され、減ることはありません。",

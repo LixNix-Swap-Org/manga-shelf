@@ -949,6 +949,88 @@ const scenarios = [
         }
     },
     {
+        name: 'catalog copy: a series and its volumes from another own shelf, never anything of a shelf the caller does not belong to',
+        async run({ admin, ed }) {
+            const shelfOf = async (api, name) => {
+                const res = await api('POST', '/shelves', { name });
+                assert.equal(res.status, 201, JSON.stringify(res.body));
+                return res.body.id;
+            };
+            const detail = async (api, id) => (await api('GET', `/mangas/${id}`)).body;
+            const shelfA = await shelfOf(ed, 'Kern Kopie A');
+            const shelfB = await shelfOf(ed, 'Kern Kopie B');
+            const adminShelf = await shelfOf(admin, 'Kern Kopie Fremd');
+            const sourceId = await newSeries(ed, 'Kern Kopie Reihe', {
+                publisher: 'Kern Kopie Verlag', description: 'Text von Ed', author: 'Autorin Kopie', total_volumes: 9, wish_priority: 2, shelf_id: shelfA,
+                work_key: 'anilist:990077'
+            });
+            await newVolume(ed, sourceId, '1', { pages: 180, isbn: '9783551000002', status: 'Vorhanden' });
+            await newVolume(ed, sourceId, '2', { notes: 'meine Notiz' });
+            await newVolume(ed, sourceId, '3', { status: 'Erscheint bald', release_date: '2027-03' });
+            const foreignId = await newSeries(admin, 'Kern Kopie Reihe Fremd', { description: 'Text von Admin', shelf_id: adminShelf });
+
+            // the search sees ed's own shelves only and leaves out what the target shelf already holds
+            const search = async (q, shelfId) => (await ed('GET', `/mangas/copy-candidates?q=${encodeURIComponent(q)}&shelf_id=${shelfId}`)).body;
+            let found = await search('kern kopie', shelfB);
+            assert.deepEqual(found.results.map(r => [r.id, r.shelf_id, r.shelf_name, r.volume_count]), [[sourceId, shelfA, 'Kern Kopie A', 3]]);
+            assert.equal('catalog_series_id' in found.results[0], false, 'no catalog id');
+            assert.deepEqual((await search('kern kopie', shelfA)).results, []);
+            assert.deepEqual((await search('k', shelfB)).results, [], 'too short');
+            assert.equal((await ed('GET', `/mangas/copy-candidates?q=kern&shelf_id=${adminShelf}`)).status, 404, 'a foreign target shelf');
+            assert.ok(!(await admin('GET', `/mangas/copy-candidates?q=kern%20kopie&shelf_id=${adminShelf}`)).body.results.some(r => r.id === sourceId));
+
+            // the copy: ed's values, no wish, every volume missing (an announced one stays announced), nothing per person
+            assert.equal((await ed('POST', '/mangas/copy', { from: foreignId, shelf_id: shelfB })).status, 404);
+            assert.equal((await ed('POST', '/mangas/copy', { from: sourceId, shelf_id: adminShelf })).status, 404);
+            assert.equal((await ed('POST', '/mangas/copy', { from: sourceId, shelf_id: shelfB, volumes: 'ja' })).status, 400);
+            const copied = await ed('POST', '/mangas/copy', { from: sourceId, shelf_id: shelfB, volumes: true });
+            assert.equal(copied.status, 201, JSON.stringify(copied.body));
+            assert.deepEqual([copied.body.shelf_id, copied.body.volumes_created], [shelfB, 3]);
+            const copy = await detail(ed, copied.body.id);
+            assert.deepEqual([copy.title, copy.description, copy.author, copy.total_volumes, copy.wish_priority, copy.shelf_id],
+                ['Kern Kopie Reihe', 'Text von Ed', 'Autorin Kopie', 9, null, shelfB]);
+            assert.deepEqual(copy.volumes.map(v => [v.volume_number, v.status, v.pages, v.notes, v.owners.length]),
+                [['1', 'Fehlt', 180, null, 0], ['2', 'Fehlt', null, null, 0], ['3', 'Erscheint bald', null, null, 0]]);
+            assert.deepEqual(copy.catalog.local_fields, []);
+            // the same edition in another shelf is no other edition; an English edition of the work is one for both rows
+            assert.deepEqual([copy.editions, (await detail(ed, sourceId)).editions], [[], []]);
+            const english = await ed('POST', `/mangas/${sourceId}/editions`, { language: 'en' });
+            assert.equal(english.status, 201, JSON.stringify(english.body));
+            assert.deepEqual((await detail(ed, copied.body.id)).editions.map(e => [e.id, e.language]), [[english.body.id, 'en']]);
+            assert.deepEqual((await detail(ed, sourceId)).editions.map(e => e.id), [english.body.id]);
+            assert.equal('catalog_series_id' in (await detail(ed, sourceId)).editions[0], false);
+            // shelf B holds the German edition now: only the English one is still offered
+            assert.deepEqual((await search('kern kopie', shelfB)).results.map(r => [r.id, r.language]), [[english.body.id, 'en']]);
+            assert.equal((await ed('POST', '/mangas/copy', { from: sourceId, shelf_id: shelfB })).body.code, 'COPY_EXISTS');
+            assert.equal((await ed('POST', '/mangas/copy', { from: copied.body.id, shelf_id: shelfB })).status, 409);
+
+            // both rows are ed's: an edit of one reaches the other through the catalog
+            assert.equal((await ed('PUT', `/mangas/${sourceId}`, { description: 'Neuer Text' })).status, 200);
+            assert.equal((await detail(ed, copied.body.id)).description, 'Neuer Text');
+
+            // volumes the copy lacks, from the other row of the same edition
+            const sources = async (id) => (await ed('GET', `/mangas/${id}/volume-sources`)).body.sources;
+            assert.deepEqual(await sources(copied.body.id), []);
+            await newVolume(ed, sourceId, '4');
+            await newVolume(ed, sourceId, 'Artbook', { type: 'special' });
+            let offered = await sources(copied.body.id);
+            assert.deepEqual(offered.map(s => [s.manga_id, s.shelf_name, s.volumes.map(v => v.volume_number)]), [[sourceId, 'Kern Kopie A', ['4', 'Artbook']]]);
+            assert.equal((await ed('POST', `/mangas/${copied.body.id}/volumes/copy`, { from: foreignId })).status, 404);
+            assert.equal((await ed('POST', `/mangas/${copied.body.id}/volumes/copy`, { from: sourceId, volume_ids: 'x' })).status, 400);
+            const one = await ed('POST', `/mangas/${copied.body.id}/volumes/copy`, { from: sourceId, volume_ids: [offered[0].volumes[1].id] });
+            assert.equal(one.status, 200, JSON.stringify(one.body));
+            assert.equal(one.body.created.length, 1);
+            offered = await sources(copied.body.id);
+            assert.deepEqual(offered[0].volumes.map(v => v.volume_number), ['4']);
+            assert.equal((await ed('POST', `/mangas/${copied.body.id}/volumes/copy`, { from: sourceId })).body.created.length, 1);
+            assert.deepEqual(await sources(copied.body.id), []);
+            assert.equal((await ed('POST', `/mangas/${copied.body.id}/volumes/copy`, { from: sourceId })).status, 400);
+            // the source also lacks nothing now that the copy has the same volumes
+            assert.deepEqual(await sources(sourceId), []);
+            assert.equal((await admin('GET', `/mangas/${copied.body.id}/volume-sources`)).status, 404);
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');

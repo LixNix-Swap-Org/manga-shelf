@@ -282,6 +282,7 @@
   "Aufräumen fehlgeschlagen": "Porządkowanie nie powiodło się",
   "Aufräumen ist gesperrt: die Bildliste eines Sicherungs-Snapshots ist nicht lesbar.": "Porządkowanie jest zablokowane: nie można odczytać listy obrazów migawki kopii zapasowej.",
   "Aus CSV importieren": "Importuj z CSV",
+  "Aus deinen Regalen": "Z twoich półek",
   "Aus deinen Reihen": "Z twoich serii",
   "Aus dem Sendeplatz geschätzt": "Oszacowano na podstawie godziny emisji",
   "Aus der App": "Z aplikacji",
@@ -569,12 +570,15 @@
   "Bände": "Tomy",
   "Bände / Fortschritt": "Tomy / postęp",
   "Bände anreichern geht erst, wenn die Edition bestätigt ist.": "Uzupełnianie tomów jest możliwe dopiero po potwierdzeniu wydania.",
+  "Bände aus deinen Regalen übernehmen": "Przenieś tomy z twoich półek",
   "Bände durchsuchen": "Przeszukaj tomy",
   "Bände generieren": "Wygeneruj tomy",
   "Bände hinzufügen": "Dodaj tomy",
   "Bände im Besitz": "Posiadane tomy",
   "Bände mit Besitzer, aber nicht im Besitz": "Tomy z właścicielem, ale nie posiadane",
   "Bände mit hoher Wunsch-Priorität zuerst zeigen": "Najpierw pokaż tomy o wysokim priorytecie na liście życzeń",
+  "Bände mitnehmen (als „Fehlt“)": "Dołącz tomy (jako „Brakuje”)",
+  "Bände übernehmen": "Przenieś tomy",
   "Bände-Checkliste": "Lista kontrolna tomów",
   "CSV herunterladen": "Pobierz CSV",
   "CSV-Datei auswählen": "Wybierz plik CSV",
@@ -837,6 +841,7 @@
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Nie udało się wyświetlić tego widoku. Ponowne wczytanie zwykle to naprawia.",
   "Diese Ausgabe lösen": "Odłącz to wydanie",
   "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "To wydanie jest też na innej półce. Twoje zmiany dotyczą tylko tej półki.",
+  "Diese Ausgabe steht schon in diesem Regal": "To wydanie jest już na tej półce",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Te tomy posiadają inni użytkownicy w seriach, które ty też kolekcjonujesz.",
   "Diese ISBN gehört zu „{title}“.": "Ten ISBN należy do „{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Ten ISBN pasuje do innej serii w kolekcji.",
@@ -847,6 +852,7 @@
     "many": "Ta seria ma {n} rozdziałów – więcej się nie da.",
     "other": "Ta seria ma {n} rozdziału – więcej się nie da."
   },
+  "Diese Reihe ist nicht dieselbe Ausgabe oder hat keine fehlenden Bände": "Ta seria nie jest tym samym wydaniem albo nie ma brakujących tomów",
   "Diese Reihe ist nicht in der Sammlung.": "Tej serii nie ma w kolekcji.",
   "Diese Reihe sammelst du nicht mehr": "Tej serii już nie kolekcjonujesz",
   "Diese Reihe steht auf deiner Wunschliste": "Ta seria jest na twojej liście życzeń",
@@ -1091,6 +1097,8 @@
   "Fehler beim Zurücksetzen": "Błąd podczas przywracania",
   "Fehler beim automatischen Ausfüllen": "Błąd automatycznego uzupełniania",
   "Fehler beim Ändern des Status": "Błąd zmiany statusu",
+  "Fehler beim Übernehmen der Bände": "Błąd podczas przenoszenia tomów",
+  "Fehler beim Übernehmen der Reihe": "Błąd podczas przenoszenia serii",
   "Fehler beim Übernehmen des Bands": "Błąd przejmowania tomu",
   "Fehler-ID: {ref}": "ID błędu: {ref}",
   "Fehlerhafte Zeilen": "Błędne wiersze",
@@ -1385,6 +1393,7 @@
   "In diesem Monat erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "W tym miesiącu nie wychodzi żaden odcinek Twoich anime. Gdy termin będzie znany, pojawi się tutaj.",
   "In diesem Zeitraum wurde nichts mit Datum als gelesen markiert.": "W tym okresie nic nie zostało oznaczone jako przeczytane z datą.",
   "In dieser Woche erscheint keine Folge deiner Anime. Sobald ein Termin bekannt ist, steht er hier.": "W tym tygodniu nie wychodzi żaden odcinek Twoich anime. Gdy termin będzie znany, pojawi się tutaj.",
+  "In dieses Regal übernehmen": "Przenieś na tę półkę",
   "In {file} diese Zeile eintragen, dann den Container neu starten:": "Wpisz tę linię w {file}, a potem uruchom kontener ponownie:",
   "In {file} diese Zeile eintragen, den Server starten und sofort im Backups-Dialog {backup} einspielen; vorher nichts ändern. Danach die Zeile wieder entfernen.": "Wpisz tę linię w {file}, uruchom serwer i od razu przywróć {backup} w oknie Kopie zapasowe; nic wcześniej nie zmieniaj. Potem usuń tę linię.",
   "In {file} diese Zeile eintragen:": "Wpisz tę linię w {file}:",
@@ -2928,6 +2937,7 @@
   "beschädigt": "uszkodzona",
   "bisher {n} erschienen": "dotąd wydano {n}",
   "collecting::Pausiert": "Wstrzymane",
+  "copy::Übernehmen": "Przenieś",
   "das Backup von vor dem Update fehlt": "brakuje kopii zapasowej sprzed aktualizacji",
   "das Backup von vor dem Update wurde verändert": "kopia zapasowa sprzed aktualizacji została zmieniona",
   "diesen Band": "ten tom",
@@ -2955,6 +2965,7 @@
   "fehlt ({count})": "brakuje ({count})",
   "festgelegt": "ustalone",
   "freier Speicher unbekannt": "wolne miejsce nieznane",
+  "from muss die ID einer Reihe sein": "from musi być ID serii",
   "gehört zu einem anderen Manga-Shelf-Server": "należy do innego serwera Manga Shelf",
   "gelesen": "przeczytane",
   "gelöscht": "usunięto",
@@ -2984,6 +2995,7 @@
     "many": "za {n} dni",
     "other": "za {n} dnia"
   },
+  "in „{shelf}“": "na „{shelf}”",
   "kein Inhaltsverzeichnis gefunden": "nie znaleziono spisu treści",
   "kein JPG, PNG, WebP, GIF oder AVIF": "to nie JPG, PNG, WebP, GIF ani AVIF",
   "kein Manga-Shelf-Server": "to nie serwer Manga Shelf",
@@ -3063,7 +3075,9 @@
     "many": "osieroconych plików",
     "other": "osieroconego pliku"
   },
+  "volume_ids muss eine Liste von 1 bis {max} Band-IDs sein": "volume_ids musi być listą od 1 do {max} ID tomów",
   "volume_numbers Array ist erforderlich": "tablica volume_numbers jest wymagana",
+  "volumes muss true oder false sein": "volumes musi mieć wartość true lub false",
   "vorgemerkte Änderung geht|vorgemerkte Änderungen gehen": {
     "one": "zapisana zmiana",
     "few": "zapisane zmiany",
@@ -3234,11 +3248,35 @@
     "many": "Utworzono {n} tomów",
     "other": "Utworzono {n} tomu"
   },
+  "{n} Band aus „{shelf}“ fehlt hier.|{n} Bände aus „{shelf}“ fehlen hier.": {
+    "one": "Brakuje tu {n} tomu z „{shelf}”.",
+    "few": "Brakuje tu {n} tomów z „{shelf}”.",
+    "many": "Brakuje tu {n} tomów z „{shelf}”.",
+    "other": "Brakuje tu {n} tomu z „{shelf}”."
+  },
   "{n} Band erscheint heute|{n} Bände erscheinen heute": {
     "one": "Dziś wychodzi {n} tom",
     "few": "Dziś wychodzą {n} tomy",
     "many": "Dziś wychodzi {n} tomów",
     "other": "Dziś wychodzi {n} tomu"
+  },
+  "{n} Band wird hier als „Fehlt“ angelegt.|{n} Bände werden hier als „Fehlt“ angelegt.": {
+    "one": "{n} tom zostanie tu dodany jako „Brakuje”.",
+    "few": "{n} tomy zostaną tu dodane jako „Brakuje”.",
+    "many": "{n} tomów zostanie tu dodanych jako „Brakuje”.",
+    "other": "{n} tomu zostanie tu dodane jako „Brakuje”."
+  },
+  "{n} Band übernommen|{n} Bände übernommen": {
+    "one": "Przeniesiono {n} tom",
+    "few": "Przeniesiono {n} tomy",
+    "many": "Przeniesiono {n} tomów",
+    "other": "Przeniesiono {n} tomu"
+  },
+  "{n} Band|{n} Bände": {
+    "one": "{n} tom",
+    "few": "{n} tomy",
+    "many": "{n} tomów",
+    "other": "{n} tomu"
   },
   "{n} Bände|{n} Bände": {
     "one": "{n} tom",
@@ -3562,6 +3600,7 @@
   "Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.": "Wyszukaj w AniList lub MyAnimeList przez „Dodaj anime” albo utwórz wpis ręcznie.",
   "Übernatürlich": "Nadprzyrodzone",
   "Übernehmen": "Zastosuj",
+  "Übernehmen: {title}": "Przenieś: {title}",
   "Übernimmt Titel, Autor, Genres, Beschreibung, Bandzahl und Cover; Bände und Besitz bleiben bei jeder Ausgabe für sich.": "Przejmuje tytuł, autora, gatunki, opis, liczbę tomów i okładkę; tomy i stan posiadania pozostają osobne dla każdego wydania.",
   "Übernimmt deinen Fortschritt von AniList und schickt neue Folgen von hier an AniList. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Przejmuje twój postęp z AniList i wysyła nowe odcinki stąd do AniList. Wygrywa wyższa liczba odcinków, nigdy w tył.",
   "Übernimmt gesehene Folgen aus deinem Crunchyroll-Verlauf in deine Anime-Liste. Die höhere Folgenzahl gewinnt, nie rückwärts.": "Przenosi obejrzane odcinki z twojej historii Crunchyroll na twoją listę anime. Wygrywa wyższa liczba odcinków, nigdy w tył.",
