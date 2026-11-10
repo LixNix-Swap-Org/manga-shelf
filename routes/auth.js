@@ -162,9 +162,10 @@ router.post('/auth/login', async (req, res) => {
     loginGuard.attempt(account, ip);
 
     // "Max" and "max" are the same account; an exact match wins if old data has both
-    // as typed or in NFC (new accounts are stored in NFC; an older one keeps the form it was created with)
+    // as typed or in NFC (new accounts are stored in NFC; an older one keeps the form it was created with). Written as
+    // IN, not as two NOCASE equalities joined by OR: SQLite 3.47 (Node 22.13) turns that OR into a case-sensitive lookup
     const typed = username.trim();
-    const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE OR username = ? COLLATE NOCASE ORDER BY (username = ?) DESC, id ASC LIMIT 1')
+    const user = db.prepare('SELECT * FROM users WHERE (username COLLATE NOCASE) IN (?, ?) ORDER BY (username = ?) DESC, id ASC LIMIT 1')
         .get(typed, typed.normalize('NFC'), typed);
     const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
     if (!user || !valid) throw new HttpError(401, 'Ungültige Anmeldedaten', 'INVALID_CREDENTIALS');
