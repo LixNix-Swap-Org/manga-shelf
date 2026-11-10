@@ -223,6 +223,8 @@ jobs:
       - name: Service probe (install-service, permissions, uninstall-service)
         if: runner.os != 'macOS'
         continue-on-error: true
+        # a few seconds; a hanging service install must not take the binaries with it
+        timeout-minutes: 5
         shell: bash
         env:
           BINARY: dist/server/${{ matrix.smoke }}
@@ -245,6 +247,7 @@ jobs:
       - name: x64 part of the universal binary (Rosetta)
         if: runner.os == 'macOS'
         continue-on-error: true
+        timeout-minutes: 5
         run: arch -x86_64 "dist/server/${{ matrix.smoke }}" --version
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -417,6 +420,8 @@ jobs:
       - name: Flatpak (attempt)
         if: steps.project.outputs.present == 'true' && runner.os == 'Linux'
         continue-on-error: true
+        # usually 3 to 4 minutes; a hanging Flathub download must not run into the job limit and cancel the installers
+        timeout-minutes: 15
         shell: bash
         working-directory: desktop
         run: |

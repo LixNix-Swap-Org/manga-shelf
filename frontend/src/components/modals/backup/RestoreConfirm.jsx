@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { RefreshCw, TriangleAlert, ShieldAlert } from 'lucide-react';
+import { RefreshCw, TriangleExclamationPoint, ShieldExclamationPoint } from 'lucide-react';
 import { formatDateTime, formatMegabytes, formatNumber, formatTime } from '../../../utils/format';
 import { t } from '../../../i18n/index.js';
 import { payloadText } from '../../../i18n/serverText.js';
@@ -119,7 +119,7 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
 
       {userLine && (
         <div className="bg-rose-500/15 border border-rose-500/40 text-rose-100 p-3 rounded-xl text-sm font-semibold flex gap-2">
-          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-rose-300" aria-hidden="true" />
+          <ShieldExclamationPoint className="w-4 h-4 shrink-0 mt-0.5 text-rose-300" aria-hidden="true" />
           <span>{userLine}</span>
         </div>
       )}
@@ -127,7 +127,7 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
       {schemaLine && (
         <div className="bg-rose-500/10 border border-rose-500/40 text-rose-200 p-3 rounded-xl text-xs space-y-2">
           <p className="flex gap-2">
-            <TriangleAlert className="w-4 h-4 shrink-0 text-rose-300" aria-hidden="true" />
+            <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-rose-300" aria-hidden="true" />
             <span>{schemaLine}</span>
           </p>
           <label htmlFor={checkboxId} className="flex items-center gap-2 text-rose-100 cursor-pointer">
@@ -147,7 +147,7 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
         <ul aria-label={t('Hinweise zur Wiederherstellung')} className="space-y-1">
           {otherLines.map(line => (
             <li key={line} className="text-xs text-amber-200 flex gap-2">
-              <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" aria-hidden="true" />
+              <TriangleExclamationPoint className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" aria-hidden="true" />
               <span>{line}</span>
             </li>
           ))}

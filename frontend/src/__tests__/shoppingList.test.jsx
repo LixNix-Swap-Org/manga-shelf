@@ -988,3 +988,31 @@ describe('ShoppingListView layout', () => {
   });
 });
 
+
+describe('ShoppingListView: owned in another own shelf', () => {
+  const elsewhere = [
+    { shelf_id: 2, shelf_name: 'Wohnzimmer', status: 'owned', owners: ['lena'] },
+    { shelf_id: 3, shelf_name: 'Arbeitszimmer', status: 'ordered', owners: [] }
+  ];
+  const warning = 'Schon vorhanden in: Wohnzimmer (lena) · Schon bestellt in: Arbeitszimmer';
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('warns on the card and on the scan of that volume, which stays bookable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response(200, {
+      isbn: '9783551000011', found: true, book: { title: 'Berserk', volume_number: '1', volume_number_known: true },
+      matched_manga: { id: 9, title: 'Berserk' },
+      matched_volume: { id: 1, manga_id: 9, volume_number: '1', status: 'Fehlt', owned_by_me: false, owners: [], owned_elsewhere: elsewhere }
+    })));
+    renderView(props({ shoppingData: list([row({ owned_elsewhere: elsewhere }), row({ id: 2, volume_number: '2', isbn: '9783551000028' })]) }));
+    const notes = document.querySelectorAll('[data-elsewhere]');
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toBe(warning);
+
+    await scan('9783551000011');
+    const [entry] = scanEntries();
+    expect(entry.dataset.kind).toBe('buy');
+    expect(entry.querySelector('[data-elsewhere]').textContent).toBe(warning);
+    expect(screen.getByRole('button', { name: '1 als gekauft abhaken' })).toBeTruthy();
+  });
+});

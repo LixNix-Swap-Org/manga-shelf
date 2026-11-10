@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash2, AlertTriangle } from 'lucide-react';
+import { Trash2, TriangleExclamationPoint } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { t } from '../../i18n/index.js';
 
@@ -11,7 +11,8 @@ let shownConfirm = null;
  * Accessible confirmation dialog matching the app's glassmorphic dark design, in place of native window.confirm().
  * One at a time; it owns a history entry like every dialog (Back cancels). The root carries `data-confirm`, the buttons
  * `data-confirm-action="cancel"` / `"confirm"`. Focus goes back to the opener, or to the dialog the opener was in when
- * the opener is gone (a removed list row).
+ * the opener is gone (a removed list row). `icon` (a lucide component) replaces the default symbol of the variant: a
+ * danger that deletes nothing, such as moving a series, should not show a trash can.
  */
 export default function ConfirmDialog({
   isOpen,
@@ -22,6 +23,7 @@ export default function ConfirmDialog({
   variant = 'danger',
   isDanger,
   busy = false,
+  icon: Icon = null,
   onConfirm,
   onCancel
 }) {
@@ -89,10 +91,12 @@ export default function ConfirmDialog({
           <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${effectiveVariant === 'danger'
             ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
             : 'bg-brand-500/20 border-brand-500/40 text-brand-300'}`}>
-            {effectiveVariant === 'danger' ? (
+            {Icon ? (
+              <Icon className="w-5 h-5" aria-hidden="true" />
+            ) : effectiveVariant === 'danger' ? (
               <Trash2 className="w-5 h-5" aria-hidden="true" />
             ) : (
-              <AlertTriangle className="w-5 h-5" aria-hidden="true" />
+              <TriangleExclamationPoint className="w-5 h-5" aria-hidden="true" />
             )}
           </div>
           <div className="flex-1 min-w-0">

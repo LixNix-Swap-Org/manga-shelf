@@ -23,6 +23,9 @@
 - **Price, date and condition per copy:** the volume editor lists every copy of a volume (yours, those of others, a household copy) with its purchase price, date and condition. Your own copy, a household copy and, for an admin, every copy can be changed there (`PUT /api/volumes/:id/copies/:copyId`). The price of the volume stays what the statistics count.
 - **Lending:** a copy can be lent to an account or to a person without one ("Ausgeliehen an Felix seit 02.01.2026"). The volume shows "Verliehen" in the grid and list views; the statistics card "Verliehen & ausgeliehen" lists what is lent out from your shelves and what others lent to you (`GET /api/copies/lent`). Migration 47 adds the lending columns; a trash entry and a bulk undo keep the lending of personal copies.
 
+### Shopping list
+- **No second purchase by mistake:** a missing volume whose edition is already owned or ordered in another of your shelves says so on the shopping list and in the shop scan: "Schon vorhanden in: Wohnzimmer (lena)" or "Schon bestellt in: …". It stays bookable (a second copy can be wanted). Only your own shelves count. `GET /api/shopping-list` and `GET /api/lookup/isbn` carry it as `owned_elsewhere`.
+
 ### Reading marks
 - A volume you read counts as read in every shelf that holds the same edition, and a webtoon chapter likewise. Others see your marks only in shelves you are a member of.
 - Leaving a shelf or moving a series into a shelf you are not in no longer deletes your reading marks and chapters: they are hidden there and show again when you are back. Only ownership marks are still deleted; the confirmation texts say so.

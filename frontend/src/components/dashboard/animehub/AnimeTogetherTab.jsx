@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AlertTriangle, Users } from 'lucide-react';
+import { TriangleExclamationPoint, Users } from 'lucide-react';
 import CoverImage from '../../common/CoverImage';
 import { togetherRows } from '../../../utils/animeHub';
 import { displayTitle } from '../../../utils/animeHelpers';
@@ -42,7 +42,7 @@ export default function AnimeTogetherTab({ list, userId, username, onOpen }) {
             </ul>
             {ahead.length > 0 && (
               <p className="text-[11px] text-amber-300 mt-2 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                <TriangleExclamationPoint className="w-3.5 h-3.5" aria-hidden="true" />
                 {t('Weiter sind: {names} – bei Spoilern aufpassen.', { names: ahead.map((name) => (name === me ? t('Du') : name)).join(', ') })}
               </p>
             )}

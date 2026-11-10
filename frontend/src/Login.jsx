@@ -1,6 +1,6 @@
 import { useState, useId } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, User, Lock, ArrowRight, Info, Server, RefreshCw, ShieldAlert } from 'lucide-react';
+import { BookOpen, User, Lock, ArrowRight, Info, Server, RefreshCw, ShieldExclamationPoint } from 'lucide-react';
 import { MESSAGES } from './appShell';
 import { apiFetch, readJson, rememberToken, isAppMode } from './utils/api';
 import { useDocumentTitle } from './components/common/PageChrome';
@@ -42,7 +42,7 @@ function ServerInfo({ onRetry }) {
       </div>
       {insecure && (
         <div role="alert" className="basis-full flex items-start gap-2 text-red-300">
-          <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <ShieldExclamationPoint className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
           <span>
             {t(INSECURE_URL_TEXT)}.{' '}
             <Link to="/server" state={{ edit: server.id }} className="font-semibold underline underline-offset-2">{t('Server bearbeiten')}</Link>

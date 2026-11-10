@@ -1,6 +1,6 @@
 // Add-series dialog: lookup search, manual form and cover; also creates a volume scanned by ISBN.
 import { useState, useEffect, useRef, useId } from 'react';
-import { Plus, X, Sparkles, RefreshCw, TriangleAlert, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
+import { Plus, X, Sparkles, RefreshCw, TriangleExclamationPoint, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
 import { buildScanVolumePayload } from '../../utils/scanHelpers';
 import { MANGA_STATUSES, lookupMangaUrl } from '../../hooks/useMangaData';
 import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
@@ -576,7 +576,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           {/* same title, language and format already in the collection: a hint with a way to it, creating stays allowed */}
           {!seriesLocked && duplicates.length > 0 && (
             <div id={`${ids}-duplicate`} role="status" className="bg-sky-500/10 border border-sky-500/30 text-sky-200 p-2.5 rounded-xl text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
-              <TriangleAlert className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
+              <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
               <span>{t('„{title}“ steht schon in deiner Sammlung.', { title: duplicates[0].title })}</span>
               {onOpenExisting && (
                 <button type="button" className="underline underline-offset-2 font-semibold hover:text-white" onClick={() => requestOpenExisting(duplicates[0])}>
@@ -644,7 +644,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
           {/* Lookup Error Banner */}
           {lookupError && (
             <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
-              <TriangleAlert className="w-4 h-4 shrink-0 text-amber-400" />
+              <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-amber-400" />
               <span>{lookupError}</span>
             </div>
           )}
