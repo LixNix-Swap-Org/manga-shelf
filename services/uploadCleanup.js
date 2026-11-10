@@ -14,7 +14,7 @@ const REFERENCE_COLUMNS = {
     mangas: ['cover_image', 'banner_image', 'description', 'manga_passion_edition_data'],
     volumes: ['cover_image', 'images', 'notes'],
     animes: ['cover_image', 'banner_image'],
-    catalog_series: ['cover_image', 'banner_image', 'description'],
+    catalog_series: ['cover_image', 'banner_image', 'description', 'mp_edition_data'],
     catalog_volumes: ['cover_image'],
     trash: ['payload']
 };

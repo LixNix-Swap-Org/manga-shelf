@@ -937,9 +937,9 @@ test('feed token: none at first, created on demand, the feed lists dated pre-ord
     assert.ok(!reader.cookie.includes(token), 'not the session token');
     assert.equal((await reader('GET', '/radar/feed-token')).body.path, made.body.path, 'the address can be shown again');
 
-    const stored = require('../db').db.prepare("SELECT key, value FROM app_settings WHERE key LIKE 'calendar_feed:%'").all();
+    const stored = require('../db').db.prepare('SELECT token_hash, sealed FROM calendar_feeds').all();
     assert.equal(stored.length, 1);
-    assert.ok(!stored[0].value.includes(token) && !stored[0].key.includes(token), 'only the hash and a sealed copy are stored');
+    assert.ok(!stored[0].sealed.includes(token) && !stored[0].token_hash.includes(token), 'only the hash and a sealed copy are stored');
 
     const res = await fetchFeed(`?token=${token}`);
     assert.equal(res.status, 200);
@@ -952,7 +952,7 @@ test('feed token: none at first, created on demand, the feed lists dated pre-ord
     assert.match(text, /SUMMARY:Kalender\\; Reihe\\, mit Komma – Band 2\r\n/);
     assert.ok(!/Komma – Band [345]\r\n/.test(text), 'month-only, owned and long-past volumes stay out');
     assert.match(text, /UID:volume-\d+@[\w-]+\.manga-shelf/);
-    assert.ok(require('../db').db.prepare("SELECT value FROM app_settings WHERE key LIKE 'calendar_feed:%'").get().value.includes('"last_used_at":1'));
+    assert.ok(require('../db').db.prepare('SELECT last_used_at FROM calendar_feeds').get().last_used_at > 1e12, 'the fetch is remembered');
 });
 
 test('feed token: wrong, missing or session tokens get 404; a new token revokes the old one; DELETE ends it', async () => {
@@ -1001,13 +1001,13 @@ test('feed token: the radar and the anime feed each have their own token, revoke
     assert.equal((await fetchFeed(`?token=${animeToken}`)).status, 404, 'an anime address never lists the radar');
     assert.equal((await fetchFeed(`?token=${radarToken}`)).status, 200);
 
-    // stored before feeds had scopes: no scope in the entry
+    // a second radar token of the same account (the address of an older version that migration 50 carried over)
     const { db } = require('../db');
     const edId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
     const older = 'L'.repeat(43);
     const hash = require('crypto').createHash('sha256').update(older, 'utf8').digest('hex');
-    db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)')
-        .run(`calendar_feed:${hash}`, JSON.stringify({ user_id: edId, created_at: '2026-01-01T00:00:00.000Z', last_used_at: null, sealed: null }));
+    db.prepare("INSERT INTO calendar_feeds (token_hash, user_id, scope, sealed, created_at, last_used_at) VALUES (?, ?, 'radar', NULL, '2026-01-01T00:00:00.000Z', NULL)")
+        .run(hash, edId);
     assert.equal((await fetchFeed(`?token=${older}`)).status, 200);
     assert.equal((await animeFeed(older)).status, 404);
 

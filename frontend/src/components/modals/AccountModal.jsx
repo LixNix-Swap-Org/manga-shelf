@@ -375,6 +375,48 @@ function DefaultVisibilityField({ offline }) {
         <option value="private">{t('Nur ich')}</option>
       </select>
       <p className="text-xs text-slate-400">{t('Gilt für neue Bewertungen. Bei jedem Anime lässt sich das einzeln ändern. Notizen sieht nie jemand außer dir.')}</p>
+      <p className="text-xs text-slate-400">{t('Jede Note zählt ohne Namen im Community-Schnitt mit, auch mit „Nur ich“.')}</p>
+    </div>
+  );
+}
+
+/**
+ * Whether the other accounts see by name what you watch, plan and have seen, your episodes, your line in the anime
+ * statistics and the name on your public ratings (users.share_anime_activity, on by default). Hidden from admins too.
+ */
+function ShareAnimeField({ offline }) {
+  const id = useId();
+  const stored = useAccountDefaults({ fresh: true, enabled: !offline });
+  const [picked, setPicked] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const checked = picked ?? stored.shareAnime ?? true;
+
+  const save = async (next) => {
+    setPicked(next);
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/auth/profile', { method: 'PUT', body: { share_anime_activity: next } });
+      const data = await readJson(res);
+      if (!res.ok) {
+        notify.error(serverText(data) || t('Speichern fehlgeschlagen'));
+        return;
+      }
+      rememberAccountDefaults({ ...data?.user, share_anime_activity: typeof data?.user?.share_anime_activity === 'boolean' ? data.user.share_anime_activity : next });
+    } catch (_) {
+      notify.error(t('Netzwerkfehler – bitte erneut versuchen.'));
+    } finally {
+      setPicked(null);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 pt-4 border-t border-slate-800">
+      <label htmlFor={`${id}-share`} className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+        <input id={`${id}-share`} type="checkbox" className="h-4 w-4 accent-brand-500" checked={checked} disabled={saving || offline || !stored.loaded} onChange={(e) => save(e.target.checked)} />
+        {t('Meine Anime-Liste mit Namen zeigen')}
+      </label>
+      <p className="text-xs text-slate-400">{t('Andere sehen dann, was du schaust, planst und gesehen hast. Ausgeschaltet sieht das niemand außer dir, auch Admins nicht; deine Noten zählen trotzdem ohne Namen im Schnitt mit.')}</p>
     </div>
   );
 }
@@ -389,6 +431,7 @@ function LanguageTab({ user = null, offline = false }) {
       <LanguageSelect beforeChange={() => markReopenAccount('language')} />
       <DefaultLanguageField offline={offline} />
       <DefaultVisibilityField offline={offline} />
+      <ShareAnimeField offline={offline} />
       {ReminderSwitch && canRemind(user) && remindersAvailable() && (
         <div className="pt-4 border-t border-slate-800">
           <Suspense fallback={null}>

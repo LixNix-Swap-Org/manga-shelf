@@ -1050,3 +1050,65 @@ test('migration 46: an entry only one row shows takes that row\'s values, so not
     assert.equal(conn.prepare('SELECT pages FROM catalog_volumes WHERE id = (SELECT catalog_volume_id FROM volumes WHERE id = 21)').get().pages, null);
     assert.deepEqual(conn.prepare('SELECT id, local_fields FROM mangas UNION ALL SELECT id, local_fields FROM volumes').all().map(r => r.local_fields), [null, null]);
 });
+
+test('migrations 49 to 52: personal anime tags and notes, the feed table, edition data on the catalog, checked roles', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    schema.applySchema(conn);
+    // the state before migration 49: no anime_tags, tags and the note on the entry; feeds in app_settings; the edition on the row
+    conn.exec(`
+        DROP TABLE anime_tags; DROP TABLE calendar_feeds;
+        DROP TRIGGER trg_check_users_role_ins; DROP TRIGGER trg_check_users_role_upd;
+        DELETE FROM schema_migrations WHERE version >= 49;
+    `);
+    const user = (name) => Number(conn.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, 'x', 'editor')").run(name).lastInsertRowid);
+    const [anna, ben, gone] = [user('anna'), user('ben'), user('gone')];
+    conn.prepare('DELETE FROM users WHERE id = ?').run(gone);
+    const anime = (title, tags, notes) => Number(conn.prepare('INSERT INTO animes (title, tags, notes) VALUES (?, ?, ?)').run(title, tags, notes).lastInsertRowid);
+    const watched = anime('Gesehen', JSON.stringify(['Mit Freunden', ' mit   freunden ', 'Herbst']), 'DVD im Regal');
+    const lonely = anime('Niemand', 'kein json', 'bleibt am Eintrag');
+    const progress = conn.prepare("INSERT INTO anime_progress (anime_id, user_id, status, notes) VALUES (?, ?, 'Geplant', ?)");
+    progress.run(watched, anna, null);
+    progress.run(watched, ben, 'Staffel 2 fehlt');
+    const feed = (key, value) => conn.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(`calendar_feed:${key}`, value);
+    feed('aa', JSON.stringify({ user_id: anna, created_at: '2026-01-01T00:00:00Z', last_used_at: 5, sealed: 's1' }));
+    feed('bb', JSON.stringify({ user_id: ben, scope: 'anime', created_at: '2026-01-02T00:00:00Z', last_used_at: null, sealed: 's2' }));
+    feed('cc', JSON.stringify({ user_id: gone, scope: 'radar' }));
+    feed('dd', 'kaputt');
+    const series = Number(conn.prepare("INSERT INTO mangas (title, manga_passion_id) VALUES ('Edition', 77)").run().lastInsertRowid);
+    conn.prepare('UPDATE catalog_series SET mp_edition_data = NULL').run();
+    conn.prepare('UPDATE mangas SET manga_passion_edition_data = ? WHERE id = ?').run(JSON.stringify({ id: 77, tags: 'Action' }), series);
+
+    assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [49, 50, 51, 52]);
+    // 49: every old tag once, nobody's own; the entry's note in front of each own note, kept where nobody has the entry
+    assert.deepEqual(conn.prepare('SELECT anime_id, user_id, tag FROM anime_tags ORDER BY id').all().map(r => ({ ...r })),
+        [{ anime_id: watched, user_id: null, tag: 'Mit Freunden' }, { anime_id: watched, user_id: null, tag: 'Herbst' }]);
+    assert.equal(conn.prepare('SELECT count(*) AS n FROM animes WHERE tags IS NOT NULL').get().n, 0);
+    const note = (id) => conn.prepare('SELECT notes FROM anime_progress WHERE anime_id = ? AND user_id = ?').get(watched, id).notes;
+    assert.equal(note(anna), 'DVD im Regal');
+    assert.equal(note(ben), 'DVD im Regal\nStaffel 2 fehlt');
+    assert.equal(conn.prepare('SELECT notes FROM animes WHERE id = ?').get(watched).notes, null);
+    assert.equal(conn.prepare('SELECT notes FROM animes WHERE id = ?').get(lonely).notes, 'bleibt am Eintrag');
+    // 50: the feeds of existing accounts move with their scope (none = radar); the rest was dead already
+    assert.deepEqual(conn.prepare('SELECT token_hash, user_id, scope, sealed, last_used_at FROM calendar_feeds ORDER BY token_hash').all().map(r => ({ ...r })), [
+        { token_hash: 'aa', user_id: anna, scope: 'radar', sealed: 's1', last_used_at: 5 },
+        { token_hash: 'bb', user_id: ben, scope: 'anime', sealed: 's2', last_used_at: null }
+    ]);
+    assert.equal(conn.prepare("SELECT count(*) AS n FROM app_settings WHERE key LIKE 'calendar_feed:%'").get().n, 0);
+    conn.prepare('DELETE FROM users WHERE id = ?').run(ben);
+    assert.equal(conn.prepare('SELECT count(*) AS n FROM calendar_feeds WHERE user_id = ?').get(ben).n, 0, 'a feed goes with its account');
+    // 51: the edition sits once on the catalog series, the row's copy is gone
+    assert.equal(conn.prepare('SELECT c.mp_edition_data FROM catalog_series c JOIN mangas m ON m.catalog_series_id = c.id WHERE m.id = ?').get(series).mp_edition_data,
+        JSON.stringify({ id: 77, tags: 'Action' }));
+    assert.equal(conn.prepare('SELECT manga_passion_edition_data FROM mangas WHERE id = ?').get(series).manga_passion_edition_data, null);
+    // 52: an unknown account role is refused, the known ones pass
+    assert.throws(() => conn.prepare("INSERT INTO users (username, password_hash, role) VALUES ('x', 'x', 'superuser')").run(), /invalid users.role/);
+    assert.throws(() => conn.prepare("UPDATE users SET role = 'root' WHERE id = ?").run(anna), /invalid users.role/);
+    conn.prepare("UPDATE users SET role = 'guest' WHERE id = ?").run(anna);
+
+    conn.prepare('DELETE FROM schema_migrations WHERE version >= 49').run();
+    assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [49, 50, 51, 52], 'a second run is harmless');
+    assert.equal(conn.prepare('SELECT count(*) AS n FROM anime_tags').get().n, 2);
+});

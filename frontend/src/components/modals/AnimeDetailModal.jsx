@@ -1175,7 +1175,7 @@ export default function AnimeDetailModal({
 
               {(canEdit || anime.tags?.length > 0) && (
                 <section className="mt-5 border-t border-slate-800 pt-4">
-                  <TagEditor tags={anime.tags || []} known={knownTags} canEdit={canEdit} busy={busy}
+                  <TagEditor tags={anime.tags || []} removable={anime.removable_tags} known={knownTags} canEdit={canEdit} busy={busy}
                     onSave={saveTags} />
                 </section>
               )}
@@ -1205,11 +1205,14 @@ export default function AnimeDetailModal({
                       </select>
                     </div>
                   )}
-                  <div className="sm:col-span-2 flex justify-end">
-                    <button type="button" className="btn-secondary text-xs text-red-300 inline-flex items-center gap-1" onClick={doDelete} disabled={busy}>
-                      <Trash className="w-3.5 h-3.5" aria-hidden="true" /> {t('Für alle löschen')}
-                    </button>
-                  </div>
+                  {/* only an admin deletes an entry others still have on their list (can_delete_for_all) */}
+                  {anime.can_delete_for_all !== false && (
+                    <div className="sm:col-span-2 flex justify-end">
+                      <button type="button" className="btn-secondary text-xs text-red-300 inline-flex items-center gap-1" onClick={doDelete} disabled={busy}>
+                        <Trash className="w-3.5 h-3.5" aria-hidden="true" /> {t('Für alle löschen')}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
             </>
