@@ -263,6 +263,8 @@ jobs:
           if-no-files-found: error
       - name: Keyless signature of the image (cosign, Actions OIDC)
         continue-on-error: true
+        # optional: a hang here must not cancel the sign job, which publish waits for
+        timeout-minutes: 5
         env:
           IMAGE: ${{ needs.docker.outputs.image }}@${{ needs.docker.outputs.digest }}
           REGISTRY_TOKEN: ${{ github.token }}

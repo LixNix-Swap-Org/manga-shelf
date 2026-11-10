@@ -67,6 +67,7 @@ jobs:
         run: npm audit --audit-level=high
         working-directory: frontend
         continue-on-error: true
+        timeout-minutes: 3
       - run: npm run build
         working-directory: frontend
       - name: Web build without the Crunchyroll chunks
