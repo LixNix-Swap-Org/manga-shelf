@@ -1,7 +1,7 @@
 import { BookCheck, BookOpen, BuildingComplex, Calendar, Camera, Check, CircleExclamationPoint, Coins, FileText, Package, PenLine, Plus, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
 import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
-import OwnerBadges, { ownerColor, readerInitials } from './OwnerBadges';
+import OwnerBadges, { LentBadge, ownerColor, readerInitials } from './OwnerBadges';
 import { formatEuro, formatShortDate, gapLabel, getVolumeBadge, volumeStatusKind } from './volumeViewHelpers';
 import { formatMoney } from '../../utils/format';
 import { editionCurrency } from '../../utils/editions';
@@ -270,6 +270,7 @@ export default function VolumeGridView({
                   )}
                   <VolumeLanguagePill volume={vol} manga={manga} />
                   <OwnerBadges vol={vol} multiUser={readers.length > 1} />
+                  <LentBadge vol={vol} />
                 </div>
               </div>
 

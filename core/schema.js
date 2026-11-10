@@ -7,7 +7,7 @@ const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
 const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL, ADOPT_SERIES_SQL, ADOPT_VOLUME_SQL } = require('./lib/catalog');
 const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
-const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
+const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, OWNERS_VIEW_LENT_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -1280,6 +1280,23 @@ function migrationList(log = silentLog) {
                 const series = d.prepare('SELECT count(*) AS n FROM mangas WHERE local_fields IS NOT NULL').get().n;
                 const volumes = d.prepare('SELECT count(*) AS n FROM volumes WHERE local_fields IS NOT NULL').get().n;
                 if (series || volumes) log.info(`[Database Migration] v46: ${series} series and ${volumes} volumes keep values of their own (local fields)`);
+            }
+        },
+        {
+            version: 47,
+            name: 'add_copy_lending',
+            up: (d) => {
+                // who borrowed a copy: an account (lent_to_user_id; lent_to_name keeps its name should the account go) or a
+                // person without one (lent_to_name only), since lent_at (YYYY-MM-DD). Nothing is lent after the migration.
+                const cols = new Set(d.prepare('PRAGMA table_info(volume_copies)').all().map(c => c.name));
+                if (!cols.has('lent_to_user_id')) d.exec('ALTER TABLE volume_copies ADD COLUMN lent_to_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;');
+                if (!cols.has('lent_to_name')) d.exec('ALTER TABLE volume_copies ADD COLUMN lent_to_name TEXT;');
+                if (!cols.has('lent_at')) d.exec('ALTER TABLE volume_copies ADD COLUMN lent_at TEXT;');
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_volume_copies_lent_to ON volume_copies (lent_to_user_id) WHERE lent_to_user_id IS NOT NULL;
+                    DROP VIEW IF EXISTS volume_owners;
+                    ${OWNERS_VIEW_LENT_SQL}
+                `);
             }
         }
     ];

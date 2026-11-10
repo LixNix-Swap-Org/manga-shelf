@@ -5,6 +5,7 @@ const mangas = require('./handlers/mangas');
 const snapshot = require('./handlers/snapshot');
 const volumes = require('./handlers/volumes');
 const owners = require('./handlers/owners');
+const copies = require('./handlers/copies');
 const reads = require('./handlers/reads');
 const chapters = require('./handlers/chapters');
 const stats = require('./handlers/stats');
@@ -71,6 +72,8 @@ const routes = [
     { method: 'POST', path: '/volumes/:id/catalog-reset', role: 'editor', handler: volumes.catalogReset },
     { method: 'DELETE', path: '/volumes/:id', role: 'editor', handler: volumes.remove },
     { method: 'POST', path: '/volumes/:id/owners', role: 'editor', handler: owners.toggleOwner },
+    { method: 'PUT', path: '/volumes/:id/copies/:copyId', role: 'editor', handler: copies.updateCopy },
+    { method: 'GET', path: '/copies/lent', role: 'auth', handler: copies.lentCopies },
     { method: 'POST', path: '/volumes/:id/read', role: 'editor', handler: reads.toggleRead },
     { method: 'POST', path: '/volumes/batch-read', role: 'editor', handler: reads.batchRead },
     { method: 'GET', path: '/volumes/lookup', role: 'editor', limit: 'lookup', handler: mangaPassion.volumeLookup },

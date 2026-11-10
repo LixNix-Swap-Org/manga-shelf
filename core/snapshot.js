@@ -2,6 +2,7 @@
 const { regularNumberedSql, volumeOrderSql } = require('./lib/volumeNumber');
 const access = require('./lib/access');
 const catalogWrite = require('./lib/catalogWrite');
+const { copiesByVolume, attachCopies } = require('./lib/copies');
 
 // Series per block of the offline snapshot; between blocks other requests get the event loop. Tests lower it.
 const options = { chunkSize: 200 };
@@ -250,7 +251,9 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const chapters = ctx.db.prepare(`${CHAPTERS_SELECT} WHERE cp.manga_id = ? ORDER BY cp.user_id`).all(mangaId);
     const flags = manga.catalog_series_id === null || manga.catalog_series_id === undefined ? null
         : catalogWrite.seriesFlags(ctx)(manga.catalog_series_id);
-    return buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters, flags);
+    // every copy of a volume: price, date and condition per copy, and who borrowed it (migration 47)
+    return attachCopies(buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters, flags),
+        copiesByVolume(ctx.db, 'v.manga_id = ?', [mangaId]));
 }
 
 function assertSameConnection(ctx, generation) {
@@ -296,12 +299,13 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
         const readsByVolume = groupBy(readsStmt.all(from, to), 'volume_id');
         const ownersByVolume = groupBy(ownersStmt.all(from, to), 'volume_id');
         const chaptersByManga = groupBy(chaptersStmt.all(from, to), 'manga_id');
+        const copies = copiesByVolume(ctx.db, 'v.manga_id BETWEEN ? AND ?', [from, to]);
         for (const m of block) {
             const volumes = volumesByManga.get(m.id) || [];
-            details[m.id] = buildMangaDetail(m, volumes, readsByVolume, ownersByVolume,
+            details[m.id] = attachCopies(buildMangaDetail(m, volumes, readsByVolume, ownersByVolume,
                 usersOfSeries(users, members, m, user.id, volumes, readsByVolume, ownersByVolume), user.id,
                 editionsOf(m, editionsByWork.get(m.work_key) || []), chaptersByManga.get(m.id) || [],
-                m.catalog_series_id === null ? null : flagsOf(m.catalog_series_id));
+                m.catalog_series_id === null ? null : flagsOf(m.catalog_series_id)), copies);
         }
     }
     assertSameConnection(ctx, generation);

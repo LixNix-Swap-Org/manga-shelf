@@ -7,6 +7,7 @@ import TopSeriesCard from './stats/TopSeriesCard';
 import AnimeStatsCard from './stats/AnimeStatsCard';
 import AnimeInsightsCard from './stats/AnimeInsightsCard';
 import EditionsCard from './stats/EditionsCard';
+import LentCard from './stats/LentCard';
 import PublisherTab, { TopPublishersCard } from './stats/PublisherTab';
 import ReadingTab, { ReadingSummaryCard } from './stats/ReadingTab';
 import useDialogA11y from '../../hooks/useDialogA11y';
@@ -343,6 +344,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
                         <AnimeStatsCard anime={statsData.anime} />
                         <AnimeInsightsCard insights={statsData.anime?.insights} />
                         <EditionsCard languages={statsData.languages} currencies={statsData.currencies} />
+                        <LentCard shelfId={shelfId} onNavigate={onClose} />
                       </div>
 
                       <TopSeriesCard topSeries={statsData.top_series} onNavigate={onClose} />
