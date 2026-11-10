@@ -7,6 +7,7 @@ import coreRoutes from '../../../core/routes.js';
 import errors from '../../../core/errors.js';
 import sqljs from '../../../core/adapters/sqljs.js';
 import trash from '../../../core/handlers/trash.js';
+import catalogMaintenance from '../../../core/lib/catalogMaintenance.js';
 import { createBlobFiles } from './files.js';
 import { createLocalCredentials } from './credentials.js';
 import { createLocalServer } from './localServer.js';
@@ -412,6 +413,8 @@ export async function createLocalRuntime({
     if (follower || closed || replacing) return;
     try {
       trash.purgeTrash(ctx);
+      // catalog entries nothing shows or marks any more (core/lib/catalogMaintenance.js)
+      catalogMaintenance.purgeOrphans(ctx);
       // with navigator.locks unavailable another window may hold uploads this one does not know yet
       if (lock || !lockName) await dropUnreferencedUploads();
     } catch (err) {

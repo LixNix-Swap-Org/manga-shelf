@@ -1482,6 +1482,7 @@ test('the live connection waits for locks and caps the WAL file; the daily maint
     assert.ok(report, 'due after more than a day');
     assert.deepEqual(report.violations, []);
     assert.equal(report.outsideShelves, 0);
+    assert.deepEqual(Object.keys(report.catalog).sort(), ['series', 'volumes'], 'the catalog purge runs with it');
     assert.ok(dbm.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'sqlite_stat1'").get(), 'planner statistics exist');
     assert.equal(scheduler.runDatabaseMaintenanceIfDue(later + 60 * 1000), null, 'not due again on the same connection within a day');
     assert.ok(scheduler.runDatabaseMaintenanceIfDue(later + day + 1), 'due again a day later');

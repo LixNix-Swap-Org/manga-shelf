@@ -1,4 +1,5 @@
 // Trash: GET /trash, POST /trash/:id/restore, DELETE /trash/:id, DELETE /trash; purgeTrash for the scheduler.
+const { RELINKED_COLUMNS } = require('../lib/catalogMaintenance');
 const { msg, badRequest, notFound, conflict } = require('../errors');
 const { parsePositiveInt } = require('../lib/validate');
 const { TRASH_RETENTION_DAYS, sqlTimestamp } = require('../lib/trash');
@@ -96,7 +97,12 @@ function list(ctx, { query } = {}) {
     return { body: { items, retention_days: TRASH_RETENTION_DAYS } };
 }
 
-const columnsOf = (ctx, table) => new Set(ctx.db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
+// the catalog link and the local fields are left to the insert triggers: the stored entry may be gone (catalogMaintenance)
+const columnsOf = (ctx, table) => {
+    const columns = new Set(ctx.db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
+    for (const column of RELINKED_COLUMNS[table] || []) columns.delete(column);
+    return columns;
+};
 
 /** INSERT of the stored row with the columns the table still has (a later migration may add or drop some). */
 function insertRow(ctx, table, columns, row, overrides = {}) {

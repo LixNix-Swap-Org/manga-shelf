@@ -1,4 +1,5 @@
 // Volumes: create (single and batch), edit, delete, bulk edit (POST /volumes, /volumes/batch, /volumes/bulk, PUT/DELETE /volumes/:id).
+const { RELINKED_COLUMNS } = require('../lib/catalogMaintenance');
 const { normalizePublisher } = require('../lib/publishers');
 const { normalizeIsbn } = require('../lib/isbn');
 const {
@@ -703,6 +704,7 @@ function revertBulk(ctx, token) {
     };
     const volumeColumns = new Set(ctx.db.prepare('PRAGMA table_info(volumes)').all().map((c) => c.name));
     volumeColumns.delete('number_sort');
+    for (const column of RELINKED_COLUMNS.volumes) volumeColumns.delete(column);
 
     const restored = [];
     const conflicts = [];
