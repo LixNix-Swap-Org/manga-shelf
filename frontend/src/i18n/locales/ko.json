@@ -3378,5 +3378,6 @@
   "★★★ hoch": "★★★ 높음",
   "✓ Im Besitz": "✓ 보유",
   "✕ Fehlt": "✕ 미보유",
-  "✕ Fehlt (Lücke)": "✕ 미보유 (빠진 권)"
+  "✕ Fehlt (Lücke)": "✕ 미보유 (빠진 권)",
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names}에게는 다른 책장이 없어서 이제 비어 있는 자기 책장이 생겼습니다."
 }

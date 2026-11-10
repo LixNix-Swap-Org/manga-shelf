@@ -144,3 +144,32 @@ test('the seeder makes the first admin owner of the household shelf, as /setup d
     assert.equal(conn.prepare('SELECT role FROM shelf_members WHERE shelf_id = 1 AND user_id = ?').get(adminId).role, 'owner');
     conn.close();
 });
+
+test('an empty household shelf makes its first member owner only when that account can act as one', () => {
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchema(conn);
+    conn.exec(`INSERT INTO users (id, username, password_hash, role) VALUES (1, 'gast', 'x', 'guest'), (2, 'ed', 'x', 'editor')`);
+    const ctx = createCtx({ db: dbFromConnection(conn) });
+    const roleOf = (userId) => conn.prepare('SELECT role FROM shelf_members WHERE shelf_id = 1 AND user_id = ?').get(userId)?.role;
+    access.ensureMembership(withUser(ctx, { id: 1, username: 'gast', role: 'guest' }));
+    assert.equal(roleOf(1), 'viewer', 'a guest never becomes owner, even of an empty shelf');
+    assert.equal(conn.prepare('SELECT owner_user_id FROM shelves WHERE id = 1').get().owner_user_id, null);
+    access.ensureMembership(withUser(ctx, { id: 2, username: 'ed', role: 'editor' }));
+    assert.equal(roleOf(2), 'editor', 'the shelf has a member now, so the next one joins as editor');
+    conn.close();
+});
+
+test('a new series lands in the shelf the caller owns by role, not by the creator column', () => {
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchema(conn);
+    conn.exec(`
+        INSERT INTO users (id, username, password_hash, role) VALUES (1, 'a', 'x', 'editor'), (2, 'b', 'x', 'editor');
+        INSERT INTO shelves (id, name, owner_user_id, is_default) VALUES (2, 'Von A angelegt', 1, 0), (3, 'Jetzt von A', 2, 0);
+        INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (1, 1, 'editor'), (2, 1, 'editor'), (2, 2, 'owner'), (3, 1, 'owner');
+    `);
+    const ctx = withUser(createCtx({ db: dbFromConnection(conn) }), { id: 1, username: 'a', role: 'editor' });
+    assert.equal(access.targetShelfId(ctx), 3, 'shelf 2 was handed over to b; a owns shelf 3');
+    conn.close();
+});

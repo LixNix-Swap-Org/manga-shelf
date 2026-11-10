@@ -147,6 +147,24 @@ test('shelves: moving a series needs editor rights in both shelves; trash and lo
     assert.ok(own.id);
 });
 
+test('shelves: deleting a shelf names the members who got an empty shelf of their own', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'rita', password: 'password123', role: 'editor', separate_shelf: true })).status, 200);
+    const rita = ctx.client();
+    assert.equal((await rita('POST', '/auth/login', { username: 'rita', password: 'password123' })).status, 200);
+    const ritaId = (await rita('GET', '/auth/me')).body.user.id;
+    const own = (await myShelf(rita)).id;
+    const extra = (await anna('POST', '/shelves', { name: 'Kurz' })).body.id;
+    assert.equal((await anna('POST', `/shelves/${extra}/members`, { username: 'rita', role: 'editor' })).status, 201);
+    assert.equal((await anna('POST', `/shelves/${extra}/members`, { username: 'ben', role: 'viewer' })).status, 201);
+    // rita leaves her own shelf by deleting it, so "Kurz" is her only one
+    assert.equal((await rita('DELETE', `/shelves/${own}`)).status, 200);
+    const res = await anna('DELETE', `/shelves/${extra}`);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.personal_shelves, ['rita'], 'ben and anna still have shelves');
+    assert.equal((await rita('GET', '/shelves')).body.shelves[0].name, 'Sammlung von rita');
+    assert.ok(ritaId);
+});
+
 test('shelves: the user directory lists names only and is closed to guests', async () => {
     const res = await anna('GET', '/users/directory');
     assert.equal(res.status, 200);

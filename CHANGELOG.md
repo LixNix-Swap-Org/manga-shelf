@@ -44,6 +44,11 @@
 - Anime and manga works are now linked many-to-many in the database (`anime_work_links`): the series an anime is linked to and every manga in its AniList relations that the collection knows. Nothing reads them yet; they prepare the cross-media views.
 - **Linked series per shelf:** an anime is linked to a work, not to one series. Everybody sees their own edition of it, and every shelf decides for itself: linking an edition pins it for that shelf, "Keine Verknüpfung" hides the link there. The link for everyone changes only while every edition of the work is in shelves you can edit. The note "Über deine Ausgabe dieses Werks verknüpft" and the lock on links into foreign shelves are gone, so `manga_via_work` and `manga_linked_elsewhere` are no longer in the anime answers.
 
+### Shelves
+- Deleting a shelf now says which members had no other shelf and got an empty one of their own.
+- A visitor or guest account never becomes the owner of an empty household shelf, so the shelf always keeps someone who can manage it.
+- A new series without a chosen shelf lands in a shelf you own today, also after a shelf was handed over to you or away from you.
+
 ## 3.7.0
 
 ### Before updating

@@ -3687,5 +3687,6 @@
   "★★★ hoch": "★★★ высокий",
   "✓ Im Besitz": "✓ В наличии",
   "✕ Fehlt": "✕ Нет в наличии",
-  "✕ Fehlt (Lücke)": "✕ Нет в наличии (пропуск)"
+  "✕ Fehlt (Lücke)": "✕ Нет в наличии (пропуск)",
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "У {names} не было другой полки, теперь у них есть своя, пустая."
 }
