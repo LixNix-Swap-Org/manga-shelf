@@ -106,7 +106,7 @@ const loadRow = (ctx, id) => {
 
 /** Every user's progress of one entry, with usernames. */
 const progressRows = (ctx, animeId) => ctx.db.prepare(`
-    SELECT p.*, u.username FROM anime_progress p JOIN users u ON u.id = p.user_id
+    SELECT p.*, u.username, u.share_anime_activity FROM anime_progress p JOIN users u ON u.id = p.user_id
     WHERE p.anime_id = ? ORDER BY u.username COLLATE NOCASE
 `).all(animeId);
 
@@ -207,9 +207,9 @@ function detailOf(ctx, id) {
         manga,
         my_progress: store.progressOf(mine),
         // a resume link is where one user stopped watching, notes are private and a rating follows its visibility;
-        // an anonymous rating still counts in `community` but carries no name here; the list names only people the
-        // caller shares a shelf with (an admin sees all), `community` still counts everybody without names
-        progress: access.visibleRows(ctx, progress).map((p) => (p === mine
+        // an anonymous rating still counts in `community` but carries no name here; the list names only accounts that
+        // share their anime list (access.sharedAnimeRows), `community` still counts everybody without names
+        progress: access.sharedAnimeRows(ctx, progress).map((p) => (p === mine
             ? { ...store.progressOf(p), username: p.username }
             : { ...community.othersView(store.progressOf(p), p), username: p.username })),
         community: { ...community.summarize(progress), episodes: community.episodeCommunity(progress) }
@@ -284,7 +284,7 @@ function list(ctx) {
     const rows = ctx.db.prepare('SELECT * FROM animes ORDER BY title COLLATE NOCASE, id').all();
     const progress = ctx.db.prepare(`
         SELECT p.anime_id, p.user_id, p.status, p.episodes_watched, p.score, p.notes, p.started_at, p.finished_at, p.updated_at,
-               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, p.rating_visibility, p.public_comment, u.username
+               p.resume_url, p.resume_episode, p.audio_language, p.subtitle_language, p.watched_episodes, p.episode_scores, p.rating_visibility, p.public_comment, u.username, u.share_anime_activity
         FROM anime_progress p JOIN users u ON u.id = p.user_id
         ORDER BY u.username COLLATE NOCASE
     `).all();
@@ -296,9 +296,9 @@ function list(ctx) {
     const now = nowMs(ctx);
     const userId = ctx.user ? ctx.user.id : null;
     const communities = community.communityByAnime(progress);
-    // who watches what is shown only for people the caller shares a shelf with (an admin sees all)
-    const visible = access.visibleUserIds(ctx);
-    const visibleRows = (rows) => (visible ? rows.filter((p) => visible.has(Number(p.user_id))) : rows);
+    // who watches what is shown for every account that shares its anime list (users.share_anime_activity, hidden from
+    // admins too, see access.sharedAnimeRows); the caller always sees their own row
+    const visibleRows = (rows) => access.sharedAnimeRows(ctx, rows);
     const remembered = rememberedLinks(ctx);
     const linkOf = animeLinks.linkResolver(ctx);
     let queued = 0;
@@ -333,7 +333,9 @@ function ratings(ctx, { params }) {
     loadRow(ctx, id);
     const rows = progressRows(ctx, id);
     const viewer = ctx.user ? ctx.user.id : null;
-    return { body: { anime_id: id, ...community.ratingsOf(rows, viewer), episodes: community.episodeCommunity(rows) } };
+    // the public rating of someone who does not share their anime list has no name
+    const named = new Set(access.sharedAnimeRows(ctx, rows).map((r) => r.user_id));
+    return { body: { anime_id: id, ...community.ratingsOf(rows, viewer, (r) => named.has(r.user_id)), episodes: community.episodeCommunity(rows) } };
 }
 
 function duplicateOf(ctx, anilistId, malId, tmdbRef = null) {

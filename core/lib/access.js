@@ -69,6 +69,17 @@ function visibleRows(ctx, rows, key = 'user_id') {
     return ids ? rows.filter(r => ids.has(Number(r[key]))) : rows;
 }
 
+/**
+ * Anime progress rows (status, episodes, ratings by name) the caller may see. The anime list is shared by every account
+ * on the server, shelves or not, so this is the caller's own row and those of accounts that share their anime list
+ * (users.share_anime_activity, on by default). A hidden one is hidden from admins too; it still counts, without a
+ * name, in the community averages. `shared` names the flag field of a row.
+ */
+function sharedAnimeRows(ctx, rows, key = 'user_id', shared = 'share_anime_activity') {
+    const own = ctx.user ? Number(ctx.user.id) : null;
+    return rows.filter(r => Number(r[key]) === own || r[shared] !== 0);
+}
+
 const memberships = new WeakMap();
 
 const defaultShelf = (db) => db.prepare('SELECT id, name FROM shelves WHERE is_default = 1 ORDER BY id LIMIT 1').get();
@@ -409,7 +420,7 @@ function prepareScoped(db, sql) {
 }
 
 module.exports = {
-    scopeSql, scopedCtx, prepareScoped, parseId, isReadOnlyAccount, joinRole, isMember, canSeeUser, visibleUserIds, visibleRows, memberRole, activeOwnerCount,
+    scopeSql, scopedCtx, prepareScoped, parseId, isReadOnlyAccount, joinRole, isMember, canSeeUser, visibleUserIds, visibleRows, sharedAnimeRows, memberRole, activeOwnerCount,
     resolveTargetUser, ROLE_WEIGHT, ensureMembership, createPersonalShelf, userPrimaryShelf, parseShelfSetup, setupUserShelf,
     reconcileShelfRoles, shelfRole, requireShelf, accessibleShelfIds, requestedShelfIds,
     inShelves, targetShelfId, mangaAccess, volumeAccess

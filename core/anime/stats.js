@@ -1,5 +1,5 @@
 // Anime block of GET /stats: only when the list has entries.
-const { visibleRows } = require('../lib/access');
+const { sharedAnimeRows } = require('../lib/access');
 
 const MONTHS = 12;
 const TOP = 8;
@@ -83,7 +83,7 @@ function animeStats(ctx) {
         FROM anime_progress WHERE user_id = ?
     `).get(ctx.user.id);
     const perUser = ctx.db.prepare(`
-        SELECT u.id AS user_id, u.username, sum(p.episodes_watched) AS episodes_watched,
+        SELECT u.id AS user_id, u.username, u.share_anime_activity, sum(p.episodes_watched) AS episodes_watched,
                sum(p.episodes_watched * COALESCE(a.duration, 0)) AS watch_minutes,
                count(CASE WHEN p.status = 'Gesehen' THEN 1 END) AS completed
         FROM anime_progress p JOIN users u ON u.id = p.user_id JOIN animes a ON a.id = p.anime_id
@@ -98,8 +98,8 @@ function animeStats(ctx) {
         completed: counts.completed || 0,
         planned: counts.planned || 0,
         insights: insightsOf(ctx),
-        // only accounts the caller shares a shelf with (an admin sees all), like the progress in the anime list
-        per_user: visibleRows(ctx, perUser).map((r) => ({
+        // only accounts that share their anime list (and the caller), like the progress in the anime list
+        per_user: sharedAnimeRows(ctx, perUser).map((r) => ({
             user_id: r.user_id,
             username: r.username,
             episodes_watched: r.episodes_watched || 0,
