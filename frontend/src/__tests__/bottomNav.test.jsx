@@ -89,8 +89,9 @@ describe('bottom navigation on phones', () => {
     const drawer = document.getElementById('mobile-menu-drawer');
     expect(drawer.closest('header')).toBeNull();
     expect(drawer.className).toContain('fixed');
-    expect(within(drawer).getByRole('button', { name: /^Anime$/ })).toBeTruthy();
-    expect(within(drawer).getByRole('button', { name: /^Anime-Radar$/ })).toBeTruthy();
+    // Anime is the first entry of "Mehr"; the anime episodes are in the Radar tab
+    expect(within(drawer).getAllByRole('button')[0].textContent.trim()).toBe('Anime');
+    expect(within(drawer).queryByRole('button', { name: /^Anime-Radar$/ })).toBeNull();
 
     fireEvent.click(document.getElementById('btn-mobile-radar'));
     expect(screen.getByTestId('view').textContent).toBe('radar');

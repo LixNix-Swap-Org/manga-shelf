@@ -114,6 +114,13 @@ beforeEach(() => {
 // the bottom navigation stays mounted (hidden) above 640 px with its own scanner; the header's is the visible one
 const headerScan = () => within(document.querySelector('header[data-sticky-header]')).getByText('Scan-Test');
 
+// account menu, then "Verwaltung" (a lazy dialog)
+const openAdmin = async () => {
+  if (!document.getElementById('account-menu')) fireEvent.click(document.getElementById('btn-account-menu'));
+  fireEvent.click(document.getElementById('btn-open-admin'));
+  return screen.findByRole('dialog', { name: 'Verwaltung' });
+};
+
 describe('Dashboard', () => {
   it('the header stays sticky: no ancestor clips with overflow hidden, and it pads itself below the status bar', () => {
     renderDashboard('/');
@@ -317,10 +324,11 @@ describe('Dashboard', () => {
     expect(state.mangaList.handleDeleteManga).toHaveBeenCalledWith(null, 1, 'Naruto', true);
   });
 
-  it('editors open the CSV dialog from the header; a closed dialog is not mounted', async () => {
+  it('editors open the CSV dialog from Verwaltung; a closed dialog is not mounted', async () => {
     renderDashboard('/');
     expect(screen.queryByRole('dialog')).toBeNull();
-    fireEvent.click(document.getElementById('btn-open-csv'));
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-csv'));
     expect(await screen.findByRole('dialog', { name: /CSV-Export & Import/ })).toBeTruthy();
   });
 
@@ -574,10 +582,10 @@ describe('Dashboard: shelves and the tools menu', () => {
     }));
   });
 
-  it('a series link in "Sammlung aufräumen" opened from the tools closes the dialog and opens the series', async () => {
+  it('a series link in "Sammlung aufräumen" opened from Verwaltung closes the dialog and opens the series', async () => {
     renderDashboard('/');
-    fireEvent.click(document.getElementById('btn-open-tools'));
-    fireEvent.click(document.getElementById('btn-menu-cleanup'));
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-cleanup'));
     const dialog = await screen.findByRole('dialog', { name: /Sammlung aufräumen/ });
     fireEvent.click(within(dialog).getByRole('link', { name: 'Dandadan' }));
     await waitFor(() => expect(currentUrl()).toBe('/manga/2'));
@@ -610,18 +618,18 @@ describe('Dashboard: shelves and the tools menu', () => {
     expect(screen.getByRole('button', { name: 'Naruto löschen' })).toBeTruthy();
   });
 
-  it('Escape closes the tools menu, hands focus back and leaves the search alone', () => {
+  it('Escape closes the account menu, hands focus back and leaves the search alone', () => {
     renderDashboard('/');
     const search = document.getElementById('main-search-input');
     fireEvent.change(search, { target: { value: 'Nar' } });
-    const tools = document.getElementById('btn-open-tools');
-    fireEvent.click(tools);
-    const item = document.getElementById('btn-menu-cleanup');
+    const account = document.getElementById('btn-account-menu');
+    fireEvent.click(account);
+    const item = document.getElementById('btn-open-admin');
     item.focus();
-    expect(document.getElementById('tools-dropdown-menu').getAttribute('role')).toBeNull();
+    expect(document.getElementById('account-menu').getAttribute('role')).toBeNull();
     fireEvent.keyDown(item, { key: 'Escape' });
-    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
-    expect(document.activeElement).toBe(tools);
+    expect(document.getElementById('account-menu')).toBeNull();
+    expect(document.activeElement).toBe(account);
     expect(search.value).toBe('Nar');
   });
 });

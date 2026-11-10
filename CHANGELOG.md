@@ -44,6 +44,12 @@
 - Anime and manga works are now linked many-to-many in the database (`anime_work_links`): the series an anime is linked to and every manga in its AniList relations that the collection knows. Nothing reads them yet; they prepare the cross-media views.
 - **Linked series per shelf:** an anime is linked to a work, not to one series. Everybody sees their own edition of it, and every shelf decides for itself: linking an edition pins it for that shelf, "Keine Verknüpfung" hides the link there. The link for everyone changes only while every edition of the work is in shelves you can edit. The note "Über deine Ausgabe dieses Werks verknüpft" and the lock on links into foreign shelves are gone, so `manga_via_work` and `manga_linked_elsewhere` are no longer in the anime answers.
 
+### Navigation
+- **Fewer buttons at the top:** the desktop header keeps search, "Neuer Manga", "Statistiken", "App installieren" and an account menu (the initial at the top right). The menu holds "Verwaltung", "Konto & Sprache" and logout.
+- **Verwaltung:** one dialog with four sections (Konto, Personen & Regale, Daten, System) holds everything that stood side by side in the header: users, shelves, backups, CSV, cleanup, trash, publishers and the system page. Each entry opens the same dialog as before, for the same roles.
+- **One Radar tab:** "Release-Radar" and "Anime-Radar" are one tab "Radar" with "Manga-Termine" and "Anime-Folgen". The addresses `?view=radar` and `?view=episodes` keep working.
+- **Phones:** "Mehr" starts with Anime, followed by statistics, "Neuer Manga" (or Radar for readers) and Verwaltung.
+
 ## 3.7.0
 
 ### Before updating

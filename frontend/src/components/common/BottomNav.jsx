@@ -65,6 +65,8 @@ export default function BottomNav({
   const keyboardOpen = useKeyboardOpen(navRef);
   if (typeof document === 'undefined') return null;
   const id = (name) => (narrow ? name : undefined);
+  // the Radar tab holds the manga releases and the anime episodes
+  const radarActive = activeMainView === 'radar' || activeMainView === 'episodes';
   const go = (view) => {
     setMobileMenuOpen?.(false);
     setView(view);
@@ -119,12 +121,12 @@ export default function BottomNav({
           <button
             type="button"
             id={id('btn-mobile-radar')}
-            aria-current={activeMainView === 'radar' ? 'page' : undefined}
+            aria-current={radarActive ? 'page' : undefined}
             aria-label={releaseCount > 0 ? tn('Radar – Release-Radar, {n} Termine', 'Radar – Release-Radar, {n} Termine', releaseCount) : t('Radar – Release-Radar')}
             onClick={() => go('radar')}
-            className={itemClass(activeMainView === 'radar')}
+            className={itemClass(radarActive)}
           >
-            <Calendar className={`w-5 h-5 ${activeMainView === 'radar' ? 'text-sky-300' : ''}`} aria-hidden="true" />
+            <Calendar className={`w-5 h-5 ${radarActive ? 'text-sky-300' : ''}`} aria-hidden="true" />
             <span aria-hidden="true">{t('Radar')}</span>
           </button>
           <Badge count={releaseCount} className="bg-sky-500" />

@@ -207,15 +207,21 @@ const headerProps = (overrides = {}) => ({
 });
 
 describe('DashboardHeader: System entry', () => {
-  it('is admin-only on desktop and in the menu, and opens the system page', async () => {
+  it('is admin-only in Verwaltung and opens the system page', async () => {
     serve();
-    const { rerender } = render(<DashboardHeader {...headerProps({ user: { id: 2, username: 'ed', role: 'editor' }, mobileMenuOpen: true })} />);
-    expect(document.getElementById('btn-open-system')).toBeNull();
-    expect(document.getElementById('btn-mobile-menu-system')).toBeNull();
+    const openAdmin = async () => {
+      fireEvent.click(document.getElementById('btn-account-menu'));
+      fireEvent.click(document.getElementById('btn-open-admin'));
+      return screen.findByRole('dialog', { name: 'Verwaltung' });
+    };
+    const { rerender } = render(<DashboardHeader {...headerProps({ user: { id: 2, username: 'ed', role: 'editor' } })} />);
+    await openAdmin();
+    expect(document.getElementById('btn-admin-system')).toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Schließen' })[0]);
 
-    rerender(<DashboardHeader {...headerProps({ mobileMenuOpen: true })} />);
-    expect(document.getElementById('btn-mobile-menu-system')).toBeTruthy();
-    fireEvent.click(document.getElementById('btn-open-system'));
+    rerender(<DashboardHeader {...headerProps()} />);
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-system'));
     const dialog = await screen.findByRole('dialog', { name: 'System' });
     expect(dialog.parentElement).toBe(document.body);
     await within(dialog).findByText('v2.19.1');
@@ -223,6 +229,7 @@ describe('DashboardHeader: System entry', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'System' })).toBeNull());
 
     rerender(<DashboardHeader {...headerProps({ user: { id: 1, username: 'root', role: 'admin', offline: true } })} />);
-    expect(document.getElementById('btn-open-system')).toBeNull();
+    await openAdmin();
+    expect(document.getElementById('btn-admin-system')).toBeNull();
   });
 });
