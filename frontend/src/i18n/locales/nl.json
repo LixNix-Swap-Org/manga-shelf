@@ -257,6 +257,7 @@
   },
   "Auf Crunchyroll suchen": "Zoeken op Crunchyroll",
   "Auf Einkaufsliste setzen": "Op de kooplijst zetten",
+  "Auf Katalogstand zurücksetzen": "Terugzetten naar catalogus",
   "Auf Server übertragen": "Naar server overdragen",
   "Auf Wunschliste": "Op verlanglijst",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "Op de server staan al gegevens – die zouden worden vervangen. “Samenvoegen” is bedoeld voor een server met gegevens.",
@@ -789,6 +790,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "Het oude adres werkt meteen niet meer.",
   "Die beiden neuen Passwörter sind nicht gleich.": "De twee nieuwe wachtwoorden komen niet overeen.",
   "Die eigene Rolle kann hier nicht geändert werden": "Je eigen rol kan hier niet worden gewijzigd",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "De eigen waarden van deze plank worden vervangen door de waarden uit de catalogus.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "Het geïnstalleerde bestand meldt een andere versie dan verwacht.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "De lokale collectie kon niet worden aangemaakt.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "De nieuwe versie is niet door de voorafgaande controle gekomen.",
@@ -800,6 +802,7 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Richt de service opnieuw in met dit bestand en start hem:",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Deze weergave kon niet worden getoond. Opnieuw laden lost dit meestal op.",
   "Diese Ausgabe lösen": "Deze editie ontkoppelen",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Deze uitgave staat ook op een andere plank. Je wijzigingen gelden alleen voor deze plank.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Deze delen zijn in bezit van andere gebruikers in reeksen die jij ook verzamelt.",
   "Diese ISBN gehört zu „{title}“.": "Dit ISBN hoort bij “{title}”.",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Dit ISBN past bij een andere reeks in de collectie.",
@@ -1045,6 +1048,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Fout bij het herstellen van de back-up (details in het serverlog)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Fout bij het herstellen van de back-up: {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Fout bij het herstellen: {reason}",
+  "Fehler beim Zurücksetzen": "Fout bij het terugzetten",
   "Fehler beim automatischen Ausfüllen": "Fout bij het automatisch invullen",
   "Fehler beim Ändern des Status": "Fout bij het wijzigen van de status",
   "Fehler beim Übernehmen des Bands": "Fout bij het overnemen van het deel",
@@ -1395,6 +1399,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Hoofdstukvoortgang kon niet worden opgeslagen",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "Hoofdstukvoortgang van “{name}” ligt boven het totale aantal hoofdstukken (genegeerd)",
   "Karten": "Kaarten",
+  "Katalogstand übernommen": "Cataloguswaarden overgenomen",
   "Kaufdatum": "Aankoopdatum",
   "Kaufdatum…": "Aankoopdatum…",
   "Kaufpreis": "Aankoopprijs",
@@ -3128,6 +3133,10 @@
   "{n} Extras|{n} Extras": {
     "one": "{n} extra",
     "other": "{n} extra's"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} veld heeft op deze plank een eigen waarde.",
+    "other": "{n} velden hebben op deze plank een eigen waarde."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} aflevering gezien",

@@ -11,6 +11,7 @@ import { PRIORITY_OPTIONS, isWishedSeries, priorityBadgeClass, wishLabel } from 
 import { authorShelfPath, splitAuthors } from '../../utils/seriesMeta';
 import CollectingControl from './CollectingControl';
 import EditionSwitcher from './EditionSwitcher';
+import CatalogNotice from './CatalogNotice';
 import EditionFields from '../common/EditionFields';
 import FormatFields from '../common/FormatFields';
 import WebtoonPill from '../common/WebtoonPill';
@@ -362,6 +363,12 @@ export default function MangaHeroCard({
                 </button>
               </div>
             </div>
+
+            <CatalogNotice
+              manga={manga}
+              disabled={saving || isOffline}
+              onReset={async () => { endEdit(); await onEditionsChanged?.(); }}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

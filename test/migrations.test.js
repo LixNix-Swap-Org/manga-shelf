@@ -985,3 +985,68 @@ test('migration 45 moves series links of anime onto the work, pins the chosen ed
     assert.match(conn.prepare("SELECT sql FROM sqlite_master WHERE name = 'trg_mangas_work_update'").get().sql, /anime_work_links/);
     assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE name = 'trg_mangas_anime_pins_shelf'").get(), 'a pin moves with its series');
 });
+
+test('migration 46 keeps every value a row has: what differs from its catalog entry is local, catalog changes reach the rest', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 46);
+    conn.exec(`
+        DELETE FROM schema_migrations WHERE version = 46;
+        INSERT INTO shelves (id, name) VALUES (7, 'Zweites');
+        INSERT INTO mangas (id, title, publisher, description, tags, shelf_id, language) VALUES
+            (1, 'Kern 46', 'Carlsen Manga', 'Text eins', 'Action', 1, 'de'),
+            (2, 'Kern 46', 'Carlsen Manga', NULL, NULL, 7, 'de');
+        INSERT INTO volumes (id, manga_id, volume_number, pages, release_year, status) VALUES (11, 1, '1', 100, 2024, 'Fehlt'), (21, 2, '1', NULL, NULL, 'Fehlt');
+    `);
+    const infos = [];
+    const log = { debug() {}, info: (m) => infos.push(m), warn() {}, error() {} };
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log }).map(r => r.version), [46]);
+    assert.ok(infos.some(line => /v46: 1 series and 1 volumes keep values of their own/.test(line)), infos.join('\n'));
+    const rows = (table) => conn.prepare(`SELECT id, local_fields FROM ${table} ORDER BY id`).all().map(r => ({ ...r }));
+    assert.deepEqual(rows('mangas'), [{ id: 1, local_fields: null }, { id: 2, local_fields: '["description","tags"]' }]);
+    assert.deepEqual(rows('volumes'), [{ id: 11, local_fields: null }, { id: 21, local_fields: '["pages","release_year"]' }]);
+    const catalogId = conn.prepare('SELECT catalog_series_id AS id FROM mangas WHERE id = 1').get().id;
+    assert.deepEqual({ ...conn.prepare('SELECT tags, description FROM catalog_series WHERE id = ?').get(catalogId) }, { tags: 'Action', description: 'Text eins' });
+    assert.equal(conn.prepare('SELECT release_year FROM catalog_volumes WHERE id = (SELECT catalog_volume_id FROM volumes WHERE id = 11)').get().release_year, 2024);
+    // nothing a shelf showed changed
+    assert.deepEqual({ ...conn.prepare('SELECT description, tags FROM mangas WHERE id = 2').get() }, { description: null, tags: null });
+
+    // a catalog change reaches the rows where the field is not local; a raw row write stays in its row
+    conn.prepare("UPDATE catalog_series SET description = 'Neu', author = 'Autorin' WHERE id = ?").run(catalogId);
+    assert.deepEqual(conn.prepare('SELECT id, description, author FROM mangas ORDER BY id').all().map(r => ({ ...r })),
+        [{ id: 1, description: 'Neu', author: 'Autorin' }, { id: 2, description: null, author: 'Autorin' }]);
+    conn.exec("UPDATE mangas SET author = 'Nur hier' WHERE id = 1");
+    assert.equal(conn.prepare('SELECT author FROM catalog_series WHERE id = ?').get(catalogId).author, 'Autorin');
+    // a new row of the same edition links and keeps what differs local; the fill never reaches the other rows
+    conn.exec("INSERT INTO mangas (id, title, publisher, description, shelf_id, language) VALUES (3, 'Kern 46', 'Carlsen Manga', 'Eigener Text', 7, 'de')");
+    assert.equal(conn.prepare('SELECT catalog_series_id AS id FROM mangas WHERE id = 3').get().id, catalogId);
+    assert.equal(conn.prepare('SELECT local_fields FROM mangas WHERE id = 3').get().local_fields, '["author","description","tags"]');
+    assert.equal(conn.prepare('SELECT description FROM catalog_series WHERE id = ?').get(catalogId).description, 'Neu');
+    assert.deepEqual(conn.prepare('PRAGMA foreign_key_check').all(), []);
+    assert.equal(conn.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
+});
+
+test('migration 46: an entry only one row shows takes that row\'s values, so nothing a deleted series left stays in the catalog', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 46);
+    conn.exec(`
+        DELETE FROM schema_migrations WHERE version = 46;
+        INSERT INTO mangas (id, title, publisher, description, author, shelf_id, language) VALUES (1, 'Kern 46 Waise', 'Carlsen Manga', 'Text alt', 'Autorin alt', 1, 'de');
+        INSERT INTO volumes (id, manga_id, volume_number, pages, status) VALUES (11, 1, '1', 120, 'Fehlt');
+        -- stage 1 never cleared a catalog value: the deleted series' text stays when the next row of the edition comes
+        DELETE FROM mangas WHERE id = 1;
+        INSERT INTO mangas (id, title, publisher, shelf_id, language) VALUES (2, 'Kern 46 Waise', 'Carlsen Manga', 1, 'de');
+        INSERT INTO volumes (id, manga_id, volume_number, status) VALUES (21, 2, '1', 'Fehlt');
+    `);
+    const entry = (cols) => ({ ...conn.prepare(`SELECT ${cols} FROM catalog_series c JOIN mangas m ON m.catalog_series_id = c.id WHERE m.id = 2`).get() });
+    assert.deepEqual(entry('c.description, c.author'), { description: 'Text alt', author: 'Autorin alt' }, 'stage 1 left the old text');
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log: { debug() {}, info() {}, warn() {}, error() {} } }).map(r => r.version), [46]);
+    assert.deepEqual(entry('c.description, c.author, c.source_fields'), { description: null, author: null, source_fields: null });
+    assert.equal(conn.prepare('SELECT pages FROM catalog_volumes WHERE id = (SELECT catalog_volume_id FROM volumes WHERE id = 21)').get().pages, null);
+    assert.deepEqual(conn.prepare('SELECT id, local_fields FROM mangas UNION ALL SELECT id, local_fields FROM volumes').all().map(r => r.local_fields), [null, null]);
+});

@@ -840,6 +840,115 @@ const scenarios = [
         }
     },
     {
+        name: 'catalog overlay: alone with an edition a shelf writes the catalog, a shared edition keeps changes local, catalog changes reach every row that did not set the field, reset, and nothing tells about a shelf the caller does not belong to',
+        async run({ admin, ed, run }) {
+            const shelfOf = async (api, name) => {
+                const res = await api('POST', '/shelves', { name });
+                assert.equal(res.status, 201, JSON.stringify(res.body));
+                return res.body.id;
+            };
+            const detail = async (api, id) => (await api('GET', `/mangas/${id}`)).body;
+            const flags = (d) => [d.catalog.editable, d.catalog.resettable, d.catalog.local_fields];
+            const entryOf = (table, id) => `(SELECT ${table === 'mangas' ? 'catalog_series_id' : 'catalog_volume_id'} FROM ${table} WHERE id = ${Number(id)})`;
+            const edShelf = await shelfOf(ed, 'Kern Katalog Regal Ed');
+            const adminShelf = await shelfOf(admin, 'Kern Katalog Regal Admin');
+
+            const edId = await newSeries(ed, 'Kern Katalog Reihe', { publisher: 'Kern Katalog Verlag', description: 'Text von Ed', shelf_id: edShelf });
+            let mine = await detail(ed, edId);
+            assert.deepEqual(flags(mine), [true, true, []]);
+            assert.deepEqual(Object.keys(mine.catalog).sort(), ['editable', 'local_fields', 'resettable'], 'no catalog id');
+            assert.equal('local_fields' in mine, false);
+            // alone with the edition: the change goes to the catalog (and the catalog keeps matching the new title)
+            assert.equal((await ed('PUT', `/mangas/${edId}`, { title: 'Kern Katalog Reihe Neu' })).status, 200);
+            mine = await detail(ed, edId);
+            assert.deepEqual([mine.title, mine.catalog.local_fields], ['Kern Katalog Reihe Neu', []]);
+
+            // the same edition in a shelf ed does not belong to: one catalog entry, no text of ed's shelf shows up, and
+            // neither answer tells that the other shelf exists
+            const adminId = await newSeries(admin, 'Kern Katalog Reihe Neu', { publisher: 'Kern Katalog Verlag', shelf_id: adminShelf });
+            let theirs = await detail(admin, adminId);
+            assert.equal(theirs.description, null);
+            assert.deepEqual(flags(theirs), [true, true, []]);
+            assert.deepEqual(flags(await detail(ed, edId)), [true, true, []]);
+
+            // shared: a change stays in the shelf that made it
+            assert.equal((await ed('PUT', `/mangas/${edId}`, { author: 'Autorin Ed' })).status, 200);
+            mine = await detail(ed, edId);
+            assert.deepEqual([mine.author, mine.catalog.local_fields], ['Autorin Ed', []]);
+            assert.equal((await detail(admin, adminId)).author, null);
+
+            // a catalog change (as a source writes it) reaches every row that did not set the field itself
+            run(`UPDATE catalog_series SET total_volumes = 21, author = ?, source_fields = '["author","total_volumes"]' WHERE id = ${entryOf('mangas', edId)}`, 'Kern Quelle');
+            mine = await detail(ed, edId);
+            theirs = await detail(admin, adminId);
+            assert.deepEqual([mine.total_volumes, mine.author], [21, 'Autorin Ed']);
+            assert.deepEqual([theirs.total_volumes, theirs.author], [21, 'Kern Quelle']);
+
+            // a reset takes nothing while the entry has a row in a shelf the caller does not see (its values may come
+            // from there), and answers as for an entry without local fields
+            for (const [api, id] of [[ed, edId], [admin, adminId]]) {
+                const quiet = await api('POST', `/mangas/${id}/catalog-reset`, {});
+                assert.deepEqual([quiet.status, quiet.body.local_fields], [200, []], JSON.stringify(quiet.body));
+            }
+            assert.equal((await detail(ed, edId)).author, 'Autorin Ed');
+            assert.equal((await ed('POST', `/mangas/${edId}/catalog-reset`, { fields: ['shelf_id'] })).status, 400);
+
+            // volumes follow the same rule (the detail names no local fields of a volume)
+            const edVol = await newVolume(ed, edId, '1', { pages: 180 });
+            const adminVol = await newVolume(admin, adminId, '1');
+            const volumeOf = async (api, mangaId, id) => (await detail(api, mangaId)).volumes.find((v) => v.id === id);
+            let theirVol = await volumeOf(admin, adminId, adminVol);
+            assert.deepEqual([theirVol.pages, 'local_fields' in theirVol], [null, false]);
+            assert.equal((await admin('PUT', `/volumes/${adminVol}`, { pages: 200 })).status, 200);
+            assert.equal((await volumeOf(ed, edId, edVol)).pages, 180, 'a shared volume keeps the change in its shelf');
+            run(`UPDATE catalog_volumes SET release_date = '2026-01-02' WHERE id = ${entryOf('volumes', edVol)}`);
+            theirVol = await volumeOf(admin, adminId, adminVol);
+            assert.deepEqual([theirVol.release_date, theirVol.pages], ['2026-01-02', 200]);
+            assert.equal((await volumeOf(ed, edId, edVol)).release_date, '2026-01-02');
+            const quietVol = await admin('POST', `/volumes/${adminVol}/catalog-reset`, {});
+            assert.deepEqual([quietVol.status, quietVol.body.local_fields], [200, []]);
+            assert.equal((await volumeOf(admin, adminId, adminVol)).pages, 200);
+
+            // once ed reads the other shelf, it is no secret any more: ed's edit form says a change stays local, and the
+            // local fields show
+            assert.equal((await admin('POST', `/shelves/${adminShelf}/members`, { username: 'ed', role: 'viewer' })).status, 201);
+            assert.deepEqual(flags(await detail(ed, edId)), [false, true, ['author']]);
+            assert.deepEqual(flags(await detail(admin, adminId)), [true, true, []], 'the admin still does not belong to ed\'s shelf');
+            assert.equal((await admin('DELETE', `/shelves/${adminShelf}/members/2`)).status, 200);
+
+            // alone again: the shelf sees its own values and may take the catalog values back
+            assert.equal((await admin('DELETE', `/mangas/${adminId}`)).status, 200);
+            mine = await detail(ed, edId);
+            assert.deepEqual(flags(mine), [true, true, ['author']]);
+            const reset = await ed('POST', `/mangas/${edId}/catalog-reset`, { fields: ['author'] });
+            assert.equal(reset.status, 200, JSON.stringify(reset.body));
+            assert.deepEqual(reset.body.local_fields, []);
+            assert.equal((await detail(ed, edId)).author, 'Kern Quelle');
+
+            // a value a shelf wrote is never offered back, not even once that shelf is gone: ed writes a text alone (it
+            // goes to the catalog), the admin joins, ed leaves; the admin's reset takes nothing of ed's
+            assert.equal((await ed('PUT', `/mangas/${edId}`, { description: 'Geheimtext von Ed' })).status, 200);
+            const joinId = await newSeries(admin, 'Kern Katalog Reihe Neu', { publisher: 'Kern Katalog Verlag', shelf_id: adminShelf });
+            assert.equal((await ed('DELETE', `/mangas/${edId}`)).status, 200);
+            // only the source values are offered (author and volume count), never ed's text
+            assert.deepEqual(flags(await detail(admin, joinId)), [true, true, ['author', 'total_volumes']]);
+            assert.deepEqual((await admin('POST', `/mangas/${joinId}/catalog-reset`, {})).body.local_fields, []);
+            const joined = await detail(admin, joinId);
+            assert.deepEqual([joined.description, joined.author, joined.total_volumes], [null, 'Kern Quelle', 21]);
+            assert.equal((await admin('DELETE', `/mangas/${joinId}`)).status, 200);
+
+            // an entry nobody shows any more takes the values of the next holder: nothing of the series deleted before stays
+            const orphan = await newSeries(ed, 'Kern Katalog Waise', { description: 'Text der Waise', author: 'Autorin Waise', shelf_id: edShelf });
+            assert.equal((await ed('DELETE', `/mangas/${orphan}`)).status, 200);
+            const heir = await newSeries(admin, 'Kern Katalog Waise', { shelf_id: adminShelf });
+            const heirDetail = await detail(admin, heir);
+            assert.deepEqual([heirDetail.description, heirDetail.author, heirDetail.catalog.local_fields], [null, null, []]);
+            // the catalog entry itself holds the heir's values (an update that matches only such a row changes one)
+            assert.equal(Number(run(`UPDATE catalog_series SET pub_status = pub_status WHERE id = ${entryOf('mangas', heir)} AND description IS NULL AND author IS NULL`).changes), 1);
+            assert.equal((await admin('DELETE', `/mangas/${heir}`)).status, 200);
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');

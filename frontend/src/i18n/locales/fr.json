@@ -261,6 +261,7 @@
   },
   "Auf Crunchyroll suchen": "Chercher sur Crunchyroll",
   "Auf Einkaufsliste setzen": "Mettre dans la liste d'achats",
+  "Auf Katalogstand zurücksetzen": "Rétablir les valeurs du catalogue",
   "Auf Server übertragen": "Transférer vers le serveur",
   "Auf Wunschliste": "Dans la liste de souhaits",
   "Auf dem Server liegen schon Daten – sie würden ersetzt. Für einen Server mit Daten ist „Zusammenführen“ gedacht.": "Le serveur contient déjà des données – elles seraient remplacées. « Fusionner » est prévu pour un serveur qui contient des données.",
@@ -806,6 +807,7 @@
   "Die alte Adresse hört sofort auf zu funktionieren.": "L'ancienne adresse cesse immédiatement de fonctionner.",
   "Die beiden neuen Passwörter sind nicht gleich.": "Les deux nouveaux mots de passe ne sont pas identiques.",
   "Die eigene Rolle kann hier nicht geändert werden": "Tu ne peux pas modifier ton propre rôle ici",
+  "Die eigenen Werte dieses Regals werden durch die Werte des Katalogs ersetzt.": "Les valeurs propres à cette étagère seront remplacées par celles du catalogue.",
   "Die installierte Datei meldet eine andere Version als erwartet.": "Le fichier installé indique une autre version que celle attendue.",
   "Die lokale Sammlung konnte nicht angelegt werden.": "Impossible de créer la collection locale.",
   "Die neue Version hat die Vorabprüfung nicht bestanden.": "La nouvelle version n'a pas réussi la vérification préalable.",
@@ -817,6 +819,7 @@
   "Dienst mit dieser Datei neu einrichten und starten:": "Réinstalle le service avec ce fichier et démarre-le :",
   "Diese Ansicht konnte nicht angezeigt werden. Ein Neuladen behebt das meistens.": "Impossible d'afficher cette vue. Un rechargement règle généralement le problème.",
   "Diese Ausgabe lösen": "Délier cette édition",
+  "Diese Ausgabe steht auch in einem anderen Regal. Deine Änderungen gelten nur für dieses Regal.": "Cette édition se trouve aussi sur une autre étagère. Tes modifications ne s’appliquent qu’à cette étagère.",
   "Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.": "Ces tomes sont possédés par d'autres utilisateurs dans des séries que tu collectionnes aussi.",
   "Diese ISBN gehört zu „{title}“.": "Cet ISBN correspond à « {title} ».",
   "Diese ISBN passt zu einer anderen Reihe der Sammlung.": "Cet ISBN correspond à une autre série de la collection.",
@@ -1065,6 +1068,7 @@
   "Fehler beim Wiederherstellen des Backups (Details im Server-Log)": "Erreur lors de la restauration de la sauvegarde (détails dans le journal du serveur)",
   "Fehler beim Wiederherstellen des Backups: {reason}": "Erreur lors de la restauration de la sauvegarde : {reason}",
   "Fehler beim Wiederherstellen: {reason}": "Erreur lors de la restauration : {reason}",
+  "Fehler beim Zurücksetzen": "Erreur lors de la réinitialisation",
   "Fehler beim automatischen Ausfüllen": "Erreur lors du remplissage automatique",
   "Fehler beim Ändern des Status": "Erreur lors du changement de statut",
   "Fehler beim Übernehmen des Bands": "Erreur lors de la reprise du tome",
@@ -1421,6 +1425,7 @@
   "Kapitelstand konnte nicht gespeichert werden": "Impossible d’enregistrer la progression des chapitres",
   "Kapitelstand von „{name}“ liegt über der Gesamtkapitelzahl (ignoriert)": "La progression de « {name} » dépasse le nombre total de chapitres (ignorée)",
   "Karten": "Cartes",
+  "Katalogstand übernommen": "Valeurs du catalogue reprises",
   "Kaufdatum": "Date d'achat",
   "Kaufdatum…": "Date d'achat…",
   "Kaufpreis": "Prix d'achat",
@@ -3190,6 +3195,11 @@
     "one": "{n} extra",
     "many": "{n} extras",
     "other": "{n} extras"
+  },
+  "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
+    "one": "{n} champ a une valeur propre sur cette étagère.",
+    "many": "{n} champs ont une valeur propre sur cette étagère.",
+    "other": "{n} champs ont une valeur propre sur cette étagère."
   },
   "{n} Folge gesehen|{n} Folgen gesehen": {
     "one": "{n} épisode vu",

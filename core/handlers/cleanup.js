@@ -5,6 +5,7 @@ const { isValidIsbn } = require('../lib/isbn');
 const { normalizePublisher, isKnownPublisher } = require('../lib/publishers');
 const { LEGACY_READ_STATUS, convertLegacyRead, syncOwnersWithStatus, syncStatusWithOwners } = require('../lib/owners');
 const { zonedToday } = require('../radar');
+const catalogWrite = require('../lib/catalogWrite');
 
 const ITEM_LIMIT = 50;
 
@@ -125,12 +126,14 @@ function normalizeStoredPublishers(ctx, shelfIds) {
         volumes: `manga_id IN (SELECT id FROM mangas WHERE ${scope.sql})`
     };
     let changed = 0;
-    for (const table of ['mangas', 'volumes']) {
-        const rows = ctx.db.prepare(`SELECT DISTINCT publisher FROM ${table} WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' AND ${where[table]}`).all(...scope.params);
-        const update = ctx.db.prepare(`UPDATE ${table} SET publisher = ? WHERE publisher = ? AND ${where[table]}`);
-        for (const { publisher } of rows) {
+    for (const [table, kind] of [['mangas', 'series'], ['volumes', 'volume']]) {
+        const rows = ctx.db.prepare(`SELECT id, publisher FROM ${table} WHERE publisher IS NOT NULL AND TRIM(publisher) <> '' AND ${where[table]}`).all(...scope.params);
+        const update = ctx.db.prepare(`UPDATE ${table} SET publisher = ? WHERE id = ?`);
+        for (const { id, publisher } of rows) {
             const canonical = normalizePublisher(publisher);
-            if (canonical && canonical !== publisher) changed += update.run(canonical, publisher, ...scope.params).changes;
+            if (!canonical || canonical === publisher) continue;
+            // the catalog follows only where the caller may edit it for everyone (core/lib/catalogWrite.js)
+            changed += catalogWrite.track(ctx, kind, id, () => update.run(canonical, id)).changes;
         }
     }
     return changed;
