@@ -3388,5 +3388,32 @@
   "★★★ hoch": "★★★ 高",
   "✓ Im Besitz": "✓ 所持",
   "✕ Fehlt": "✕ 未所持",
-  "✕ Fehlt (Lücke)": "✕ 未所持(欠番)"
+  "✕ Fehlt (Lücke)": "✕ 未所持(欠番)",
+  "„{title}“ Band {volume} als gelesen markiert": "「{title}」第{volume}巻を既読にしました",
+  "Band {volume} von „{title}“ als gelesen markieren": "「{title}」第{volume}巻を既読にする",
+  "+1 gelesen": "+1 既読",
+  "Seite": "ページ",
+  "Zu erledigen ({count})": "やること（{count}）",
+  "Strg K": "Ctrl K",
+  "Zuletzt geöffnet": "最近開いた",
+  "Schnellzugriff": "クイックアクセス",
+  "Keine Treffer – Enter durchsucht weiter die Sammlung.": "該当なし – Enter でコレクションを検索します。",
+  "↑↓ wählen · Enter öffnen · Esc schließen": "↑↓ 選択 · Enter 開く · Esc 閉じる",
+  "Gemerkte Filter": "保存したフィルター",
+  "Gemerkt": "保存済み",
+  "Gemerkten Filter „{label}“ löschen": "保存したフィルター「{label}」を削除",
+  "Aktuelle Auswahl merken": "現在の選択を保存",
+  "Anderes Regal": "別の本棚",
+  "Erschienen?": "発売済み？",
+  "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}：第{volume}巻はすでに本棚「{shelf}」にあります",
+  "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}：第{volumes}巻はすでに本棚「{shelf}」にあります",
+  "{title}: Band {volume} sollte erschienen sein": "{title}：第{volume}巻は発売済みのはずです",
+  "{title}: Bände {volumes} sollten erschienen sein": "{title}：第{volumes}巻は発売済みのはずです",
+  "{title}: Band {volume} fehlt": "{title}：第{volume}巻がありません",
+  "Weniger zeigen": "表示を減らす",
+  "Alle {count} zeigen": "{count}件すべて表示",
+  "{title}: {n} Band fehlt ({volumes})|{title}: {n} Bände fehlen ({volumes})": {
+    "other": "{title}：{n}巻がありません（{volumes}）"
+  },
+  "„{title}“ öffnen": "「{title}」を開く"
 }

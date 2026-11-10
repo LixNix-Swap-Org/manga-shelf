@@ -7,6 +7,8 @@ import DashboardHeader, { opensCollection } from './components/dashboard/Dashboa
 import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
 import CollectionStats from './components/dashboard/CollectionStats';
 import ContinueReading from './components/dashboard/ContinueReading';
+import SavedFilters from './components/dashboard/SavedFilters';
+import TodoList from './components/dashboard/TodoList';
 import AnimeSearchHits, { animeSearchHits, ANIME_SEARCH_MIN_CHARS } from './components/dashboard/AnimeSearchHits';
 import DashboardFooter from './components/dashboard/DashboardFooter';
 import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
@@ -97,6 +99,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const canQuickBuy = Boolean(user) && !['visitor', 'guest'].includes(user.realRole || user.role);
 
   const navigate = useNavigate();
+  const [todoCount, setTodoCount] = useState(0);
   const location = useLocation();
   const searchInputRef = useRef(null);
 
@@ -604,6 +607,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         isInstalledApp={isInstalledApp}
         isOfflineMode={isOfflineMode}
         isVisitor={isVisitor}
+        mangas={mangas}
+        todoCount={todoCount}
+        onOpenSeries={(id) => navigate(`/manga/${id}`)}
         mobileMenuOpen={mobileMenuOpen}
         onLogout={onLogout}
         onLocalReplaced={handleLocalReplaced}
@@ -653,7 +659,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               handleOpenStats={handleOpenStats}
               isOfflineMode={isOfflineMode}
             />
-            <ContinueReading userId={user?.id} enabled={!isOfflineMode} />
+            <ContinueReading userId={user?.id} enabled={!isOfflineMode} canMark={canEdit} onChanged={fetchMangas} />
+            <TodoList enabled={!isOfflineMode && Boolean(user)} shelfId={scopedShelfId} reloadKey={dataAt} onCount={setTodoCount} />
 
         {/* Filter & Sort Toolbar */}
         <CollectionToolbar
@@ -687,6 +694,24 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           availableShelves={availableShelves}
           shelfFilter={shelfFilter}
           setShelfFilter={setShelfFilter}
+        />
+        <SavedFilters
+          userId={user?.id}
+          shelves={availableShelves}
+          current={{ status: statusFilter, publisher: publisherFilter, collect: collectFilter, author: authorFilter, tags: tagFilter, lang: languageFilter, shelf: shelfFilter, sort: sortBy, group: groupBy }}
+          filtersActive={statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter)
+            || (Array.isArray(tagFilter) && tagFilter.length > 0) || languageFilter !== 'ALL' || shelfFilter !== 'ALL'}
+          apply={(f) => {
+            setStatusFilter(f.status);
+            setPublisherFilter(f.publisher);
+            setCollectFilter(f.collect);
+            setAuthorFilter(f.author);
+            setTagFilter(f.tags);
+            setLanguageFilter(f.lang);
+            setShelfFilter(f.shelf);
+            setSortBy(f.sort);
+            setGroupBy(f.group);
+          }}
         />
         <AnimeSearchHits hits={animeHits} onOpen={handleOpenAnime} onShowAll={() => setView(ANIME_VIEW)} />
         {/* Grid or Empty State */}

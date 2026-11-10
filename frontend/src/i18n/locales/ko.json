@@ -3388,5 +3388,32 @@
   "★★★ hoch": "★★★ 높음",
   "✓ Im Besitz": "✓ 보유",
   "✕ Fehlt": "✕ 미보유",
-  "✕ Fehlt (Lücke)": "✕ 미보유 (빠진 권)"
+  "✕ Fehlt (Lücke)": "✕ 미보유 (빠진 권)",
+  "„{title}“ Band {volume} als gelesen markiert": "「{title}」{volume}권을 읽음으로 표시했습니다",
+  "Band {volume} von „{title}“ als gelesen markieren": "「{title}」{volume}권을 읽음으로 표시",
+  "+1 gelesen": "+1 읽음",
+  "Seite": "페이지",
+  "Zu erledigen ({count})": "할 일 ({count})",
+  "Strg K": "Ctrl K",
+  "Zuletzt geöffnet": "최근에 연 항목",
+  "Schnellzugriff": "빠른 이동",
+  "Keine Treffer – Enter durchsucht weiter die Sammlung.": "결과 없음 – Enter를 누르면 컬렉션을 계속 검색합니다.",
+  "↑↓ wählen · Enter öffnen · Esc schließen": "↑↓ 선택 · Enter 열기 · Esc 닫기",
+  "Gemerkte Filter": "저장한 필터",
+  "Gemerkt": "저장됨",
+  "Gemerkten Filter „{label}“ löschen": "저장한 필터 「{label}」 삭제",
+  "Aktuelle Auswahl merken": "현재 선택 저장",
+  "Anderes Regal": "다른 책장",
+  "Erschienen?": "출간됨?",
+  "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: {volume}권은 이미 「{shelf}」 책장에 있습니다",
+  "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: {volumes}권은 이미 「{shelf}」 책장에 있습니다",
+  "{title}: Band {volume} sollte erschienen sein": "{title}: {volume}권이 이미 출간되었을 것입니다",
+  "{title}: Bände {volumes} sollten erschienen sein": "{title}: {volumes}권이 이미 출간되었을 것입니다",
+  "{title}: Band {volume} fehlt": "{title}: {volume}권이 없습니다",
+  "Weniger zeigen": "간단히 보기",
+  "Alle {count} zeigen": "{count}개 모두 보기",
+  "{title}: {n} Band fehlt ({volumes})|{title}: {n} Bände fehlen ({volumes})": {
+    "other": "{title}: {n}권이 없습니다 ({volumes})"
+  },
+  "„{title}“ öffnen": "「{title}」 열기"
 }

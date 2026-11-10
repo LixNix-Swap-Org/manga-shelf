@@ -12,6 +12,7 @@ const stats = require('./handlers/stats');
 const settings = require('./handlers/settings');
 const shopping = require('./handlers/shopping');
 const radar = require('./handlers/radar');
+const todoHandler = require('./handlers/todo');
 const mangaPassion = require('./handlers/mangaPassion');
 const lookup = require('./handlers/lookup');
 const csv = require('./handlers/csv');
@@ -98,6 +99,7 @@ const routes = [
     { method: 'GET', path: '/shopping-list', role: 'auth', conditional: true, handler: shopping.shoppingList },
     { method: 'GET', path: '/release-radar', role: 'auth', conditional: true, handler: radar.releaseRadar },
     { method: 'GET', path: '/dashboard-summary', role: 'auth', conditional: true, handler: radar.dashboardSummary },
+    { method: 'GET', path: '/todo', role: 'auth', handler: todoHandler.todo },
     { method: 'GET', path: '/release-radar/changes', role: 'auth', handler: radar.dateChanges },
     // calendar apps send no session: the per-user feed token in the query is the credential
     { method: 'GET', path: '/radar/feed.ics', role: 'public', handler: radar.calendarFeed },

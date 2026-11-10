@@ -256,6 +256,8 @@ async function visibleSeriesIds(page) {
         const ids = [];
         for (const a of document.querySelectorAll('a[href^="/manga/"]')) {
             if (a.offsetParent === null) continue;
+            // the strips above the grid link to series too
+            if (a.closest('#todo-list, #continue-reading, #quick-access')) continue;
             const m = /^\/manga\/(\d+)/.exec(a.getAttribute('href'));
             if (m && !ids.includes(Number(m[1]))) ids.push(Number(m[1]));
         }

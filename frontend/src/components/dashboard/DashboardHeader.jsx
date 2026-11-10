@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
@@ -10,12 +10,15 @@ import { getCoverOrigin } from '../../utils/coverOrigin';
 import { BookOpen, Calendar, ChartColumn, ChevronDown, Download, Globe, LogOut, Menu, Plus, Search, Settings, ShieldCheck, Tv, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
 import { adminSections } from './adminSections';
+import QuickAccessPanel, { quickAccessEntries, quickOptionId, QUICK_LISTBOX_ID } from './QuickAccess';
+import { getRecentSeries } from '../../utils/recentSeries';
 import { t } from '../../i18n/index.js';
 
 const SystemModal = lazy(() => import('../modals/SystemModal'));
 const BackupExportModal = lazy(() => import('../modals/BackupExportModal'));
 const AdminCenter = lazy(() => import('./AdminCenter'));
 
+const QUICK_SHORTCUTS = 'Control+K Meta+K'; // i18n-ignore: key names (aria-keyshortcuts syntax)
 // i18n
 const SEARCH_PLACEHOLDER = 'Titel, Autor, Tag, ISBN oder Notiz suchen...';
 // BarcodeScannerButton's look plus the touch hit area
@@ -161,9 +164,12 @@ export default function DashboardHeader({
   isInstalledApp,
   isOfflineMode,
   isVisitor,
+  mangas = [],
+  todoCount = 0,
   mobileMenuOpen,
   onLogout,
   onLocalReplaced,
+  onOpenSeries,
   radarData,
   search,
   searchInputRef,
@@ -258,6 +264,69 @@ export default function DashboardHeader({
     onInstall: isInstallable && !isInstalledApp ? handleInstallClick : null
   });
 
+  // quick access: the search field opens a list of series and actions (Ctrl+K / Cmd+K focuses it)
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickIndex, setQuickIndex] = useState(-1);
+  const quickActions = useMemo(() => {
+    const list = [];
+    if (canEdit) list.push({ id: 'add', label: t('Neuer Manga'), hint: t('Aktion'), run: handleOpenModal });
+    list.push({ id: 'scan', label: t('Band scannen'), hint: t('Aktion'), run: () => document.getElementById('btn-header-scan')?.click() });
+    list.push({ id: 'stats', label: t('Statistiken'), hint: t('Seite'), run: handleOpenStats });
+    list.push({ id: 'view-shelf', label: t('Sammlung'), hint: t('Ansicht'), run: () => setView('shelf') });
+    list.push({ id: 'view-shopping', label: t('Einkaufsliste'), hint: t('Ansicht'), run: () => setView('shopping') });
+    list.push({ id: 'view-anime', label: t('Anime'), hint: t('Ansicht'), run: () => setView('anime') });
+    list.push({ id: 'view-radar', label: t('Radar'), hint: t('Ansicht'), run: () => setView('radar') });
+    if (todoCount > 0) {
+      list.push({
+        id: 'todo',
+        label: t('Zu erledigen ({count})', { count: todoCount }),
+        hint: t('Sammlung'),
+        run: () => {
+          setView('shelf');
+          setTimeout(() => {
+            const list = document.getElementById('todo-list');
+            list?.scrollIntoView?.({ block: 'start' });
+            list?.focus?.({ preventScroll: true });
+          }, 0);
+        }
+      });
+    }
+    list.push({ id: 'admin', label: t('Verwaltung'), hint: t('Seite'), run: () => setAdminOpen(true) });
+    for (const section of adminEntries) {
+      for (const entry of section.entries) list.push({ id: entry.id, label: entry.label, hint: section.title, run: entry.run });
+    }
+    return list;
+  }, [canEdit, handleOpenModal, handleOpenStats, setView, adminEntries, todoCount]);
+  const quick = useMemo(
+    () => (quickOpen ? quickAccessEntries({ query: search, mangas, recentIds: getRecentSeries(user?.id), actions: quickActions }) : { sections: [], items: [] }),
+    [quickOpen, search, mangas, user?.id, quickActions]
+  );
+  const activeQuick = quickIndex >= 0 && quickIndex < quick.items.length ? quickIndex : -1;
+  useEffect(() => { setQuickIndex(-1); }, [search, quickOpen]);
+
+  const chooseQuick = (item) => {
+    setQuickOpen(false);
+    searchInputRef.current?.blur();
+    if (search) setSearch('');
+    if (item.kind === 'series') onOpenSeries?.(item.manga.id);
+    else item.run?.();
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey) || String(e.key).toLowerCase() !== 'k') return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      const input = searchInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.select();
+      setQuickOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [searchInputRef]);
+
   // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
   const sheet = (drawer) => (narrow
     ? createPortal(
@@ -344,23 +413,31 @@ export default function DashboardHeader({
 
         {/* Search bar: Full width on < xl, Centered & spacious on >= xl */}
         <div 
+          id="main-search-box"
           onClick={(e) => {
             // the scanner's button and its hidden file input must not raise the keyboard
             if (e.target instanceof Element && e.target.closest('button, input[type="file"]')) return;
             searchInputRef.current?.focus();
           }}
-          className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[150px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner"
+          className="relative flex items-center gap-2.5 bg-slate-950/80 border border-slate-700/80 hover:border-slate-600 rounded-xl px-3.5 w-full xl:flex-1 xl:max-w-xs 2xl:max-w-md xl:min-w-[150px] 2xl:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400 transition-all cursor-text shadow-inner"
         >
           <Search className="w-4 h-4 text-slate-400 shrink-0 pointer-events-none" aria-hidden="true" />
           <input 
             ref={searchInputRef}
             id="main-search-input"
             type="text" 
+            role="combobox"
+            aria-expanded={quickOpen}
+            aria-controls={quickOpen ? QUICK_LISTBOX_ID : undefined}
+            aria-autocomplete="list"
+            aria-activedescendant={activeQuick >= 0 ? quickOptionId(activeQuick) : undefined}
+            aria-keyshortcuts={QUICK_SHORTCUTS}
             aria-label={t('Sammlung durchsuchen')}
             placeholder={searchPlaceholder}
             className="w-full min-w-0 bg-transparent border-0 px-0 py-2.5 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-sm" 
             value={search} 
-            onFocus={() => { searchTypedRef.current = false; }}
+            onFocus={() => { searchTypedRef.current = false; setQuickOpen(true); }}
+            onBlur={() => setQuickOpen(false)}
             onChange={e => {
               searchTypedRef.current = true;
               // the header search always searches the collection: typing on another view shows the shelf
@@ -369,14 +446,32 @@ export default function DashboardHeader({
               searchScope?.onTyped(e.target.value);
             }} 
             onKeyDown={(e) => {
-              if (e.key !== 'Enter' || e.nativeEvent.isComposing || !searchOnline) return;
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!quickOpen) { setQuickOpen(true); return; }
+                const n = quick.items.length;
+                if (!n) return;
+                const step = e.key === 'ArrowDown' ? 1 : -1;
+                setQuickIndex(activeQuick < 0 ? (step > 0 ? 0 : n - 1) : (activeQuick + step + n) % n);
+                return;
+              }
+              if (e.key === 'Enter' && quickOpen && activeQuick >= 0) {
+                e.preventDefault();
+                chooseQuick(quick.items[activeQuick]);
+                return;
+              }
+              if (e.key !== 'Enter' || !searchOnline) return;
               e.preventDefault();
               if (activeMainView !== 'shelf') setView('shelf');
               searchScope.submitOnline(e.currentTarget.value);
             }}
           />
           <div className="shrink-0 flex items-center gap-1">
-            <BarcodeScannerButton compact onDetected={handleBarcodeDetected} className={HEADER_SCAN_CLASS} />
+            {!search && !quickOpen && (
+              <kbd aria-hidden="true" className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded border border-slate-700 text-[10px] font-semibold text-slate-400 whitespace-nowrap">{t('Strg K')}</kbd>
+            )}
+            <BarcodeScannerButton compact id="btn-header-scan" onDetected={handleBarcodeDetected} className={HEADER_SCAN_CLASS} />
             {showScope && (
               <button
                 id="btn-search-scope"
@@ -407,6 +502,20 @@ export default function DashboardHeader({
               </button>
             )}
           </div>
+          {quickOpen && (() => {
+            const panel = (
+              <QuickAccessPanel
+                sections={quick.sections}
+                activeIndex={activeQuick}
+                onChoose={chooseQuick}
+                onHover={setQuickIndex}
+                onClose={() => searchInputRef.current?.blur()}
+                narrow={narrow}
+              />
+            );
+            // phones: full screen below the header, outside it (its backdrop filter would anchor a fixed panel)
+            return narrow ? createPortal(panel, document.body) : panel;
+          })()}
         </div>
 
         {/* Desktop actions (>= xl): add, statistics, install and the account menu; everything else is in "Verwaltung" */}

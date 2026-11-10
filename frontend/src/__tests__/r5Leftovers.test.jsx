@@ -400,6 +400,38 @@ describe('Weiterlesen strip', () => {
     expect(String(fetchMock.mock.calls[0][0])).toBe('/api/stats/reading');
   });
 
+  it('"+1 gelesen" marks the next volume read, reloads, and the toast undoes it', async () => {
+    let reading = { continue_reading: [entry(1, { unread_after: 3 })] };
+    const calls = [];
+    const fetchMock = vi.fn(async (url, init = {}) => {
+      calls.push([init.method || 'GET', String(url), init.body ? JSON.parse(init.body) : null]);
+      if (String(url).startsWith('/api/volumes/')) return res(200, { success: true });
+      return res(200, reading);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onChanged = vi.fn();
+    render(<MemoryRouter><ContinueReading userId={2} canMark onChanged={onChanged} /></MemoryRouter>);
+    const button = await screen.findByRole('button', { name: 'Band 2 von „Reihe 1“ als gelesen markieren' });
+    expect(button.textContent).toMatch('+1 gelesen');
+    reading = { continue_reading: [entry(1, { next_volume: { id: 11, volume_number: '3', cover_image: null } })] };
+    fireEvent.click(button);
+    await screen.findByRole('button', { name: 'Band 3 von „Reihe 1“ als gelesen markieren' });
+    expect(calls.filter(([m]) => m === 'POST')).toEqual([['POST', '/api/volumes/10/read', { read: true }]]);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    const toast = toasts.last();
+    expect(toast.message).toBe('„Reihe 1“ Band 2 als gelesen markiert');
+    await act(async () => { toast.action.onClick(); });
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(2));
+    expect(calls.filter(([m]) => m === 'POST').at(-1)).toEqual(['POST', '/api/volumes/10/read', { read: false }]);
+  });
+
+  it('readers get no "+1 gelesen" button', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => res(200, { continue_reading: [entry(1)] })));
+    render(<MemoryRouter><ContinueReading userId={2} /></MemoryRouter>);
+    await screen.findByRole('region', { name: 'Weiterlesen' });
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('stays hidden offline, without entries and on an error', async () => {
     const fetchMock = vi.fn(async () => res(200, { continue_reading: [] }));
     vi.stubGlobal('fetch', fetchMock);

@@ -59,6 +59,10 @@
 - **Verwaltung:** one dialog with four sections (Konto, Personen & Regale, Daten, System) holds everything that stood side by side in the header: users, shelves, backups, CSV, cleanup, trash, publishers and the system page. Each entry opens the same dialog as before, for the same roles.
 - **One Radar tab:** "Release-Radar" and "Anime-Radar" are one tab "Radar" with "Manga-Termine" and "Anime-Folgen". The addresses `?view=radar` and `?view=episodes` keep working.
 - **Phones:** "Mehr" starts with Anime, followed by statistics, "Neuer Manga" (or Radar for readers) and Verwaltung.
+- **Quick access:** clicking or tapping the search field opens a list below it: the series that match (without a query the ones you opened last) and every page and action, from "Neuer Manga" and "Band scannen" to the views and the entries of Verwaltung. Arrow keys and Enter choose; without a chosen entry Enter and typing search the collection as before. Ctrl+K (Mac: ⌘K) focuses the search from anywhere on the shelf. On phones the list covers the screen below the header.
+- **"+1 gelesen"** on every entry of "Weiterlesen" marks its next volume as read, with "Rückgängig" in the notice (editors and admins).
+- **Saved filters:** "Aktuelle Auswahl merken" below the toolbar keeps the current shelf, status, publisher, collecting state, author, tags, language, sort and grouping as a chip that sets them again with one click. Up to 8 per account, kept on this device.
+- **Zu erledigen:** a card on the shelf lists what is open in the collection, each with a link to its series: missing volumes already owned in another of your shelves, pre-orders whose release date has passed, and gaps. The quick access has an entry for it. New endpoint `GET /api/todo`.
 
 ## 3.7.0
 

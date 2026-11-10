@@ -3388,5 +3388,32 @@
   "★★★ hoch": "★★★ 高",
   "✓ Im Besitz": "✓ 已拥有",
   "✕ Fehlt": "✕ 缺失",
-  "✕ Fehlt (Lücke)": "✕ 缺失（缺口）"
+  "✕ Fehlt (Lücke)": "✕ 缺失（缺口）",
+  "„{title}“ Band {volume} als gelesen markiert": "已将《{title}》第 {volume} 卷标为已读",
+  "Band {volume} von „{title}“ als gelesen markieren": "将《{title}》第 {volume} 卷标为已读",
+  "+1 gelesen": "+1 已读",
+  "Seite": "页面",
+  "Zu erledigen ({count})": "待办（{count}）",
+  "Strg K": "Ctrl K",
+  "Zuletzt geöffnet": "最近打开",
+  "Schnellzugriff": "快速访问",
+  "Keine Treffer – Enter durchsucht weiter die Sammlung.": "没有结果 – 按 Enter 仍会搜索收藏。",
+  "↑↓ wählen · Enter öffnen · Esc schließen": "↑↓ 选择 · Enter 打开 · Esc 关闭",
+  "Gemerkte Filter": "已保存的筛选",
+  "Gemerkt": "已保存",
+  "Gemerkten Filter „{label}“ löschen": "删除已保存的筛选“{label}”",
+  "Aktuelle Auswahl merken": "保存当前选择",
+  "Anderes Regal": "其他书架",
+  "Erschienen?": "已出版？",
+  "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}：第 {volume} 卷已在书架“{shelf}”中",
+  "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}：第 {volumes} 卷已在书架“{shelf}”中",
+  "{title}: Band {volume} sollte erschienen sein": "{title}：第 {volume} 卷应该已经出版",
+  "{title}: Bände {volumes} sollten erschienen sein": "{title}：第 {volumes} 卷应该已经出版",
+  "{title}: Band {volume} fehlt": "{title}：缺少第 {volume} 卷",
+  "Weniger zeigen": "收起",
+  "Alle {count} zeigen": "显示全部 {count} 项",
+  "{title}: {n} Band fehlt ({volumes})|{title}: {n} Bände fehlen ({volumes})": {
+    "other": "{title}：缺少 {n} 卷（{volumes}）"
+  },
+  "„{title}“ öffnen": "打开《{title}》"
 }

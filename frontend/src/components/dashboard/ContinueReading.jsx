@@ -1,8 +1,9 @@
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Check } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
-import { get } from '../../utils/api';
+import { get, post } from '../../utils/api';
+import { notify } from '../../utils/notify';
 import { t } from '../../i18n/index.js';
 
 export const CONTINUE_READING_LIMIT = 3;
@@ -15,23 +16,53 @@ export function continueReadingItems(data, limit = CONTINUE_READING_LIMIT) {
 
 /**
  * "Weiterlesen" strip on the shelf: the last series the user read whose next owned volume is unread. Hidden while
- * offline, while loading, on an error and when there is nothing to continue.
+ * offline, while loading, on an error and when there is nothing to continue. With `canMark`, each entry has a
+ * "+1 gelesen" button that marks its next volume as read (undo from the toast); `onChanged` runs after each change.
  */
-export default function ContinueReading({ userId, enabled = true }) {
+export default function ContinueReading({ userId, enabled = true, canMark = false, onChanged }) {
   const [items, setItems] = useState([]);
+  const [busy, setBusy] = useState(null);
   const headingId = useId();
+  const controllerRef = useRef(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    controllerRef.current?.abort();
     if (!enabled || !userId) {
       setItems([]);
-      return undefined;
+      return;
     }
     const controller = new AbortController();
+    controllerRef.current = controller;
     get('/api/stats/reading', { signal: controller.signal })
       .then((data) => { if (!controller.signal.aborted) setItems(continueReadingItems(data)); })
       .catch(() => { if (!controller.signal.aborted) setItems([]); });
-    return () => controller.abort();
   }, [enabled, userId]);
+
+  useEffect(() => {
+    load();
+    return () => controllerRef.current?.abort();
+  }, [load]);
+
+  const setRead = async (volumeId, read) => {
+    await post(`/api/volumes/${volumeId}/read`, { read });
+    load();
+    onChanged?.();
+  };
+
+  const markNext = async (item) => {
+    const next = item.next_volume;
+    setBusy(item.manga_id);
+    try {
+      await setRead(next.id, true);
+      notify.success(t('„{title}“ Band {volume} als gelesen markiert', { title: item.title || t('Ohne Titel'), volume: next.volume_number }), {
+        action: { label: t('Rückgängig'), onClick: () => { setRead(next.id, false).catch((e) => notify.error(e)); } }
+      });
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   if (!items.length) return null;
   return (
@@ -44,10 +75,10 @@ export default function ContinueReading({ userId, enabled = true }) {
           const next = item.next_volume;
           const unread = Number(item.unread_after) > 1 ? item.unread_after : null;
           return (
-            <li key={item.manga_id}>
+            <li key={item.manga_id} className="relative">
               <Link
                 to={`/manga/${item.manga_id}`}
-                className="continue-reading-entry glass-panel flex items-center gap-3 p-2.5 rounded-2xl border border-slate-800/80 hover:border-emerald-500/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                className={`continue-reading-entry glass-panel flex items-center gap-3 p-2.5 ${canMark ? 'pr-24' : ''} rounded-2xl border border-slate-800/80 hover:border-emerald-500/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
               >
                 <CoverImage
                   src={[next.cover_image, item.cover_image]}
@@ -61,6 +92,17 @@ export default function ContinueReading({ userId, enabled = true }) {
                     : t('Weiter mit Band {volume}', { volume: next.volume_number })}</span>
                 </span>
               </Link>
+              {canMark && (
+                <button
+                  type="button"
+                  className="continue-reading-mark absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 min-h-[36px] px-2.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 disabled:opacity-50"
+                  aria-label={t('Band {volume} von „{title}“ als gelesen markieren', { volume: next.volume_number, title: item.title || t('Ohne Titel') })}
+                  disabled={busy === item.manga_id}
+                  onClick={() => markNext(item)}
+                >
+                  <Check className="w-3.5 h-3.5" aria-hidden="true" /> {t('+1 gelesen')}
+                </button>
+              )}
             </li>
           );
         })}

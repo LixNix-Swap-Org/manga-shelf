@@ -278,7 +278,7 @@ describe('DashboardHeader scope button', () => {
     expect(pressed.getAttribute('aria-label')).toBe('Online mitsuchen');
     expect(pressed.getAttribute('title')).toBe('Sucht in der Sammlung und online');
     expect(input.getAttribute('placeholder')).toBe('Sammlung und online suchen…');
-    expect(screen.getByRole('textbox', { name: 'Sammlung durchsuchen' })).toBe(input);
+    expect(screen.getByRole('combobox', { name: 'Sammlung durchsuchen' })).toBe(input);
     const order = [...input.parentElement.querySelectorAll('button')].map((b) => b.id || b.textContent);
     expect(order).toEqual(['Scan-Test', 'btn-search-scope', '']);
     fireEvent.click(pressed);

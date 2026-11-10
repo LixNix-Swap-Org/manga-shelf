@@ -408,7 +408,7 @@ describe('DashboardHeader', () => {
 
   it('names the search field and reports the menu state', () => {
     const { rerender, props } = renderHeader();
-    expect(screen.getByRole('textbox', { name: 'Sammlung durchsuchen' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Sammlung durchsuchen' })).toBeTruthy();
     const toggle = document.getElementById('btn-mobile-menu-toggle');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(toggle.getAttribute('aria-label')).toBe('Menü öffnen');

@@ -1152,6 +1152,49 @@ const scenarios = [
         }
     },
     {
+        name: 'todo: gaps, overdue orders and volumes owned in another own shelf, one entry per series and kind',
+        async run({ admin, ed }) {
+            const shelfOf = async (api, name) => {
+                const res = await api('POST', '/shelves', { name });
+                assert.equal(res.status, 201, JSON.stringify(res.body));
+                return res.body.id;
+            };
+            const shelfA = await shelfOf(ed, 'Kern Todo A');
+            const shelfB = await shelfOf(ed, 'Kern Todo B');
+            const foreign = await shelfOf(admin, 'Kern Todo Fremd');
+            const fields = { publisher: 'Kern Todo Verlag' };
+            const inA = await newSeries(ed, 'Kern Todo Reihe', { ...fields, shelf_id: shelfA });
+            const inB = await newSeries(ed, 'Kern Todo Reihe', { ...fields, shelf_id: shelfB });
+            const inForeign = await newSeries(admin, 'Kern Todo Reihe', { ...fields, shelf_id: foreign });
+            await newVolume(ed, inA, '1', { status: 'Vorhanden' });
+            await newVolume(ed, inA, '2', { status: 'Fehlt' });
+            await newVolume(ed, inA, '3', { status: 'Fehlt' });
+            await newVolume(ed, inA, '4', { status: 'Fehlt' });
+            await newVolume(ed, inA, '5', { status: 'Vorbestellt', release_date: '2020-01-10' });
+            await newVolume(ed, inA, '6', { status: 'Vorbestellt', release_date: '2999-01-10' });
+            await newVolume(ed, inB, '2', { status: 'Vorhanden' });
+            await newVolume(admin, inForeign, '3', { status: 'Vorhanden' });
+            // a wished series without owned volumes and a dropped one are no gaps
+            const wished = await newSeries(ed, 'Kern Todo Wunsch', { shelf_id: shelfA });
+            await newVolume(ed, wished, '1', { status: 'Fehlt' });
+            const dropped = await newSeries(ed, 'Kern Todo Abgebrochen', { shelf_id: shelfA, collecting: 'abgebrochen' });
+            await newVolume(ed, dropped, '1', { status: 'Vorhanden' });
+            await newVolume(ed, dropped, '2', { status: 'Fehlt' });
+
+            const res = await ed('GET', `/todo?shelf_id=${shelfA}`);
+            assert.equal(res.status, 200, JSON.stringify(res.body));
+            assert.deepEqual(res.body.items.map(i => [i.kind, i.manga_id, i.count, i.volumes]), [
+                ['elsewhere', inA, 1, ['2']],
+                ['overdue', inA, 1, ['5']],
+                ['gap', inA, 2, ['3', '4']]
+            ]);
+            assert.equal(res.body.items[0].shelf_name, 'Kern Todo B');
+            assert.equal(res.body.total, 3);
+            assert.equal(JSON.stringify((await ed('GET', '/todo')).body).includes('Kern Todo Fremd'), false);
+            assert.equal((await ed('GET', '/todo?shelf_id=' + foreign)).status, 404);
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');
