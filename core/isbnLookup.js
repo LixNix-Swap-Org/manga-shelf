@@ -451,7 +451,7 @@ function matchCollection(db, book, isbn13, shelfIds = null) {
         const wanted = String(normalizeVolumeNumber(book.volume_number)).toLowerCase();
         volume = db.prepare(`
             SELECT ${VOLUME_COLUMNS} FROM volumes
-            WHERE manga_id = ? AND COALESCE(type, 'volume') = 'volume'
+            WHERE manga_id = ? AND type = 'volume'
             ORDER BY id
         `).all(top.manga.id).find(v => String(normalizeVolumeNumber(v.volume_number ?? '')).toLowerCase() === wanted) || null;
     }
