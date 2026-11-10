@@ -123,8 +123,13 @@ const hasOwner = (db, volumeId) => Boolean(cached(db, 'SELECT 1 FROM volume_copi
 /** Gives the household copy of the volume to `userId` (the acting user of a status change); true when one was claimed. */
 function claimHouseholdCopy(db, volumeId, userId) {
     if (!userId || hasCopy(db, volumeId, userId)) return false;
-    return cached(db, `UPDATE volume_copies SET owner_user_id = ?
+    const claimed = cached(db, `UPDATE volume_copies SET owner_user_id = ?
         WHERE id = (SELECT id FROM volume_copies WHERE volume_id = ? AND owner_user_id IS NULL ORDER BY id LIMIT 1)`).run(userId, volumeId).changes > 0;
+    if (claimed) {
+        cached(db, 'UPDATE volume_copies SET lent_to_user_id = NULL, lent_to_name = NULL, lent_at = NULL WHERE volume_id = ? AND owner_user_id = ? AND lent_to_user_id = ?')
+            .run(volumeId, userId, userId);
+    }
+    return claimed;
 }
 
 /** Drops the household copies of the volume (the volume becomes 'Fehlt' when no personal copy is left). */

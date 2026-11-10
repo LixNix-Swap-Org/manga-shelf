@@ -68,16 +68,21 @@ function updateCopy(ctx, { params, body }) {
     const keys = Object.keys(set);
     if (keys.length) {
         ctx.db.prepare(`UPDATE volume_copies SET ${keys.map(k => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map(k => set[k]), copy.id);
+        if (set.purchase_date) {
+            ctx.db.prepare("UPDATE volumes SET purchase_date = ? WHERE id = ? AND (purchase_date IS NULL OR TRIM(purchase_date) = '')")
+                .run(set.purchase_date, volumeId);
+        }
     }
     const copies = copiesByVolume(ctx.db, 'c.volume_id = ?', [volumeId]).get(volumeId) || [];
     return { body: { success: true, copy: copies.find(c => c.id === copy.id) || null, copies } };
 }
 
-// GET /copies/lent: { lent_out } = lent copies in the caller's shelves, { borrowed } = copies lent to the caller (also
-// from a shelf the caller does not belong to: the owner named them; manga_id is then null, so nothing links there)
-function lentCopies(ctx) {
-    const shelfIds = access.accessibleShelfIds(ctx);
-    const shelves = new Set(shelfIds);
+// GET /copies/lent: { lent_out } = lent copies in the caller's shelves (?shelf_id narrows to one shelf), { borrowed } =
+// copies lent to the caller (also from a shelf the caller does not belong to: the owner named them; manga_id is then null,
+// so nothing links there)
+function lentCopies(ctx, { query } = {}) {
+    const shelfIds = access.requestedShelfIds(ctx, query?.shelf_id);
+    const shelves = new Set(access.accessibleShelfIds(ctx));
     const scope = access.inShelves('m.shelf_id', shelfIds);
     const select = `
         SELECT c.id, c.volume_id, v.volume_number, v.type, m.id AS manga_id, m.title, m.shelf_id, s.name AS shelf_name,
@@ -108,4 +113,4 @@ function lentCopies(ctx) {
     return { body: { lent_out: lentOut, borrowed } };
 }
 
-module.exports = { updateCopy, lentCopies };
+module.exports = { updateCopy, lentCopies, readLending };

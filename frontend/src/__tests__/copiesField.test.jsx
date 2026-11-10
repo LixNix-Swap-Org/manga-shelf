@@ -98,17 +98,22 @@ describe('LentBadge and LentCard', () => {
     expect(container.querySelector('[data-lent]').getAttribute('title')).toBe('Ausgeliehen an: ben');
   });
 
-  it('the card lists lent and borrowed copies, a borrowed one from a foreign shelf without a link', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(200, {
+  it('the card lists lent and borrowed copies, passes ?shelf_id when filtered and shows the shelf name for all shelves', async () => {
+    const fetchMock = vi.fn(async () => fakeResponse(200, {
       lent_out: [{ copy_id: 1, volume_id: 5, manga_id: 2, title: 'Berserk', volume_number: '1', type: 'volume', shelf_name: 'Wohnzimmer', owner: 'anna', lent_to: 'ben', lent_at: '2026-01-02' }],
       borrowed: [{ copy_id: 2, volume_id: null, manga_id: null, title: 'Monster', volume_number: '3', type: 'volume', shelf_name: null, owner: 'lena', lent_to: 'anna', lent_at: null }]
-    })));
-    render(<MemoryRouter><LentCard /></MemoryRouter>);
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { rerender } = render(<MemoryRouter><LentCard /></MemoryRouter>);
     expect(await screen.findByText('Verliehen & ausgeliehen')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Berserk – Band 1' })).toBeTruthy();
+    expect(screen.getByText('Wohnzimmer')).toBeTruthy();
     expect(screen.getByText('an ben seit 02.01.2026')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Monster/ })).toBeNull();
     expect(screen.getByText('von lena')).toBeTruthy();
+
+    rerender(<MemoryRouter><LentCard shelfId={3} /></MemoryRouter>);
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/copies/lent?shelf_id=3', expect.anything()));
   });
 
   it('the card stays hidden while nothing is lent', async () => {

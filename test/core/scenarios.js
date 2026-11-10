@@ -992,6 +992,10 @@ const scenarios = [
             assert.deepEqual(copy.volumes.map(v => [v.volume_number, v.status, v.pages, v.notes, v.owners.length]),
                 [['1', 'Fehlt', 180, null, 0], ['2', 'Fehlt', null, null, 0], ['3', 'Erscheint bald', null, null, 0]]);
             assert.deepEqual(copy.catalog.local_fields, []);
+            // scanning the ISBN matches the missing copy in shelf B rather than the already-owned copy in shelf A
+            const isbnScan = await ed('GET', '/lookup/isbn?isbn=9783551000002');
+            assert.equal(isbnScan.status, 200);
+            assert.deepEqual([isbnScan.body.matched_manga.id, isbnScan.body.matched_volume.status], [copied.body.id, 'Fehlt']);
             // the same edition in another shelf is no other edition; an English edition of the work is one for both rows
             assert.deepEqual([copy.editions, (await detail(ed, sourceId)).editions], [[], []]);
             const english = await ed('POST', `/mangas/${sourceId}/editions`, { language: 'en' });
@@ -1032,7 +1036,7 @@ const scenarios = [
     },
     {
         name: 'copies: price, date and condition per copy, lending to an account or a person, the lent list, and the trash keeps it',
-        async run({ admin, ed }) {
+        async run({ admin, ed, run }) {
             const shelf = (await ed('POST', '/shelves', { name: 'Kern Exemplar Regal' })).body.id;
             const ids = Object.fromEntries((await ed('GET', '/users/directory')).body.users.map(u => [u.username, u.id]));
             const series = await newSeries(ed, 'Kern Exemplar Reihe', { shelf_id: shelf });
@@ -1067,6 +1071,41 @@ const scenarios = [
             assert.equal((await ed('POST', `/trash/${trashId}/restore`)).status, 200);
             [copy] = await copiesOf();
             assert.deepEqual([copy.owner, copy.price, copy.condition, copy.lent_to, copy.lent_at], ['ed', 6.5, 'Gut', 'admin', '2026-01-02']);
+
+            // a bulk edit undo and an owner toggle undo keep the copy's lending and condition
+            const bulkRes = await ed('POST', '/volumes/bulk', { ids: [volumeId], set: { status: 'Fehlt' } });
+            assert.equal(bulkRes.status, 200, JSON.stringify(bulkRes.body));
+            assert.equal((await ed('POST', '/volumes/bulk', { revert: bulkRes.body.undo_token })).status, 200);
+            [copy] = await copiesOf();
+            assert.deepEqual([copy.owner, copy.price, copy.condition, copy.lent_to, copy.lent_at], ['ed', 6.5, 'Gut', 'admin', '2026-01-02']);
+
+            const unown = await ed('POST', `/volumes/${volumeId}/owners`, { owned: false });
+            assert.equal(unown.status, 200);
+            assert.deepEqual([unown.body.removed_owner.condition, unown.body.removed_owner.lent_to_user_id, unown.body.removed_owner.lent_at], ['Gut', ids.admin, '2026-01-02']);
+            assert.equal((await ed('POST', `/volumes/${volumeId}/owners`, {
+                owned: true, price: unown.body.removed_owner.price, purchase_date: unown.body.removed_owner.purchase_date,
+                condition: unown.body.removed_owner.condition, lent: { user_id: unown.body.removed_owner.lent_to_user_id, at: unown.body.removed_owner.lent_at }
+            })).status, 200);
+            [copy] = await copiesOf();
+            assert.deepEqual([copy.owner, copy.price, copy.condition, copy.lent_to, copy.lent_at], ['ed', 6.5, 'Gut', 'admin', '2026-01-02']);
+
+            // ?shelf_id narrows lent_out to that shelf
+            const emptyShelf = (await ed('POST', '/shelves', { name: 'Kern Exemplar Leer' })).body.id;
+            assert.equal((await ed('GET', `/copies/lent?shelf_id=${shelf}`)).body.lent_out.length, 1);
+            assert.deepEqual((await ed('GET', `/copies/lent?shelf_id=${emptyShelf}`)).body.lent_out, []);
+
+            // claiming a household copy via POST /volumes/:id/owners keeps its price, condition and lending
+            const hhVol = await newVolume(ed, series, '2', { status: 'Fehlt' });
+            run("UPDATE volumes SET status = 'Vorhanden' WHERE id = ?", hhVol);
+            const [hhCopy] = (await ed('GET', `/mangas/${series}`)).body.volumes.find(v => v.id === hhVol).copies;
+            assert.equal(hhCopy.owner_user_id, null);
+            assert.equal((await ed('PUT', `/volumes/${hhVol}/copies/${hhCopy.id}`, {
+                price: '12,00', purchase_date: '2025-05-05', condition: 'Sehr gut', lent: { name: 'Opa Karl', at: '2026-02-01' }
+            })).status, 200);
+            assert.equal((await ed('POST', `/volumes/${hhVol}/owners`, {})).status, 200);
+            const [claimedCopy] = (await ed('GET', `/mangas/${series}`)).body.volumes.find(v => v.id === hhVol).copies;
+            assert.deepEqual([claimedCopy.owner, claimedCopy.price, claimedCopy.purchase_date, claimedCopy.condition, claimedCopy.lent_to, claimedCopy.lent_at],
+                ['ed', 12, '2025-05-05', 'Sehr gut', 'Opa Karl', '2026-02-01']);
 
             res = await put(ed, { lent: { name: 'Oma Erika' } });
             assert.equal(res.status, 200, JSON.stringify(res.body));
