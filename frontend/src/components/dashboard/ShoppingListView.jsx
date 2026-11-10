@@ -1096,7 +1096,7 @@ export default function ShoppingListView({
 
                     {item.owned_elsewhere?.length > 0 && (
                       <p className="text-[11px] text-amber-300 mt-1 flex items-start gap-1" data-elsewhere>
-                        <TriangleAlert className="w-3 h-3 shrink-0 mt-0.5" aria-hidden="true" />
+                        <TriangleExclamationPoint className="w-3 h-3 shrink-0 mt-0.5" aria-hidden="true" />
                         <span className="min-w-0 break-words">{elsewhereText(item.owned_elsewhere)}</span>
                       </p>
                     )}
