@@ -51,8 +51,8 @@ export function quickAccessEntries({ query = '', mangas = [], recentIds = [], ac
 export default function QuickAccessPanel({ sections, activeIndex, onChoose, onHover, onClose, narrow }) {
   let index = -1;
   const frame = narrow
-    ? 'fixed inset-x-0 bottom-0 top-[var(--sticky-header-h,64px)] z-50 bg-slate-950/98 overflow-y-auto overscroll-contain'
-    : 'absolute left-0 right-0 top-full mt-2 z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-700/80 bg-slate-900/98 shadow-2xl';
+    ? 'fixed inset-x-0 bottom-0 top-[var(--sticky-header-h,64px)] z-50 bg-slate-950 overflow-y-auto overscroll-contain'
+    : 'absolute left-0 right-0 top-full mt-2 z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl';
   return (
     <div id="quick-access" className={frame} onMouseDown={(e) => e.preventDefault()}>
       {narrow && (
