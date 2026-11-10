@@ -86,7 +86,7 @@ test('offline-snapshot carries read_at of every reader and condition/created_at 
     await editor('POST', '/volumes/batch', { manga_id: m, from: 1, to: 1, status: 'Vorhanden' });
     const vol = (await editor('GET', `/mangas/${m}`)).body.volumes[0];
     assert.equal((await editor('POST', `/volumes/${vol.id}/read`, { read: true })).status, 200);
-    db.prepare("UPDATE volume_reads SET read_at = '2023-02-11 10:00:00' WHERE volume_id = ?").run(vol.id);
+    db.prepare("UPDATE volume_reads SET read_at = '2023-02-11 10:00:00' WHERE catalog_volume_id = (SELECT catalog_volume_id FROM volumes WHERE id = ?)").run(vol.id);
     db.prepare("UPDATE volume_owners SET condition = 'Gebraucht', created_at = '2022-05-06 07:08:09' WHERE volume_id = ?").run(vol.id);
 
     const snapshot = (await editor('GET', '/offline-snapshot')).body;
@@ -158,7 +158,7 @@ test('offline-snapshot is built in blocks: 300 series, identical output, other w
     const editorId = (await admin('GET', '/users')).body.find(u => u.username === 'ed').id;
     const insManga = db.prepare('INSERT INTO mangas (title, total_volumes) VALUES (?, 3)');
     const insVol = db.prepare('INSERT INTO volumes (manga_id, volume_number, status, type, images, price) VALUES (?, ?, ?, ?, ?, ?)');
-    const insRead = db.prepare('INSERT INTO volume_reads (volume_id, user_id) VALUES (?, ?)');
+    const insRead = db.prepare('INSERT INTO volume_reads (catalog_volume_id, user_id) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?)');
     const insOwner = db.prepare('INSERT INTO volume_owners (volume_id, user_id) VALUES (?, ?)');
     require('../db').runTransaction(() => {
         for (let i = 0; i < 300; i++) {

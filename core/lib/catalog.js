@@ -2,6 +2,7 @@
 // shared by every shelf that holds the edition. mangas.catalog_series_id and volumes.catalog_volume_id follow their row
 // through triggers on every write path (like works / number_sort); handlers keep writing mangas and volumes.
 // The match keys are SQL expressions, so the backfill (JS) and the triggers (SQL) always agree. Frozen once shipped.
+const { MARK_FOLLOW_TRIGGERS, stashMarks, restoreMarks } = require('./marks');
 
 /** Title for matching: lower case (ASCII), common punctuation dropped, spaces folded. */
 const titleKeySql = (col) => {
@@ -242,8 +243,10 @@ const blank = (v) => v === null || v === undefined || (typeof v === 'string' && 
  * (type, number) of it. Differences the grouping papers over go to catalog_merge_log. Returns the counts.
  */
 function backfillCatalog(d, log) {
-    // stage 1 holds nothing of its own: a second run (a migration replayed from an older version) rebuilds it from scratch
-    for (const name of CATALOG_TRIGGERS) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+    // a second run (a migration replayed from an older version) rebuilds the catalog from scratch; reading marks and chapter
+    // progress on it (migration 43) are kept by the shelf rows that show them and put back on the new entries
+    for (const name of [...CATALOG_TRIGGERS, ...MARK_FOLLOW_TRIGGERS]) d.exec(`DROP TRIGGER IF EXISTS ${name};`);
+    const marks = stashMarks(d);
     d.exec(`
         UPDATE volumes SET catalog_volume_id = NULL WHERE catalog_volume_id IS NOT NULL;
         UPDATE mangas SET catalog_series_id = NULL WHERE catalog_series_id IS NOT NULL;
@@ -338,6 +341,7 @@ function backfillCatalog(d, log) {
         }
     }
     d.exec(linkAnimeBody('1 = 1'));
+    restoreMarks(d, marks);
     const report = {
         series: series.length,
         catalog_series: members.size,

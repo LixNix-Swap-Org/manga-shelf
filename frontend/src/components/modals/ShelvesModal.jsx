@@ -6,7 +6,7 @@ import api from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount } from '../../utils/format';
 import { invalidateShelves } from '../../utils/shelfScope';
-import { t, tc, tn } from '../../i18n/index.js';
+import { t, tc } from '../../i18n/index.js';
 
 const ROLES = ['owner', 'editor', 'viewer'];
 const ROLE_LABEL = {
@@ -21,29 +21,24 @@ const isReadOnlyAccount = (role) => role === 'visitor' || role === 'guest';
 const rolesFor = (member, capped) => (isReadOnlyAccount(member.app_role) || capped.has(member.user_id) ? ['viewer'] : ROLES);
 
 /**
- * The question before a removal (`self`: leaving): the member's ownership and reading marks in the shelf (and their
- * chapter progress of its webtoons) go with the membership. `member.marks` ({ owned, read, chapters }) come with
- * GET /api/shelves/:id; without them the text stays general.
+ * The question before a removal (`self`: leaving): the member's ownership marks in the shelf go with the membership.
+ * Reading marks and chapter progress stay (they belong to the catalog volume) and show again after rejoining.
+ * `member.marks.owned` comes with GET /api/shelves/:id; without it the text stays general.
  */
 export function memberRemovalText(member, { self = false } = {}) {
   const marks = member?.marks;
-  const known = Boolean(marks) && Number.isFinite(Number(marks.owned)) && Number.isFinite(Number(marks.read));
-  const chapters = known ? Number(marks.chapters) || 0 : 0;
-  const none = known && Number(marks.owned) === 0 && Number(marks.read) === 0 && chapters === 0;
+  const known = Boolean(marks) && Number.isFinite(Number(marks.owned));
+  const none = known && Number(marks.owned) === 0;
   const owned = known ? formatCount(marks.owned, 'Band', 'Bände') : '';
-  const read = known ? formatCount(marks.read, 'Band', 'Bände') : '';
-  const withChapters = (text) => (chapters > 0
-    ? `${text} ${tn('Auch der Kapitelstand von {n} Webtoon wird gelöscht.', 'Auch der Kapitelstand von {n} Webtoons wird gelöscht.', chapters)}`
-    : text);
   if (self) {
     if (none) return t('Du verlierst den Zugriff auf dieses Regal. Wirklich verlassen?');
-    if (known) return withChapters(t('Du verlierst den Zugriff auf dieses Regal, und deine Markierungen darin werden gelöscht: {owned} im Besitz, {read} gelesen. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Wirklich verlassen?', { owned, read }));
-    return t('Du verlierst den Zugriff auf dieses Regal, und deine Besitz- und Lesemarkierungen darin werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Wirklich verlassen?');
+    if (known) return t('Du verlierst den Zugriff auf dieses Regal, und deine Besitzmarkierungen darin werden gelöscht ({owned}). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Deine Lesemarkierungen bleiben erhalten und erscheinen wieder, wenn du erneut Mitglied wirst. Wirklich verlassen?', { owned });
+    return t('Du verlierst den Zugriff auf dieses Regal, und deine Besitzmarkierungen darin werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Deine Lesemarkierungen bleiben erhalten. Wirklich verlassen?');
   }
   const name = member?.username || '';
-  if (none) return t('„{name}“ aus diesem Regal entfernen? {name} hat hier keine Besitz- oder Lesemarkierungen.', { name });
-  if (known) return withChapters(t('„{name}“ aus diesem Regal entfernen? Die Markierungen von {name} in diesem Regal werden gelöscht: {owned} im Besitz, {read} gelesen. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { name, owned, read }));
-  return t('„{name}“ aus diesem Regal entfernen? Die Besitz- und Lesemarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Das lässt sich nicht rückgängig machen.', { name });
+  if (none) return t('„{name}“ aus diesem Regal entfernen? {name} besitzt hier keine Bände; die Lesemarkierungen bleiben erhalten.', { name });
+  if (known) return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht ({owned}). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { name, owned });
+  return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { name });
 }
 
 /**

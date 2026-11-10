@@ -6,7 +6,8 @@ const { DatabaseSync } = require('node:sqlite');
 const schema = require('../../core/schema');
 
 const quiet = { debug() {}, info() {}, warn() {}, error() {} };
-const CATALOG_MIGRATIONS = [41, 42];
+// 41 and 42, plus the later migrations that build on the catalog (43: marks on the catalog)
+const CATALOG_MIGRATIONS = Array.from({ length: schema.LATEST_SCHEMA_VERSION - 40 }, (_, i) => 41 + i);
 
 /** A database at schema v40 with `seed` applied, then migrated to the latest version. */
 function migratedFrom39(seed) {
@@ -227,7 +228,7 @@ test('a fresh database runs every migration including the catalog ones', () => {
     const conn = new DatabaseSync(':memory:');
     conn.exec('PRAGMA foreign_keys = ON;');
     const report = schema.applySchema(conn, { log: quiet });
-    assert.deepEqual(report.slice(-2).map(r => r.version), CATALOG_MIGRATIONS);
+    assert.deepEqual(report.slice(-CATALOG_MIGRATIONS.length).map(r => r.version), CATALOG_MIGRATIONS);
     assert.deepEqual(conn.prepare('PRAGMA foreign_key_check').all(), []);
     assert.equal(conn.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
 });

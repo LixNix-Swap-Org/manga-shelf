@@ -2,6 +2,7 @@
 const access = require('../lib/access');
 const { msg, badRequest, notFound } = require('../errors');
 const { parseChapter, parseWholeNumber, parseTrueFlag, MAX_CHAPTERS } = require('../lib/validate');
+const { setChapterProgress, clearChapterProgress } = require('../lib/marks');
 
 const CHAPTERS_ERROR = msg('Gelesene Kapitel muss eine ganze Zahl zwischen 0 und {max} sein', { max: MAX_CHAPTERS });
 // chapters_read may carry one decimal (an extra chapter such as 12.5); `add` stays whole
@@ -13,7 +14,7 @@ const chapterAboveTotal = (chapter, total) => badRequest(
 );
 
 /** The caller's chapter of a series (0 without a row). */
-const chaptersOf = (ctx, mangaId, userId) => ctx.db.prepare('SELECT chapters_read FROM chapter_progress WHERE manga_id = ? AND user_id = ?')
+const chaptersOf = (ctx, mangaId, userId) => ctx.db.prepare('SELECT chapters_read FROM shelf_chapter_progress WHERE manga_id = ? AND user_id = ?')
     .get(mangaId, userId)?.chapters_read || 0;
 
 /**
@@ -44,13 +45,8 @@ function setChapters(ctx, { params, body }) {
         if (next > MAX_CHAPTERS) throw badRequest(CHAPTERS_ERROR);
         if (manga.total_chapters && next > manga.total_chapters && next > previous) throw chapterAboveTotal(next, manga.total_chapters);
         if (next === previous) return;
-        if (next === 0) ctx.db.prepare('DELETE FROM chapter_progress WHERE manga_id = ? AND user_id = ?').run(manga.id, userId);
-        else {
-            ctx.db.prepare(`
-                INSERT INTO chapter_progress (manga_id, user_id, chapters_read, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT (manga_id, user_id) DO UPDATE SET chapters_read = excluded.chapters_read, updated_at = excluded.updated_at
-            `).run(manga.id, userId, next);
-        }
+        if (next === 0) clearChapterProgress(ctx.db, manga.id, userId);
+        else setChapterProgress(ctx.db, manga.id, userId, next);
     });
     return { body: { success: true, manga_id: manga.id, chapters_read: next, previous, total_chapters: manga.total_chapters ?? null } };
 }

@@ -1,7 +1,8 @@
 // Per-user ownership (volume_owners). volumes.status = 'Vorhanden' means "at least one owner".
 // All functions are synchronous; the caller is expected to be in a transaction already if it needs one.
-// 'Gelesen' is no longer a status: reading is kept per user in volume_reads. The old value is treated as
-// 'Vorhanden' plus a read entry and rewritten on the next sync (owners are never deleted for it).
+// 'Gelesen' is no longer a status: reading is kept per user in volume_reads (on the catalog, core/lib/marks.js). The old
+// value is treated as 'Vorhanden' plus a read entry and rewritten on the next sync (owners are never deleted for it).
+const { addRead } = require('./marks');
 
 const OWNED_STATUS = 'Vorhanden';
 const LEGACY_READ_STATUS = 'Gelesen';
@@ -31,7 +32,7 @@ function listOwners(db, volumeId) {
 }
 
 function markRead(db, volumeId, userId) {
-    db.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id) VALUES (?, ?)').run(volumeId, userId);
+    addRead(db, volumeId, userId);
 }
 
 // Brings a volume's status and owners in line after either changed; returns the stored status (null if missing).
@@ -70,7 +71,7 @@ function convertLegacyRead(db, volumeId, fallbackUserId) {
         const owner = fallbackUserId ?? fallbackOwnerId(db);
         if (owner) addOwner(db, volumeId, owner, vol);
     }
-    if (db.prepare('SELECT 1 FROM volume_reads WHERE volume_id = ? LIMIT 1').get(volumeId)) {
+    if (db.prepare('SELECT 1 FROM volume_reads WHERE catalog_volume_id = (SELECT catalog_volume_id FROM volumes WHERE id = ?) LIMIT 1').get(volumeId)) {
         db.prepare('UPDATE volumes SET status = ? WHERE id = ?').run(OWNED_STATUS, volumeId);
     } else {
         syncOwnersWithStatus(db, volumeId, null);

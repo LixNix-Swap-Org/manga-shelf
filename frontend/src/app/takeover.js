@@ -7,6 +7,7 @@ import { buildBackupZip, readBackupZip, restorableUploadName } from '../local/ba
 import { LOCAL_PASSWORD_HASH } from '../local/sanitize.js';
 import imageCheck from '../../../core/lib/imageCheck.js';
 import owners from '../../../core/lib/owners.js';
+import marks from '../../../core/lib/marks.js';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
 
@@ -162,11 +163,9 @@ export function fillFromSnapshot(conn, snapshot) {
   const mangaCols = columnsOf(conn, 'mangas');
   const volumeCols = columnsOf(conn, 'volumes');
   const insertOwner = conn.prepare('INSERT OR IGNORE INTO volume_owners (volume_id, user_id, price, purchase_date, condition, created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))');
-  const insertRead = conn.prepare('INSERT OR IGNORE INTO volume_reads (volume_id, user_id, read_at) VALUES (?, ?, ?)');
-  const insertChapters = conn.prepare('INSERT OR REPLACE INTO chapter_progress (manga_id, user_id, chapters_read) VALUES (?, ?, ?)');
   for (const manga of Object.values(snapshot.details || {})) {
     insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
-    if (manga.chapters_read > 0) insertChapters.run(manga.id, me.id, manga.chapters_read);
+    if (manga.chapters_read > 0) marks.setChapterProgress(conn, manga.id, me.id, manga.chapters_read);
     for (const v of manga.volumes || []) {
       const vol = scalars(v, SKIP_VOLUME);
       // buildMangaDetail fills images from the cover (and the cover from the images): only real lists are stored
@@ -180,7 +179,7 @@ export function fillFromSnapshot(conn, snapshot) {
       }
       if ((v.read_by || []).includes(me.id)) {
         const read = (v.read_users || []).find((r) => (r.user_id ?? r.id) === me.id);
-        insertRead.run(v.id, me.id, hasText(read?.read_at) ? read.read_at : null);
+        marks.addRead(conn, v.id, me.id, hasText(read?.read_at) ? read.read_at : null);
       }
       owners.syncStatusWithOwners(conn, v.id);
     }
