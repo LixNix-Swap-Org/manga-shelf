@@ -45,15 +45,14 @@ function moveMangaToTrash(ctx, mangaId) {
     if (!manga) return null;
     const volumes = ctx.db.prepare('SELECT * FROM volumes WHERE manga_id = ? ORDER BY id').all(manga.id);
     const { owners, reads } = volumeParts(ctx, volumes.map(v => v.id));
-    const animeIds = ctx.db.prepare('SELECT id FROM animes WHERE manga_id = ? ORDER BY id').all(manga.id).map(r => r.id);
+    // the anime linked to its work (core/lib/animeLinks.js): the link stays on the work, the list is for older restores
+    const animeIds = manga.work_id ? ctx.db.prepare('SELECT id FROM animes WHERE work_id = ? ORDER BY id').all(manga.work_id).map(r => r.id) : [];
     const chapters = ctx.db.prepare('SELECT * FROM shelf_chapter_progress WHERE manga_id = ? ORDER BY user_id').all(manga.id);
     const trashId = insertTrash(ctx, {
         kind: 'manga', refId: manga.id, mangaId: manga.id, title: manga.title,
         payload: { manga, volumes, owners, reads, anime_ids: animeIds, chapters }, shelfId: manga.shelf_id
     });
     for (const v of volumes) deleteVolumeRows(ctx, v.id);
-    // the linked anime keep naming the work, so every other edition of it still finds them
-    ctx.db.prepare('UPDATE animes SET work_id = ? WHERE manga_id = ?').run(manga.work_id || null, manga.id);
     ctx.db.prepare('DELETE FROM mangas WHERE id = ?').run(manga.id);
     return trashId;
 }

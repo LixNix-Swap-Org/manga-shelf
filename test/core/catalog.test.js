@@ -89,7 +89,9 @@ test('migration 41 folds duplicates into one catalog series per edition and one 
 
 test('migration 41 links anime to works: the linked series and the AniList relations', () => {
     const d = migratedFrom39(seedDuplicates);
-    const links = d.prepare('SELECT anime_id, work_id, relation, origin FROM anime_work_links ORDER BY anime_id, origin').all().map(r => ({ ...r }));
+    // the automatic links (scope NULL); migration 45 adds the pin of the linked edition for its shelf next to them
+    const links = d.prepare('SELECT anime_id, work_id, relation, origin FROM anime_work_links WHERE scope_shelf_id IS NULL ORDER BY anime_id, origin').all().map(r => ({ ...r }));
+    assert.deepEqual({ ...d.prepare("SELECT anime_id, manga_id, scope_shelf_id FROM anime_work_links WHERE origin = 'manual'").get() }, { anime_id: 1, manga_id: 1, scope_shelf_id: 1 });
     const work = d.prepare('SELECT work_id FROM mangas WHERE id = 1').get().work_id;
     // the work of the linked series and the AniList SOURCE relation name the same link: it is stored once
     assert.deepEqual(links, [{ anime_id: 1, work_id: work, relation: 'SOURCE', origin: 'collection' }]);

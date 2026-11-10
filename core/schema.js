@@ -53,9 +53,10 @@ const WORK_ANILIST_SQL = (col) => `CASE WHEN ${col} LIKE 'anilist:%' THEN CAST(s
 const WORK_MAL_SQL = (col) => `CASE WHEN ${col} LIKE 'mal:%' THEN CAST(substr(${col}, 5) AS INTEGER) END`;
 /**
  * Rebuilds `table` from its stored DDL as changed by `transform` (12-step procedure; the migration runs with foreign keys
- * off, see `foreignKeys: false`). Columns, rows, AUTOINCREMENT state, indexes and the table's own triggers stay.
+ * off, see `foreignKeys: false`). Columns, rows, AUTOINCREMENT state, indexes and the table's own triggers stay;
+ * `dropColumns` names columns the new definition leaves out (their values are not copied).
  */
-function rebuildTable(d, table, transform) {
+function rebuildTable(d, table, transform, { dropColumns = [] } = {}) {
     const stored = d.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
     if (!stored) throw new Error(`${table}: table missing`);
     const ddl = transform(stored.sql);
@@ -65,7 +66,7 @@ function rebuildTable(d, table, transform) {
     const extras = d.prepare("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL ORDER BY type, rowid").all(table);
     const seq = d.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'").get()
         ? d.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(table)?.seq ?? null : null;
-    const columns = d.prepare(`PRAGMA table_info(${table})`).all().map(c => `"${c.name}"`).join(', ');
+    const columns = d.prepare(`PRAGMA table_info(${table})`).all().filter(c => !dropColumns.includes(c.name)).map(c => `"${c.name}"`).join(', ');
     const tmp = `${table}_rebuild`;
     d.exec(ddl.replace(head, `CREATE TABLE ${tmp}`));
     d.exec(`INSERT INTO ${tmp} (${columns}) SELECT ${columns} FROM ${table};`);
@@ -117,6 +118,30 @@ const dataVersionTriggersSql = (table, scope) => [['ins', 'INSERT'], ['upd', 'UP
         UPDATE data_versions SET version = version + 1 WHERE scope = '${scope}';
     END;`).join('\n');
 
+/**
+ * trg_mangas_work_update since migration 45 (anime links on the work, no animes.manga_id): the last edition of a work moved to
+ * another key (a merge of work groups) takes the anime links of the old work along; a shelf link naming the series follows it.
+ */
+const WORK_UPDATE_TRIGGER_SQL = () => `
+    CREATE TRIGGER trg_mangas_work_update AFTER UPDATE OF work_key ON mangas BEGIN
+        ${WORK_TRIGGER_BODY}
+        UPDATE animes SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+            WHERE OLD.work_id IS NOT NULL AND work_id = OLD.work_id AND NEW.work_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM mangas WHERE work_id = OLD.work_id);
+        UPDATE OR IGNORE anime_work_links SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+            WHERE origin = 'manual' AND OLD.work_id IS NOT NULL AND work_id = OLD.work_id AND NEW.work_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM mangas WHERE work_id = OLD.work_id);
+        UPDATE OR IGNORE anime_work_links SET work_id = (SELECT work_id FROM mangas WHERE id = NEW.id)
+            WHERE origin = 'manual' AND manga_id = NEW.id AND NEW.work_key IS NOT NULL;
+    END;`;
+/** A shelf pin (migration 45) moves with the series it names: the shelf that holds the edition now shows its link. */
+const ANIME_PIN_SHELF_TRIGGER_SQL = `
+    CREATE TRIGGER IF NOT EXISTS trg_mangas_anime_pins_shelf AFTER UPDATE OF shelf_id ON mangas WHEN NEW.shelf_id IS NOT OLD.shelf_id BEGIN
+        UPDATE OR IGNORE anime_work_links SET scope_shelf_id = NEW.shelf_id
+         WHERE origin = 'manual' AND hidden = 0 AND manga_id = NEW.id AND scope_shelf_id = OLD.shelf_id;
+        -- the target shelf already pins that work: its own choice stays
+        DELETE FROM anime_work_links WHERE origin = 'manual' AND hidden = 0 AND manga_id = NEW.id AND scope_shelf_id = OLD.shelf_id;
+    END;`;
 const WORK_TRIGGER_BODY = `INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
                             SELECT NEW.work_key, ${WORK_ANILIST_SQL('NEW.work_key')}, ${WORK_MAL_SQL('NEW.work_key')} WHERE NEW.work_key IS NOT NULL;
                         UPDATE mangas SET work_id = (SELECT id FROM works WHERE work_key = NEW.work_key) WHERE id = NEW.id;`;
@@ -443,9 +468,12 @@ function migrationList(log = silentLog) {
                         expires_at INTEGER NOT NULL
                     );
                     CREATE INDEX IF NOT EXISTS idx_anime_progress_user ON anime_progress (user_id);
-                    CREATE INDEX IF NOT EXISTS idx_animes_manga ON animes (manga_id);
                     CREATE INDEX IF NOT EXISTS idx_animes_next_check ON animes (next_check_at);
                 `);
+                // the series link went to the work in migration 45: a replay on such a database has no column to index
+                if (d.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id')) {
+                    d.exec('CREATE INDEX IF NOT EXISTS idx_animes_manga ON animes (manga_id);');
+                }
             }
         },
         {
@@ -831,11 +859,19 @@ function migrationList(log = silentLog) {
                     INSERT OR IGNORE INTO works (work_key, anilist_id, mal_id)
                         SELECT DISTINCT work_key, ${WORK_ANILIST_SQL('work_key')}, ${WORK_MAL_SQL('work_key')} FROM mangas WHERE work_key IS NOT NULL;
                     UPDATE mangas SET work_id = (SELECT w.id FROM works w WHERE w.work_key = mangas.work_key);
-                    UPDATE animes SET work_id = (SELECT m.work_id FROM mangas m WHERE m.id = animes.manga_id) WHERE manga_id IS NOT NULL;
                     DROP TRIGGER IF EXISTS trg_mangas_work_insert;
                     CREATE TRIGGER trg_mangas_work_insert AFTER INSERT ON mangas BEGIN
                         ${WORK_TRIGGER_BODY}
                     END;
+                `);
+                // replayed after migration 45 (no animes.manga_id): that migration's form of the update trigger
+                if (!d.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id')) {
+                    d.exec('DROP TRIGGER IF EXISTS trg_mangas_work_update;');
+                    d.exec(WORK_UPDATE_TRIGGER_SQL());
+                    return;
+                }
+                d.exec(`
+                    UPDATE animes SET work_id = (SELECT m.work_id FROM mangas m WHERE m.id = animes.manga_id) WHERE manga_id IS NOT NULL;
                     DROP TRIGGER IF EXISTS trg_mangas_work_update;
                     CREATE TRIGGER trg_mangas_work_update AFTER UPDATE OF work_key ON mangas BEGIN
                         ${WORK_TRIGGER_BODY}
@@ -1169,6 +1205,39 @@ function migrationList(log = silentLog) {
                 if (personal || household || owned) {
                     log.info(`[Database Migration] v44: ${personal} owner rows -> personal copies, ${household} owned volumes without owner -> household copies, ${owned} volumes with owners but another status -> 'Vorhanden'`);
                 }
+            }
+        },
+        {
+            version: 45,
+            name: 'anime_links_on_works',
+            foreignKeys: false,
+            up: (d) => {
+                // The series link of an anime is a link to its work (core/lib/animeLinks.js): animes.work_id for everyone, shelf
+                // rows in anime_work_links (origin 'manual', scope_shelf_id) that name the chosen edition (manga_id) or hide the
+                // link for that shelf. animes.manga_id goes: a series linked without a work gets a manual key of its own first.
+                const linkCols = new Set(d.prepare('PRAGMA table_info(anime_work_links)').all().map(c => c.name));
+                if (!linkCols.has('manga_id')) d.exec('ALTER TABLE anime_work_links ADD COLUMN manga_id INTEGER REFERENCES mangas(id) ON DELETE SET NULL;');
+                d.exec(`
+                    CREATE INDEX IF NOT EXISTS idx_anime_work_links_shelf ON anime_work_links (scope_shelf_id, anime_id) WHERE scope_shelf_id IS NOT NULL;
+                    CREATE INDEX IF NOT EXISTS idx_anime_work_links_manga ON anime_work_links (manga_id) WHERE manga_id IS NOT NULL;
+                `);
+                if (d.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'manga_id')) {
+                    const keyed = d.prepare(`UPDATE mangas SET work_key = 'manual:' || lower(hex(randomblob(12)))
+                        WHERE work_key IS NULL AND id IN (SELECT manga_id FROM animes WHERE manga_id IS NOT NULL)`).run().changes;
+                    d.exec(`UPDATE animes SET work_id = (SELECT m.work_id FROM mangas m WHERE m.id = animes.manga_id)
+                        WHERE manga_id IS NOT NULL AND EXISTS (SELECT 1 FROM mangas m WHERE m.id = animes.manga_id);`);
+                    // the edition chosen so far stays the one its shelf sees
+                    const pinned = d.prepare(`INSERT OR IGNORE INTO anime_work_links (anime_id, work_id, relation, origin, scope_shelf_id, hidden, manga_id)
+                        SELECT a.id, m.work_id, 'SOURCE', 'manual', m.shelf_id, 0, m.id FROM animes a JOIN mangas m ON m.id = a.manga_id
+                         WHERE m.work_id IS NOT NULL AND m.shelf_id IS NOT NULL`).run().changes;
+                    if (keyed || pinned) log.info(`[Database Migration] v45: ${pinned} anime links -> links to the work, ${keyed} series got a work of their own`);
+                    d.exec('DROP INDEX IF EXISTS idx_animes_manga;');
+                    rebuildTable(d, 'animes', (sql) => replaceOnce(sql, /\s*\bmanga_id\s+INTEGER\s+REFERENCES\s+mangas\s*\(\s*id\s*\)\s+ON\s+DELETE\s+SET\s+NULL\s*,/i, '', 'animes.manga_id'),
+                        { dropColumns: ['manga_id'] });
+                }
+                d.exec('DROP TRIGGER IF EXISTS trg_mangas_work_update;');
+                d.exec(WORK_UPDATE_TRIGGER_SQL());
+                d.exec(ANIME_PIN_SHELF_TRIGGER_SQL);
             }
         }
     ];

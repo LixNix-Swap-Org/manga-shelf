@@ -214,6 +214,15 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
     db.exec("UPDATE mangas SET owned_volumes = (SELECT count(*) FROM volumes v WHERE v.manga_id = mangas.id AND v.status = 'Vorhanden')");
 
     const insLink = db.prepare('INSERT INTO anime_links (anime_id, service, external_id, url) VALUES (?, ?, ?, ?)');
+    // an anime links to the work of its series (migration 45): a series without one gets a manual key derived from its fixture key
+    const workOf = (key) => {
+      const id = mangaId[key];
+      if (!id) return null;
+      const row = db.prepare('SELECT work_id FROM mangas WHERE id = ?').get(id);
+      if (row.work_id) return row.work_id;
+      db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?').run(manualWorkKey(crypto.createHash('sha256').update(`demo:${key}`).digest('hex')), id);
+      return db.prepare('SELECT work_id FROM mangas WHERE id = ?').get(id).work_id;
+    };
     const insProgress = db.prepare(`INSERT INTO anime_progress (anime_id, user_id, status, episodes_watched, score, started_at, finished_at, rating_visibility, public_comment)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const a of data.anime) {
@@ -224,7 +233,7 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
       }
       const columns = {
         ...snapshotColumns(meta, nowMs), anilist_id: meta.anilist_id, mal_id: meta.mal_id, kind: 'anime', tmdb_id: a.tmdb_id, tmdb_kind: a.tmdb_kind,
-        title: meta.title.preferred || meta.title.romaji, manga_id: mangaId[a.series], updated_by: userId.max,
+        title: meta.title.preferred || meta.title.romaji, work_id: workOf(a.series), updated_by: userId.max,
         cover_image: meta.cover_url, cover_source: meta.cover_url, banner_image: meta.banner_url, banner_source: meta.banner_url
       };
       const keys = Object.keys(columns);
@@ -284,8 +293,8 @@ function demoSummary(dataDir) {
       ownedVolumes: n("SELECT count(*) AS n FROM volumes WHERE status = 'Vorhanden'"),
       collectionValueEur: eur("SELECT sum(price) AS n FROM volumes WHERE status = 'Vorhanden'"),
       priceSumOfAllRowsEur: eur('SELECT sum(price) AS n FROM volumes'),
-      mangaWithoutAnime: n("SELECT count(*) AS n FROM mangas m WHERE m.format = 'print' AND m.wish_priority IS NULL AND NOT EXISTS (SELECT 1 FROM animes a WHERE a.manga_id = m.id)"),
-      mangaWithAnime: n('SELECT count(DISTINCT manga_id) AS n FROM animes WHERE manga_id IS NOT NULL'),
+      mangaWithoutAnime: n("SELECT count(*) AS n FROM mangas m WHERE m.format = 'print' AND m.wish_priority IS NULL AND (m.work_id IS NULL OR NOT EXISTS (SELECT 1 FROM animes a WHERE a.work_id = m.work_id))"),
+      mangaWithAnime: n('SELECT count(DISTINCT m.id) AS n FROM mangas m JOIN animes a ON a.work_id = m.work_id'),
       webtoons: n("SELECT count(*) AS n FROM mangas WHERE format = 'webtoon'"),
       shoppingListVolumes: n("SELECT count(*) AS n FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status IN ('Fehlt', 'Vorbestellt') AND m.wish_priority IS NULL"),
       wishlistVolumes: n("SELECT count(*) AS n FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.status = 'Fehlt' AND m.wish_priority IS NOT NULL"),
