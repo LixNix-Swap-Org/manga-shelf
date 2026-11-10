@@ -804,11 +804,16 @@ describe('every write of the device reaches the store', () => {
           return base.put(s, key, value);
         }
       };
+      // the save waits an idle delay that grows with the measured save time: move the clock on in steps until the
+      // state is reached instead of betting on one step (a fixed step failed on a slow CI runner)
+      const until = async (reached, step = 50, limit = 10000) => {
+        for (let waited = 0; waited < limit && !reached(); waited += step) await vi.advanceTimersByTimeAsync(step);
+      };
       const rt = await newRuntime({ store, win: null, doc: null, locks: null });
       await rt.request('POST', '/api/mangas', { title: 'Eins' });
-      await vi.advanceTimersByTimeAsync(0);
+      await until(() => rt.status().saveError !== null);
       expect(rt.status().saveError).toBe('Speicher voll');
-      await vi.advanceTimersByTimeAsync(1000);
+      await until(() => typeof release === 'function');
       expect(release).toBeTypeOf('function');
       rt.useProfile({ name: 'Zweitprofil' });
       release();
