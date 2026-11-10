@@ -54,7 +54,7 @@ const openShelf = async (name) => {
 describe('memberRemovalText', () => {
   it('names the owned volumes that go, says reading marks stay, and stays general without counts', () => {
     expect(memberRemovalText(member(2, 'erika', 'editor', { owned: 3, read: 1 })))
-      .toBe('„erika“ aus diesem Regal entfernen? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht (3 Bände). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.');
+      .toBe('„erika“ aus diesem Regal entfernen? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht (3 Bände). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.');
     expect(memberRemovalText({ user_id: 2, username: 'erika', role: 'editor' }))
       .toMatch(/^„erika“ aus diesem Regal entfernen\? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht\. .*Die Lesemarkierungen bleiben erhalten\./);
     expect(memberRemovalText(member(2, 'erika', 'viewer'))).toBe('„erika“ aus diesem Regal entfernen? erika besitzt hier keine Bände; die Lesemarkierungen bleiben erhalten.');

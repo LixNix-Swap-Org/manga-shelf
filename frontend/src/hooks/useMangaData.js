@@ -134,12 +134,12 @@ export async function loadShelfMovePreview(mangaId, shelfId) {
 /** The question before a move; `affected` as from loadShelfMovePreview (null: generic text). */
 export function shelfMoveConfirmText({ title, shelf, affected }) {
   if (!Array.isArray(affected)) {
-    return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { title, shelf });
+    return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.', { title, shelf });
   }
   const people = affected
     .map((a) => t('{name} ({owned} im Besitz)', { name: a.username, owned: formatCount(a.owned, 'Band', 'Bände') }))
     .join(', ');
-  return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { title, shelf, people });
+  return t('„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.', { title, shelf, people });
 }
 
 /** "Genres nachladen": only for a German series linked to Manga Passion that has no tags yet (MP knows only German editions). */

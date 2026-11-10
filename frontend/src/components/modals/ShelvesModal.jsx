@@ -39,8 +39,8 @@ export function memberRemovalText(member, { self = false } = {}) {
   }
   const name = member?.username || '';
   if (none) return t('„{name}“ aus diesem Regal entfernen? {name} besitzt hier keine Bände; die Lesemarkierungen bleiben erhalten.', { name });
-  if (known) return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht ({owned}). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { name, owned });
-  return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { name });
+  if (known) return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht ({owned}). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.', { name, owned });
+  return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.', { name });
 }
 
 /**

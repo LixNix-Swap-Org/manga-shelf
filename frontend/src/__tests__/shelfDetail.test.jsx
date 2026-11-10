@@ -59,7 +59,7 @@ describe('shelfMoveConfirmText', () => {
     expect(named).toContain('„Naruto“ nach „Zweites“ verschieben?');
     expect(named).toContain('erika (3 Bände im Besitz)');
     expect(named).toContain('Lesemarkierungen bleiben erhalten.');
-    expect(named).toContain('Das lässt sich nicht rückgängig machen.');
+    expect(named).toContain('Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.');
     const general = shelfMoveConfirmText({ title: 'Naruto', shelf: 'Zweites', affected: null });
     expect(general).toContain('Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe;');
   });
