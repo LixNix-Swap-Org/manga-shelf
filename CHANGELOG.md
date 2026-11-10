@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 4.0.0
 
 ### Before updating
 - **Database migrations 40 to 47** run at the first start, after the usual backup `backups/vor-update-v<old>-auf-v<new>-…zip`. Migration 40 checks the value columns: volumes without a type become regular volumes, a second household shelf (there should never be one) loses that mark, and triggers refuse a volume status, volume type, collecting status or series format outside the known values. Migration 41 builds the **global catalog**: every edition and every volume of it exists once, however many shelves hold it (same Manga Passion edition, a shared ISBN, or the same title, language, format and publisher). Nothing in the shelves changes; what the merge papered over (different volume counts, two ISBNs for one volume) is listed in the table `catalog_merge_log`. Migration 42 gives `mangas`, `trash`, `shelves` and `animes` the foreign keys they lacked: a series or trash entry pointing to a shelf that no longer exists moves into the household shelf, a reference to a deleted account is cleared, and the start log names how many rows that were. Migration 43 moves reading marks and webtoon chapter progress onto the catalog (see below): marks of the same edition in two shelves merge into one, keeping the earliest read and the highest chapter. Migration 44 turns ownership into **copies** (see below). Migration 45 moves the series link of every anime onto its work (see below): a linked series without a work gets one of its own. Migration 46 makes the catalog the source of the edition data (see below); a series or volume keeps every value it has, and what differs from its catalog entry counts as its own. Migration 47 adds who borrowed a copy (see Copies); nothing is lent after it. Because the schema changes, 3.7.0 cannot open the migrated database; going back to 3.7.0 restores that backup, and everything changed since is lost.
+
+- **Going back to 3.7.0 restores the backup from before the update, and everything changed since is lost.** 3.7.0 cannot open a database at migration 47.
 
 ### Database
 - **Checked values:** the database itself refuses a volume status, volume type, collecting status or series format outside the lists the app knows (the legacy status "Gelesen" stays allowed for the data-quality fix). Stored rows with another value stay and remain editable; the start log names how many there are.
@@ -25,6 +27,9 @@
 ### Copies
 - **Price, date and condition per copy:** the volume editor lists every copy of a volume (yours, those of others, a household copy) with its purchase price, date and condition. Your own copy, a household copy and, for an admin, every copy can be changed there (`PUT /api/volumes/:id/copies/:copyId`). The price of the volume stays what the statistics count.
 - **Lending:** a copy can be lent to an account or to a person without one ("Ausgeliehen an Felix seit 02.01.2026"). The volume shows "Verliehen" in the grid and list views; the statistics card "Verliehen & ausgeliehen" lists what is lent out from your shelves and what others lent to you (`GET /api/copies/lent`). Migration 47 adds the lending columns; a trash entry and a bulk undo keep the lending of personal copies.
+- **Claiming a household copy keeps its details:** marking yourself as owner of a volume the household owns takes over that copy with its price, condition and lending instead of replacing it; undoing the change brings condition and lending back too.
+- The card "Verliehen & ausgeliehen" follows the shelf filter (`GET /api/copies/lent?shelf_id=`) and names the shelf of each copy in the overview of all shelves.
+- A purchase date set on a copy also fills an empty purchase date of the volume, so statistics and CSV see it.
 
 ### Shopping list
 - **No second purchase by mistake:** a missing volume whose edition is already owned or ordered in another of your shelves says so on the shopping list and in the shop scan: "Schon vorhanden in: Wohnzimmer (lena)" or "Schon bestellt in: …". It stays bookable (a second copy can be wanted). Only your own shelves count. `GET /api/shopping-list` and `GET /api/lookup/isbn` carry it as `owned_elsewhere`.
@@ -43,6 +48,19 @@
 ### Anime
 - Anime and manga works are now linked many-to-many in the database (`anime_work_links`): the series an anime is linked to and every manga in its AniList relations that the collection knows. Nothing reads them yet; they prepare the cross-media views.
 - **Linked series per shelf:** an anime is linked to a work, not to one series. Everybody sees their own edition of it, and every shelf decides for itself: linking an edition pins it for that shelf, "Keine Verknüpfung" hides the link there. The link for everyone changes only while every edition of the work is in shelves you can edit. The note "Über deine Ausgabe dieses Werks verknüpft" and the lock on links into foreign shelves are gone, so `manga_via_work` and `manga_linked_elsewhere` are no longer in the anime answers.
+- Switching an anime's linked series to an edition in another of your shelves takes effect at once; the earlier pin in your other shelf is cleared.
+
+### Scanning
+- When the same edition stands in two of your shelves, the ISBN scan and the title match pick the volume that is still open instead of one already owned, and no longer give up as ambiguous.
+
+### Interface
+- "Reihe verschieben" shows an arrow instead of a trash can, because nothing is deleted; the question stays red since owners outside the target shelf lose their ownership marks.
+
+### Security
+- **Updates without advisories:** Electron 44.10.2, `lucide-react` 1.69.0 (icons under their new names), `express-rate-limit` 8.7.3, `sigstore` 5.0.1, ESLint 10.14.0, Vitest 5.1.0, and current GitHub Actions.
+
+### Development
+- Optional CI steps stop on their own after a time limit instead of cancelling their job, and the local test runs stay green under load and inside a git worktree.
 
 ## 3.7.0
 
