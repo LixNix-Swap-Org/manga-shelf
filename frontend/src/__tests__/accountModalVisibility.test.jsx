@@ -67,7 +67,7 @@ describe('AccountModal: default visibility of anime ratings', () => {
     const put = fetchMock.mock.calls.find(([url, init]) => url === '/api/auth/profile' && init?.method === 'PUT');
     expect(JSON.parse(put[1].body)).toEqual({ default_anime_visibility: 'anonymous' });
     const { result } = renderHook(() => useAccountDefaults());
-    expect(result.current).toEqual({ animeVisibility: 'anonymous', loaded: true });
+    expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, loaded: true });
   });
 
   it('a refused change goes back to the stored value', async () => {
@@ -101,7 +101,7 @@ describe('useAccountDefaults', () => {
     await waitFor(() => expect(answers).toHaveLength(2));
     expect(result.current.animeVisibility).toBeNull();
     answers[1](fakeResponse(200, { user: { id: 2, default_anime_visibility: 'anonymous' } }));
-    await waitFor(() => expect(result.current).toEqual({ animeVisibility: 'anonymous', loaded: true }));
+    await waitFor(() => expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, loaded: true }));
     renderHook(() => useAccountDefaults());
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(2);
   });
@@ -111,5 +111,33 @@ describe('useAccountDefaults', () => {
     const { result } = renderHook(() => useAccountDefaults());
     await waitFor(() => expect(result.current.loaded).toBe(true));
     expect(result.current.animeVisibility).toBeNull();
+  });
+});
+
+describe('AccountModal: sharing the anime list by name', () => {
+  const share = () => screen.getByLabelText('Meine Anime-Liste mit Namen zeigen');
+
+  it('shows the stored setting, saves a change at once and keeps it for the session', async () => {
+    const fetchMock = serve({
+      me: () => fakeResponse(200, { user: { id: 2, default_anime_visibility: 'public', share_anime_activity: true } }),
+      profile: (body) => fakeResponse(200, { user: { id: 2, default_anime_visibility: 'public', share_anime_activity: body.share_anime_activity } })
+    });
+    openLanguage();
+    await waitFor(() => expect(share().disabled).toBe(false));
+    expect(share().checked).toBe(true);
+    fireEvent.click(share());
+    await waitFor(() => expect(share().disabled).toBe(false));
+    expect(share().checked).toBe(false);
+    const put = fetchMock.mock.calls.find(([url, init]) => url === '/api/auth/profile' && init?.method === 'PUT');
+    expect(JSON.parse(put[1].body)).toEqual({ share_anime_activity: false });
+    const { result } = renderHook(() => useAccountDefaults());
+    expect(result.current.shareAnime).toBe(false);
+  });
+
+  it('is on while an older server sends no setting', async () => {
+    serve({ me: () => fakeResponse(200, { user: { id: 2, default_anime_visibility: 'public' } }) });
+    openLanguage();
+    await waitFor(() => expect(share().disabled).toBe(false));
+    expect(share().checked).toBe(true);
   });
 });

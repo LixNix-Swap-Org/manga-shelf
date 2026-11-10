@@ -1298,6 +1298,130 @@ function migrationList(log = silentLog) {
                     ${OWNERS_VIEW_LENT_SQL}
                 `);
             }
+        },
+        {
+            version: 48,
+            name: 'add_anime_share_activity',
+            up: (d) => {
+                // whether others see by name what an account watches (status, episodes) and its public ratings; 1 = shared
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!cols.has('share_anime_activity')) d.exec('ALTER TABLE users ADD COLUMN share_anime_activity INTEGER NOT NULL DEFAULT 1;');
+            }
+        },
+        {
+            version: 49,
+            name: 'anime_tags_and_notes_per_person',
+            up: (d) => {
+                // Tags: one row per person and tag (user_id NULL = a tag from before, nobody's own). Everybody still sees
+                // every tag of an entry; a person removes only their own and the old ones, an admin any (core/anime/tags.js).
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS anime_tags (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        anime_id INTEGER NOT NULL REFERENCES animes(id) ON DELETE CASCADE,
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                        tag TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS ux_anime_tags ON anime_tags (anime_id, COALESCE(user_id, 0), lower(tag));
+                    CREATE INDEX IF NOT EXISTS idx_anime_tags_user ON anime_tags (user_id);
+                    ${dataVersionTriggersSql('anime_tags', 'anime')}
+                `);
+                const insertTag = d.prepare('INSERT OR IGNORE INTO anime_tags (anime_id, user_id, tag) VALUES (?, NULL, ?)');
+                for (const row of d.prepare("SELECT id, tags FROM animes WHERE tags IS NOT NULL AND tags <> ''").all()) {
+                    let list;
+                    try { list = JSON.parse(row.tags); } catch (e) { list = []; }
+                    if (!Array.isArray(list)) list = [];
+                    for (const tag of list) {
+                        if (typeof tag === 'string' && tag.trim()) insertTag.run(row.id, tag.trim().replace(/\s+/g, ' ').slice(0, 30));
+                    }
+                }
+                d.exec('UPDATE animes SET tags = NULL WHERE tags IS NOT NULL;');
+                // Notes: the note of an entry (anyone could overwrite it) goes into the own note of everybody who has the
+                // entry on their list, in front of what they wrote (as the CSV export merged them). An entry nobody has keeps it.
+                d.exec(`
+                    UPDATE anime_progress SET notes = (
+                        SELECT CASE
+                            WHEN anime_progress.notes IS NULL OR trim(anime_progress.notes) = '' THEN a.notes
+                            WHEN instr(anime_progress.notes, a.notes) > 0 THEN anime_progress.notes
+                            ELSE a.notes || char(10) || anime_progress.notes END
+                        FROM animes a WHERE a.id = anime_progress.anime_id)
+                    WHERE anime_id IN (SELECT id FROM animes WHERE notes IS NOT NULL AND trim(notes) <> '');
+                    UPDATE animes SET notes = NULL
+                    WHERE notes IS NOT NULL AND EXISTS (SELECT 1 FROM anime_progress p WHERE p.anime_id = animes.id);
+                `);
+            }
+        },
+        {
+            version: 50,
+            name: 'add_calendar_feeds',
+            up: (d) => {
+                // calendar feed tokens of a person, until now app_settings 'calendar_feed:<sha256>' with a JSON value: a table
+                // of their own goes with the account (ON DELETE CASCADE) and is found by person without reading every value
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS calendar_feeds (
+                        token_hash TEXT PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        scope TEXT NOT NULL CHECK (scope IN ('radar', 'anime')),
+                        sealed TEXT,
+                        created_at TEXT,
+                        last_used_at INTEGER
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_calendar_feeds_user ON calendar_feeds (user_id, scope);
+                `);
+                const insert = d.prepare(`INSERT OR IGNORE INTO calendar_feeds (token_hash, user_id, scope, sealed, created_at, last_used_at)
+                    SELECT ?, id, ?, ?, ?, ? FROM users WHERE id = ?`);
+                const rows = d.prepare("SELECT key, value FROM app_settings WHERE substr(key, 1, 14) = 'calendar_feed:'").all();
+                for (const row of rows) {
+                    let entry;
+                    try { entry = JSON.parse(row.value); } catch (e) { entry = null; }
+                    // a token of an account gone since, or one that cannot be read, was dead already
+                    if (!entry || !Number.isInteger(entry.user_id)) continue;
+                    const scope = entry.scope === 'anime' ? 'anime' : 'radar';
+                    const used = Number.isFinite(entry.last_used_at) ? entry.last_used_at : null;
+                    insert.run(row.key.slice(14), scope, entry.sealed ?? null, entry.created_at ?? null, used, entry.user_id);
+                }
+                d.exec("DELETE FROM app_settings WHERE substr(key, 1, 14) = 'calendar_feed:';");
+            }
+        },
+        {
+            version: 51,
+            name: 'edition_data_on_catalog',
+            up: (d) => {
+                // the stored Manga Passion edition (the fallback of "Genres nachladen") belongs to the edition, not to a shelf:
+                // one copy on the catalog series (the newest of its rows) instead of one per shelf. mangas.manga_passion_edition_data
+                // stays as an empty column for one version, so the way back to the version before keeps a valid table.
+                const cols = new Set(d.prepare('PRAGMA table_info(catalog_series)').all().map(c => c.name));
+                if (!cols.has('mp_edition_data')) d.exec('ALTER TABLE catalog_series ADD COLUMN mp_edition_data TEXT;');
+                d.exec(`
+                    UPDATE catalog_series SET mp_edition_data = (
+                        SELECT m.manga_passion_edition_data FROM mangas m
+                        WHERE m.catalog_series_id = catalog_series.id AND m.manga_passion_edition_data IS NOT NULL AND m.manga_passion_edition_data <> ''
+                        ORDER BY m.updated_at DESC, m.id DESC LIMIT 1)
+                    WHERE mp_edition_data IS NULL AND EXISTS (SELECT 1 FROM mangas m WHERE m.catalog_series_id = catalog_series.id
+                        AND m.manga_passion_edition_data IS NOT NULL AND m.manga_passion_edition_data <> '');
+                    UPDATE mangas SET manga_passion_edition_data = NULL WHERE manga_passion_edition_data IS NOT NULL;
+                `);
+            }
+        },
+        {
+            version: 52,
+            name: 'check_user_roles',
+            up: (d) => {
+                // the account role as a safety net like the value lists of migration 40 (shelf_members.role has a CHECK): a
+                // role outside the list would neither be an editor nor read-only for core/lib/access.js. Frozen.
+                const roles = "'admin', 'editor', 'visitor', 'guest'";
+                const stored = d.prepare(`SELECT COUNT(*) AS n FROM users WHERE role NOT IN (${roles})`).get().n;
+                if (stored) log.warn(`[Database] ${stored} accounts hold a role outside the list; they stay as they are.`);
+                d.exec(`
+                    CREATE TRIGGER IF NOT EXISTS trg_check_users_role_ins BEFORE INSERT ON users WHEN NEW.role NOT IN (${roles}) BEGIN
+                        SELECT RAISE(ABORT, 'invalid users.role');
+                    END;
+                    CREATE TRIGGER IF NOT EXISTS trg_check_users_role_upd BEFORE UPDATE OF role ON users
+                        WHEN NEW.role IS NOT OLD.role AND NEW.role NOT IN (${roles}) BEGIN
+                        SELECT RAISE(ABORT, 'invalid users.role');
+                    END;
+                `);
+            }
         }
     ];
 }

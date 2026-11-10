@@ -37,12 +37,10 @@ test('users: deleting a user removes the calendar feed tokens of that user only'
     assert.equal((await member('POST', '/radar/feed-token')).status, 200);
     assert.equal((await admin('POST', '/radar/feed-token')).status, 200);
     const { db } = require('../db');
-    db.prepare("INSERT INTO app_settings (key, value) VALUES ('calendar_feed:kaputt', 'kein json')").run();
-    const feeds = () => db.prepare("SELECT key, value FROM app_settings WHERE key LIKE 'calendar\\_feed:%' ESCAPE '\\'").all()
-        .map(r => { try { return JSON.parse(r.value).user_id; } catch (e) { return r.key; } });
+    const feeds = () => db.prepare('SELECT user_id FROM calendar_feeds ORDER BY user_id').all().map(r => r.user_id);
     const memberId = (await admin('GET', '/users')).body.find(u => u.username === 'kalender').id;
-    assert.deepEqual(feeds().sort(), [1, memberId, 'calendar_feed:kaputt'].sort());
+    assert.deepEqual(feeds(), [1, memberId].sort((a, b) => a - b));
 
     assert.equal((await admin('DELETE', `/users/${memberId}`)).status, 200);
-    assert.deepEqual(feeds().sort(), [1, 'calendar_feed:kaputt'].sort());
+    assert.deepEqual(feeds(), [1]);
 });

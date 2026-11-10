@@ -1599,6 +1599,20 @@ describe('AnimeDetailModal: ratings with other accounts', () => {
     expect(screen.queryByRole('button', { name: 'Tag „Fantasy“ entfernen' })).toBeNull();
   });
 
+  it('tags of others show without a remove button (removable_tags); "Für alle löschen" only when allowed', async () => {
+    const view = openShared(shared({ tags: ['Fantasy', 'Von Ben'], removable_tags: ['Fantasy'], can_delete_for_all: false }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(document.getElementById('anime-tags').textContent).toContain('Von Ben');
+    expect(screen.getByRole('button', { name: 'Tag „Fantasy“ entfernen' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tag „Von Ben“ entfernen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Für alle löschen' })).toBeNull();
+    view.unmount();
+
+    openShared(shared({ tags: [], can_delete_for_all: true }), { defaultVisibility: 'public' });
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Für alle löschen' })).toBeTruthy();
+  });
+
   it('shows my status per related film and hides the episode grid of a one-episode film', async () => {
     const view = openShared(shared({
       relations: [{ kind: 'ANIME', relation: 'SIDE_STORY', title: 'Frieren Film', format: 'MOVIE', anilist_id: 3, in_collection_id: 9, my_status: 'Gesehen' }]
