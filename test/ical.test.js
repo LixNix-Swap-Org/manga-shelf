@@ -75,7 +75,7 @@ test('the feed runs in the in-memory core (apps) with a stored token and a fixed
     try {
         const token = 'T'.repeat(43);
         const userId = core.users[0].id;
-        core.conn.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(`calendar_feed:${nodeSha(token)}`, JSON.stringify({ user_id: userId, created_at: '2026-10-01T00:00:00Z', last_used_at: null }));
+        core.conn.prepare("INSERT INTO calendar_feeds (token_hash, user_id, scope, created_at) VALUES (?, ?, 'radar', '2026-10-01T00:00:00Z')").run(nodeSha(token), userId);
         core.conn.prepare("INSERT INTO mangas (id, title, publisher) VALUES (1, 'Frieren', 'Egmont')").run();
         core.conn.prepare("INSERT INTO volumes (manga_id, volume_number, status, release_date, price) VALUES (1, '14', 'Vorbestellt', '2026-10-20', 7)").run();
         core.conn.prepare("INSERT INTO volumes (manga_id, volume_number, status, release_date) VALUES (1, '13', 'Bestellt', '2026-08-01')").run();
@@ -86,7 +86,7 @@ test('the feed runs in the in-memory core (apps) with a stored token and a fixed
         assert.match(res.text, /SUMMARY:Frieren – Band 14\r\n/);
         assert.match(res.text, /DTSTART;VALUE=DATE:20261020/);
         assert.ok(!res.text.includes('Band 13'), 'more than 30 days ago');
-        const stored = JSON.parse(core.conn.prepare('SELECT value FROM app_settings WHERE key LIKE ?').get('calendar_feed:%').value);
+        const stored = core.conn.prepare('SELECT last_used_at FROM calendar_feeds').get();
         assert.equal(stored.last_used_at, Date.parse('2026-10-04T10:00:00Z'));
         assert.equal((await anonymous.raw('GET', `/radar/feed.ics?token=${'U'.repeat(43)}`)).status, 404);
     } finally {

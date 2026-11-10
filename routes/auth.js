@@ -124,7 +124,7 @@ router.post('/setup', setupLimiter, async (req, res) => {
     const pwErr = passwordError(password);
     if (pwErr) throw badRequest(pwErr);
 
-    const cleanUsername = username.trim();
+    const cleanUsername = username.trim().normalize('NFC');
     const nameErr = usernameError(cleanUsername);
     if (nameErr) throw badRequest(nameErr);
     const hash = await bcrypt.hash(password, 10);
@@ -162,7 +162,10 @@ router.post('/auth/login', async (req, res) => {
     loginGuard.attempt(account, ip);
 
     // "Max" and "max" are the same account; an exact match wins if old data has both
-    const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE ORDER BY (username = ?) DESC, id ASC LIMIT 1').get(username.trim(), username.trim());
+    // as typed or in NFC (new accounts are stored in NFC; an older one keeps the form it was created with)
+    const typed = username.trim();
+    const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE OR username = ? COLLATE NOCASE ORDER BY (username = ?) DESC, id ASC LIMIT 1')
+        .get(typed, typed.normalize('NFC'), typed);
     const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
     if (!user || !valid) throw new HttpError(401, 'Ungültige Anmeldedaten', 'INVALID_CREDENTIALS');
     loginGuard.succeeded(account, ip);
@@ -239,6 +242,16 @@ router.get('/auth/connect-info', requireEditor, (req, res) => {
 // --- USER MANAGEMENT (Admin only) ---
 const auditFields = (req) => ({ admin: req.user.username, auth_scheme: req.authScheme, ip: clientIp(req) });
 
+/**
+ * Whether an account of that name exists, ignoring case in every alphabet ("Ärik" and "ärik", which COLLATE NOCASE and
+ * the unique index keep apart) and the Unicode form (NFKC). Accounts are few, so all names are compared here.
+ */
+const foldUsername = (name) => String(name).normalize('NFKC').toLowerCase();
+function usernameInUse(name) {
+    const folded = foldUsername(name);
+    return db.prepare('SELECT username FROM users').all().some(u => foldUsername(u.username) === folded);
+}
+
 router.get('/users', requireAdmin, (req, res) => {
     const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
     res.json(users);
@@ -254,24 +267,24 @@ router.post('/users', requireAdmin, async (req, res) => {
     }
     const pwErr = passwordError(password);
     if (pwErr) throw badRequest(pwErr);
-    const cleanUsername = username.trim();
+    const cleanUsername = username.trim().normalize('NFC');
     const nameErr = usernameError(cleanUsername);
     if (nameErr) throw badRequest(nameErr);
     const cleanRole = role;
     const shelfPlan = access.parseShelfSetup(req.body || {}, cleanRole);
 
     const usernameTaken = () => sendError(res, 400, 'Dieser Benutzername existiert bereits', 'USERNAME_TAKEN');
-    if (db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername)) return usernameTaken();
+    if (usernameInUse(cleanUsername)) return usernameTaken();
     if (cleanRole === 'admin') await confirmCurrentPassword(req, res, currentPassword);
 
     const hash = await bcrypt.hash(password, 10);
     // Check again after the await, synchronously with the insert: a parallel create of "Max"/"max" may have won.
-    // (COLLATE NOCASE folds ASCII only, like the login lookup.) The shelves are set up in the same transaction: a
+    // (usernameInUse also folds Umlauts and other letters; COLLATE NOCASE of the index folds ASCII only.) The shelves are set up in the same transaction: a
     // refused shelf choice (400) leaves no account behind.
     let result;
     try {
         result = runTransaction(() => {
-            if (db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(cleanUsername)) return null;
+            if (usernameInUse(cleanUsername)) return null;
             const inserted = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(cleanUsername, hash, cleanRole);
             const created = { id: Number(inserted.lastInsertRowid), username: cleanUsername, role: cleanRole };
             access.setupUserShelf(createCtx({ user: req.user }), created, shelfPlan);

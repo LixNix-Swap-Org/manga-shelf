@@ -81,7 +81,8 @@ test('manual entries: title 1-200 characters, episodes >= 0, editable episode co
     assert.equal(res.body.my_progress.status, 'Geplant');
     const changed = await editor('PUT', `/anime/${res.body.id}`, { episodes: 4, title_de: 'Heimkino', notes: 'DVD' });
     assert.equal(changed.status, 200);
-    assert.deepEqual([changed.body.episodes, changed.body.title_de, changed.body.notes], [4, 'Heimkino', 'DVD']);
+    // the note is the caller's own since migration 49 (my_progress.notes); the entry's own stays empty
+    assert.deepEqual([changed.body.episodes, changed.body.title_de, changed.body.my_progress.notes, changed.body.notes], [4, 'Heimkino', 'DVD', null]);
     const frieren = db.prepare('SELECT id FROM animes WHERE anilist_id = 154587').get().id;
     assert.equal((await editor('PUT', `/anime/${frieren}`, { episodes: 3 })).status, 400, 'only manual entries');
     assert.equal((await visitor('PUT', `/anime/${res.body.id}`, { title: 'X' })).status, 403);

@@ -109,15 +109,14 @@ test('passwort-reset without a terminal writes the password to a 0600 file and p
 
 test('passwort-reset ends the calendar feed of that user only', async (t) => {
     const idOf = (name) => db.prepare('SELECT id FROM users WHERE username = ?').get(name).id;
-    const feed = (key, userId) => db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)')
-        .run(`calendar_feed:${key}`, JSON.stringify({ user_id: userId, created_at: Date.now(), last_used_at: null, sealed: null }));
+    const feed = (key, userId) => db.prepare("INSERT OR REPLACE INTO calendar_feeds (token_hash, user_id, scope) VALUES (?, ?, 'radar')").run(key, userId);
     feed('kim-feed', idOf('kim'));
     feed('gast-feed', idOf('gast'));
     const { result } = await captureLogs(t, () => runCommand('passwort-reset kim', () => {}, { revealSecrets: true }));
     assert.equal(result.ok, true);
-    const feeds = db.prepare("SELECT key FROM app_settings WHERE key LIKE 'calendar_feed:%' ORDER BY key").all().map(r => r.key);
-    assert.deepEqual(feeds, ['calendar_feed:gast-feed']);
-    db.prepare("DELETE FROM app_settings WHERE key LIKE 'calendar_feed:%'").run();
+    const feeds = db.prepare('SELECT token_hash FROM calendar_feeds ORDER BY token_hash').all().map(r => r.token_hash);
+    assert.deepEqual(feeds, ['gast-feed']);
+    db.prepare('DELETE FROM calendar_feeds').run();
 });
 
 test('the stdin console never prints a password, even when stdout is a terminal', async (t) => {

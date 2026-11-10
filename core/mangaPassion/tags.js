@@ -23,7 +23,9 @@ function storedEdition(json) {
 
 /** The edition as already known locally: { edition, source } or null (an edition without tags still counts). */
 function knownEdition(ctx, manga, editionId) {
-  const stored = storedEdition(manga.manga_passion_edition_data);
+  // one per edition on the catalog series since migration 51
+  const entry = manga.catalog_series_id ? ctx.db.prepare('SELECT mp_edition_data FROM catalog_series WHERE id = ?').get(manga.catalog_series_id) : null;
+  const stored = storedEdition(entry ? entry.mp_edition_data : null);
   if (stored && toEditionId(stored.id) === editionId && hasTags(stored.tags)) return { edition: stored, source: 'edition_data' };
   for (const key of [`mp_edition_vols_${editionId}`, `mp_edition_info_${editionId}`]) {
     const cached = readCache(ctx, key, Infinity);

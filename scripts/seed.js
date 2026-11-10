@@ -80,8 +80,10 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
     const insMember = db.prepare('INSERT OR IGNORE INTO shelf_members (shelf_id, user_id, role) VALUES (1, ?, ?)');
     users.forEach((id, i) => insMember.run(id, DEMO_USERS[i][1] === 'admin' ? 'owner' : 'editor'));
     db.prepare('UPDATE shelves SET owner_user_id = ? WHERE id = 1').run(users[DEMO_USERS.findIndex(([, role]) => role === 'admin')]);
-    const insManga = db.prepare(`INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, manga_passion_id, manga_passion_edition_data, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insManga = db.prepare(`INSERT INTO mangas (title, alt_title, author, publisher, language, region, currency, work_key, status, tags, total_volumes, description, cover_image, manga_passion_id, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    // the stored edition lives on the catalog series since migration 51
+    const setEdition = db.prepare('UPDATE catalog_series SET mp_edition_data = ? WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = ?)');
     const setWorkKey = db.prepare('UPDATE mangas SET work_key = ? WHERE id = ?');
     let previous = null;
     const insVolume = db.prepare(`INSERT INTO volumes (manga_id, volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, images, type, priority, target_price)
@@ -106,8 +108,9 @@ function seedDatabase({ db, runTransaction }, { series = DEFAULTS.series, volume
       }) : null;
       const mangaId = Number(insManga.run(title, rand() < 0.5 ? title.toUpperCase() : null, `Autor ${int(1, 400)}`, publisher,
         other ? other.language : 'de', other ? other.region : null, other ? other.currency : 'EUR', workKey, mangaStatus,
-        'Action, Fantasy', size, LOREM.repeat(int(1, 4)), `/uploads/cover-${s}.jpg`, linked && !other ? 10000 + s : null, linked && !other ? edition : null,
+        'Action, Fantasy', size, LOREM.repeat(int(1, 4)), `/uploads/cover-${s}.jpg`, linked && !other ? 10000 + s : null,
         users[0]).lastInsertRowid);
+      if (linked && !other) setEdition.run(edition, mangaId);
       if (workKey) setWorkKey.run(workKey, linkedTo.id);
       previous = { id: mangaId, title };
       stats.series++;

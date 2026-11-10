@@ -187,7 +187,8 @@ test('no file-map comment is cut off mid-sentence', () => {
 test('Gotcha 22 states the size limit of core/anime/request.js', () => {
     const source = fs.readFileSync(path.join(ROOT, 'core/anime/request.js'), 'utf8');
     const mb = Number(/const MAX_BYTES = (\d+) \* 1024 \* 1024;/.exec(source)[1]);
-    const gotcha = AGENTS.slice(AGENTS.indexOf('22. **ISBN'), AGENTS.indexOf('\n23. '));
+    const start = AGENTS.indexOf('22. **ISBN');
+    const gotcha = AGENTS.slice(start, AGENTS.indexOf('\n23. ', start));
     assert.match(gotcha, new RegExp(`core/anime/request\\.js\`[^;]*\\b${mb} MB limit`));
     assert.doesNotMatch(gotcha, /AniList via `fetch`/);
 });
