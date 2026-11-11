@@ -827,7 +827,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
       <ConfirmDialog
         isOpen={deleteTarget !== null}
         title={t('Benutzer {username} löschen', { username: deleteTarget?.username ?? '' })}
-        message={t('Möchtest du den Benutzer "{username}" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Besitzer oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.', { username: deleteTarget?.username ?? '' })}
+        message={t('Möchtest du den Benutzer "{username}" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.', { username: deleteTarget?.username ?? '' })}
         confirmLabel={t('Löschen')}
         cancelLabel={t('Abbrechen')}
         onConfirm={() => {

@@ -145,15 +145,17 @@ describe('ShelvesModal', () => {
     await openShelf('Familie');
     expect(screen.queryByRole('combobox', { name: 'admin: Rolle' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'admin: Entfernen' })).toBeNull();
-    expect(screen.getByText(/Du bist der einzige Besitzer dieses Regals/)).toBeTruthy();
+    expect(screen.getByText(/Du bist der einzige Verwalter dieses Regals/)).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'erika: Rolle' }).value).toBe('editor');
+    // the role is "owner" in the code and "Verwalter" on screen
+    expect([...screen.getByRole('combobox', { name: 'erika: Rolle' }).options].map((o) => [o.value, o.textContent])).toEqual([['owner', 'Verwalter'], ['editor', 'Bearbeiter'], ['viewer', 'Leser']]);
 
     routes['GET /api/shelves/1'] = () => fakeResponse(200, { ...HOME, members: [member(1, 'admin', 'owner'), member(2, 'erika', 'owner')] });
     fireEvent.click(screen.getByRole('button', { name: /Familie/ }));
     await openShelf('Familie');
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'admin: Rolle' })).toBeTruthy());
     expect(screen.getByRole('button', { name: 'admin: Entfernen' })).toBeTruthy();
-    expect(screen.queryByText(/Du bist der einzige Besitzer dieses Regals/)).toBeNull();
+    expect(screen.queryByText(/Du bist der einzige Verwalter dieses Regals/)).toBeNull();
   });
 
   it('a read-only account is offered no role above viewer', async () => {

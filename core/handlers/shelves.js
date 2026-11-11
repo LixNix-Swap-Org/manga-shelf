@@ -139,7 +139,7 @@ function remove(ctx, { params }) {
     return { body: { success: true } };
 }
 
-const LAST_OWNER = 'Das Regal braucht mindestens einen Besitzer';
+const LAST_OWNER = 'Das Regal braucht mindestens einen Verwalter';
 const READ_ONLY_CAP = 'Besucher- und Gastkonten können in einem Regal nur Leser sein';
 
 /** A member whose role counts as owner: stored owner of an account that may write (admin or editor). */

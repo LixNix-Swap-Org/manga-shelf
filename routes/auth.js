@@ -350,7 +350,7 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
         // the shelf roles follow the account role; a shelf that would lose its last owner refuses (rolls back) it all
         const blocked = access.reconcileShelfRoles(db, userId, current.role, newRole);
         if (blocked) {
-            throw new HttpError(409, msg('Das Regal „{name}“ hätte danach keinen Besitzer mehr. Bitte dort zuerst einen anderen Besitzer bestimmen.', { name: blocked.shelf }), 'SHELF_LAST_OWNER');
+            throw new HttpError(409, msg('Das Regal „{name}“ hätte danach keinen Verwalter mehr. Bitte dort zuerst einen anderen Verwalter bestimmen.', { name: blocked.shelf }), 'SHELF_LAST_OWNER');
         }
         listSync.onRoleChanged(createCtx(), userId, newRole);
         return { status: 200, previousRole: current.role, user: { id: current.id, username: current.username, role: newRole, password_changed_at: version } };
