@@ -1,101 +1,37 @@
 // Add-series dialog: lookup search, manual form and cover; also creates a volume scanned by ISBN.
 import { useState, useEffect, useRef, useId } from 'react';
-import { Plus, X, Sparkles, RefreshCw, TriangleExclamationPoint, BookOpen, Upload, ScanBarcode, Globe, Library } from 'lucide-react';
+import { Plus, X, Sparkles, RefreshCw, TriangleExclamationPoint, Upload, ScanBarcode } from 'lucide-react';
 import { buildScanVolumePayload } from '../../utils/scanHelpers';
 import { MANGA_STATUSES, lookupMangaUrl } from '../../hooks/useMangaData';
 import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { apiFetch, readJson, TIMEOUTS, assetImgProps, isAbortError, get, post } from '../../utils/api';
-import { formatCount } from '../../utils/format';
 import FilePickerButton from '../common/FilePickerButton';
 import { askConfirm } from './askConfirm';
 import { prepareImageForUpload } from '../../utils/imageResize';
-import { PRIORITY_OPTIONS, DEFAULT_WISH_PRIORITY } from '../../utils/priority';
-import { t, tn, tc } from '../../i18n/index.js';
+import { PRIORITY_OPTIONS } from '../../utils/priority';
+import { t } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import EditionFields from '../common/EditionFields';
 import FormatFields from '../common/FormatFields';
-import LanguagePill from '../common/LanguagePill';
-import { editionDefaults, editionLanguage, isMpEdition } from '../../utils/editions';
-import { foldText } from '../../utils/search';
+import { editionDefaults, isMpEdition } from '../../utils/editions';
 import { pickerCount, volumeRuns } from '../../utils/volumePicker';
 import AddVolumesStep from './AddVolumesStep';
-import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
+import { hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
 
 export { lookupSourceLabels };
+import CopyHitsSection from './addManga/CopyHitsSection';
+import LookupResultsPanel, { lookupKey } from './addManga/LookupResultsPanel';
 
-// i18n
-const EMPTY_FORM = {
-  title: '',
-  alt_title: '',
-  author: '',
-  publisher: '',
-  status: 'Laufend',
-  total_volumes: '',
-  // print (by volume) or webtoon (by chapter, with its known chapter count)
-  format: 'print',
-  total_chapters: '',
-  tags: '',
-  description: '',
-  cover_image: '',
-  manga_passion_id: null,
-  // edition (ISO codes); the dialog starts with the account's default language (editionDefaults)
-  language: 'de',
-  region: '',
-  currency: 'EUR',
-  work_key: null,
-  wish: false,
-  wish_priority: String(DEFAULT_WISH_PRIORITY)
-};
-// i18n
-const STEPS = ['Finden', 'Edition & Regal', 'Bände'];
+import {
+  EMPTY_FORM, STEPS, MAX_COVER_BYTES, NETWORK_ERROR, LOOKUP_SOURCES_HINT, LOOKUP_SOURCES_HINT_OTHER, isRemoteUrl, isBlobUrl, request, cacheRemoteCover, sameTitleSeries
+} from './addManga/addMangaForm';
 
-const MAX_COVER_BYTES = 15 * 1024 * 1024;
-// i18n
-const NETWORK_ERROR = 'Netzwerkfehler – bitte Verbindung prüfen und erneut versuchen.';
-// i18n
-const LOOKUP_SOURCES_HINT = 'Sucht in Manga Passion (deutsche Ausgaben), AniList und MyAnimeList';
-// i18n
-const LOOKUP_SOURCES_HINT_OTHER = 'Sucht in AniList und MyAnimeList (Manga Passion kennt nur deutsche Ausgaben)';
-
-const isRemoteUrl = (url) => /^https?:\/\//i.test(url || '');
-const isBlobUrl = (url) => typeof url === 'string' && url.startsWith('blob:');
-const lookupKey = (item) => item.id ?? item.title;
-
-async function request(url, init) {
-  try {
-    return await apiFetch(url, init);
-  } catch {
-    throw new Error(t(NETWORK_ERROR));
-  }
-}
-
-/** Copies a remote image into /uploads through the server; resolves to the local URL, or '' when that fails. */
-async function cacheRemoteCover(url) {
-  try {
-    const res = await apiFetch('/api/upload-remote', { method: 'POST', body: { url }, timeout: TIMEOUTS.remote });
-    if (!res.ok) return '';
-    return (await readJson(res))?.url || '';
-  } catch {
-    return '';
-  }
-}
+export { sameTitleSeries };
 
 // prefill: { form, volume } from an ISBN scan (utils/scanHelpers.js buildScanPrefill); also creates the scanned volume.
 // onSeriesCreated(manga) fires when the series exists but the dialog stays open because the scanned volume failed.
-/**
- * Series of the collection that this form would duplicate: the same title (or alternative title) after folding,
- * the same edition language and the same format. A second edition stays allowed; the dialog only points at them.
- */
-export function sameTitleSeries(mangas, form) {
-  const key = foldText(form?.title).trim();
-  if (!key || !Array.isArray(mangas)) return [];
-  const language = editionLanguage(form);
-  const format = form.format || 'print';
-  return mangas.filter((m) => m && [m.title, m.alt_title].some((title) => title && foldText(title).trim() === key)
-    && editionLanguage(m) === language && (m.format || 'print') === format);
-}
 
 export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCreated, prefill = null, mangas = null, onOpenExisting = null }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -696,57 +632,17 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
 
             {/* the same series in another own shelf: take it over with its values instead of searching again */}
             {!seriesLocked && copyHits.length > 0 && (
-              <section aria-labelledby={`${ids}-copy`} className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 space-y-2" data-copy-hits="">
-                <h3 id={`${ids}-copy`} className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                  <Library className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> {t('Aus deinen Regalen')}
-                </h3>
-                <ul className="space-y-2">
-                  {copyHits.map((hit) => (
-                    <li key={hit.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-white break-words">
-                          {hit.title} <LanguagePill language={hit.language} />
-                        </p>
-                        <p className="text-slate-400">
-                          {t('in „{shelf}“', { shelf: hit.shelf_name })} · {tn('{n} Band', '{n} Bände', hit.volume_count)}
-                        </p>
-                      </div>
-                      {copyPick !== hit.id ? (
-                        <button
-                          type="button"
-                          className="btn-secondary hit-44 px-3 py-1.5 text-xs"
-                          aria-label={t('Übernehmen: {title}', { title: hit.title })}
-                          onClick={() => { setCopyPick(hit.id); setCopyVolumes(false); }}
-                          disabled={copying || submitting}
-                        >
-                          {tc('copy', 'Übernehmen')}
-                        </button>
-                      ) : (
-                        <div className="w-full flex flex-wrap items-center gap-3">
-                          {hit.volume_count > 0 && (
-                            <span className="flex items-center gap-2">
-                              <input id={`${ids}-copy-volumes`} type="checkbox" checked={copyVolumes} onChange={(e) => setCopyVolumes(e.target.checked)} />
-                              <label htmlFor={`${ids}-copy-volumes`} className="text-slate-300">{t('Bände mitnehmen (als „Fehlt“)')}</label>
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            className="btn-primary hit-44 px-3 py-1.5 text-xs"
-                            onClick={() => copyFromShelf(hit)}
-                            disabled={copying || submitting}
-                            aria-busy={copying || undefined}
-                          >
-                            {t('In dieses Regal übernehmen')}
-                          </button>
-                          <button type="button" className="hit-44 px-1 py-1 text-slate-400 hover:text-white underline underline-offset-2" onClick={() => setCopyPick(null)} disabled={copying}>
-                            {t('Abbrechen')}
-                          </button>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <CopyHitsSection
+                idPrefix={ids}
+                hits={copyHits}
+                pick={copyPick}
+                setPick={setCopyPick}
+                copyVolumes={copyVolumes}
+                setCopyVolumes={setCopyVolumes}
+                busy={copying}
+                submitting={submitting}
+                onCopy={copyFromShelf}
+              />
             )}
 
             {/* Lookup Error Banner */}
@@ -759,98 +655,16 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
 
             {/* Lookup Results Selector */}
             {!seriesLocked && lookupResults && lookupResults.length > 0 && (
-              <div className="bg-slate-950/95 border border-brand-500/40 rounded-xl p-3 space-y-2.5 shadow-xl" aria-busy={applying || undefined}>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-brand-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" /> {isMpEdition(form) ? t('Treffer auswählen (Manga Passion zuerst):') : t('Treffer auswählen (AniList / MyAnimeList):')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={closeLookupResults}
-                    disabled={applying}
-                    className="text-slate-400 hover:text-white text-[11px] disabled:opacity-50"
-                  >
-                    {t('Schließen')}
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                  {lookupResults.map(item => {
-                    const isApplying = applyingId === lookupKey(item);
-                    return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => applyLookupResult(item)}
-                      disabled={applying}
-                      aria-busy={isApplying || undefined}
-                      className={`flex items-center gap-2.5 p-2 rounded-lg border text-left transition-all group disabled:cursor-wait ${
-                        applying && !isApplying ? 'opacity-50' : ''
-                      } ${
-                        item.source === 'manga_passion'
-                          ? 'bg-gradient-to-r from-emerald-950/30 to-slate-900/90 border-emerald-500/40 hover:border-emerald-400 hover:from-emerald-950/50'
-                          : 'bg-slate-900/80 hover:bg-brand-950/60 border-slate-800 hover:border-brand-500/50'
-                      }`}
-                    >
-                      {item.cover_image && !failedImages[`lookup-${item.id || item.title}`] ? (
-                        <img
-                          {...assetImgProps(item.cover_image)}
-                          alt={item.title}
-                          onError={() => setFailedImages(prev => ({ ...prev, [`lookup-${item.id || item.title}`]: true }))}
-                          className="w-10 h-14 object-cover rounded shadow shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-14 bg-slate-800 rounded shrink-0 flex items-center justify-center text-slate-400">
-                          <BookOpen className="w-5 h-5" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          {item.source === 'manga_passion' && (
-                            <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
-                              <Library className="w-3 h-3" aria-hidden="true" />{t('Manga Passion')}
-                            </span>
-                          )}
-                          {(item.source === 'manga_passion' ? alsoOnLabels(item) : lookupSourceLabels(item)).map((label) => (
-                            <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
-                              <Globe className="w-3 h-3" aria-hidden="true" />{label}
-                            </span>
-                          ))}
-                          {item.format_label && (
-                            <span className="inline-flex items-center bg-amber-500/20 text-amber-200 border border-amber-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">{item.format_label}</span>
-                          )}
-                          {isApplying && (
-                            <span className="flex items-center gap-1 text-[10px] text-brand-300">
-                              <RefreshCw className="w-3 h-3 animate-spin" /> {t('Wird übernommen…')}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-semibold text-white truncate group-hover:text-brand-300">
-                          {item.title}
-                        </p>
-                        <p className="text-[11px] text-slate-400 truncate">
-                          {item.author || item.alt_title || t('Unbekannt')}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
-                          {item.publisher && (
-                            <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]">
-                              {item.publisher}
-                            </span>
-                          )}
-                          {item.total_volumes && (
-                            <span className="bg-slate-800 text-slate-200 border border-slate-700/80 px-1.5 py-0.5 rounded font-bold">
-                              {formatCount(item.total_volumes, 'Band', 'Bände')}
-                            </span>
-                          )}
-                          <span className="bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-400">
-                            {mangaStatusLabel(item.status)}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <LookupResultsPanel
+                results={lookupResults}
+                mpFirst={isMpEdition(form)}
+                applying={applying}
+                applyingId={applyingId}
+                onApply={applyLookupResult}
+                onClose={closeLookupResults}
+                failedImages={failedImages}
+                setFailedImages={setFailedImages}
+              />
             )}
 
           </div>
