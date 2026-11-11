@@ -69,4 +69,15 @@ describe('ReaderBar', () => {
     expect(errors).not.toHaveBeenCalled();
     errors.mockRestore();
   });
+
+  it('"+ Band n gelesen" marks the next unread volume, only for a reader who may tick', () => {
+    const onMarkNextRead = vi.fn();
+    const { rerender } = render(<ReaderBar {...props({ canToggle: true, nextUnreadVolume: { id: 9, volume_number: '4' }, onMarkNextRead })} />);
+    fireEvent.click(screen.getByRole('button', { name: /\+ Band 4 gelesen/ }));
+    expect(onMarkNextRead).toHaveBeenCalledTimes(1);
+    rerender(<ReaderBar {...props({ canToggle: false, nextUnreadVolume: { id: 9, volume_number: '4' }, onMarkNextRead })} />);
+    expect(screen.queryByRole('button', { name: /\+ Band 4 gelesen/ })).toBeNull();
+    rerender(<ReaderBar {...props({ canToggle: true, nextUnreadVolume: null, onMarkNextRead })} />);
+    expect(screen.queryByRole('button', { name: /gelesen$/ })).toBeNull();
+  });
 });

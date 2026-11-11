@@ -3687,5 +3687,7 @@
     "one": "{n} tome comme « Manquant »",
     "many": "{n} tomes comme « Manquant »",
     "other": "{n} tomes comme « Manquant »"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "Marquer le prochain tome non lu comme lu",
+  "+ Band {volume} gelesen": "+ Tome {volume} lu"
 }

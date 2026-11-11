@@ -3581,5 +3581,7 @@
   "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
     "one": "{n} cilt „Eksik“ olarak",
     "other": "{n} cilt „Eksik“ olarak"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "Sonraki okunmamış cildi okundu olarak işaretle",
+  "+ Band {volume} gelesen": "+ Cilt {volume} okundu"
 }

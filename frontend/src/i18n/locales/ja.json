@@ -3475,5 +3475,7 @@
   },
   "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
     "other": "{n} 巻 を「不足」として"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "次の未読巻を既読にする",
+  "+ Band {volume} gelesen": "+ {volume}巻を既読"
 }

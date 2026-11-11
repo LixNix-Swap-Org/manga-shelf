@@ -501,7 +501,7 @@ manga-shelf/
 │           │   ├── EditionTab.jsx # tab "Edition & Abgleich" (?tab=edition): gap detection ("Lücken zeigen", "Lücken füllen"), Manga Passion check, editions (second EditionSwitcher, ids with suffix -tab), volumes from another shelf
 │           │   ├── EditionSwitcher.jsx # editions of the same work (work_key) as pills under the title; "+ Ausgabe" dialog: create (POST /mangas/:id/editions), link/unlink (PUT /mangas/:id/work), suggestions by title + author
 │           │   ├── CollectingControl.jsx # collecting status (aktiv/pausiert/abgebrochen)
-│           │   ├── ReaderBar.jsx # reader toggle
+│           │   ├── ReaderBar.jsx # reader toggle, "Gelesen am", "+ Band n gelesen" (first owned regular volume the shown reader has not read, via handleToggleVolumeRead)
 │           │   ├── ChapterProgress.jsx # panel "Kapitel" of a webtoon: own chapter (+1, "Gelesen bis Kapitel", undo toast), the other readers; withChapter() patches the detail
 │           │   ├── CopyVolumesNotice.jsx # notice above the volumes (catalog stage c2): "N Bände aus „<Regal>“ fehlen hier." with "Bände übernehmen" (GET …/volume-sources, POST …/volumes/copy); only for editors online with more than one shelf
 │           │   ├── CatalogNotice.jsx # notice in the series edit form (migration 46): an edition also in a shelf the caller only reads keeps changes in this shelf, local fields, "Auf Katalogstand zurücksetzen" (POST /mangas/:id/catalog-reset)

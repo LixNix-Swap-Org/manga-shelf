@@ -1,16 +1,17 @@
 import { useId } from 'react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Check } from 'lucide-react';
 import { localDateString } from '../../hooks/useVolumeActions';
 import { rich } from '../../i18n/react.jsx';
 import { t } from '../../i18n/index.js';
 
 /**
  * Reader switcher with read / unread progress of the selected reader. With setReadDate (and canToggle) a "Gelesen am"
- * date for the next read toggles; an empty field (the default) means now.
+ * date for the next read toggles; an empty field (the default) means now. With `onMarkNextRead`, "+ Band n gelesen" marks
+ * the first owned volume the shown reader has not read (undo from the toast, like a tick on the volume).
  */
 export default function ReaderBar({
   readers, selectedReaderId, setSelectedReaderId, user, ownedCount, currentReaderReadCount, currentReaderUnreadCount,
-  canToggle = false, readDate = null, setReadDate
+  canToggle = false, readDate = null, setReadDate, nextUnreadVolume = null, onMarkNextRead
 }) {
   const dateId = useId();
   if (readers.length === 0) return null;
@@ -51,6 +52,19 @@ export default function ReaderBar({
                 })}
               </div>
             </div>
+
+            {canToggle && nextUnreadVolume && onMarkNextRead && (
+              <button
+                type="button"
+                id="btn-mark-next-read"
+                onClick={onMarkNextRead}
+                className="inline-flex items-center gap-1.5 min-h-[36px] px-3 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
+                title={t('Den nächsten ungelesenen Band als gelesen markieren')}
+              >
+                <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                {t('+ Band {volume} gelesen', { volume: nextUnreadVolume.volume_number })}
+              </button>
+            )}
 
             {canToggle && setReadDate && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">

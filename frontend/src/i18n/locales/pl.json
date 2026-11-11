@@ -3793,5 +3793,7 @@
     "few": "{n} tomy jako „Brak”",
     "many": "{n} tomów jako „Brak”",
     "other": "{n} tomu jako „Brak”"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "Oznacz następny nieprzeczytany tom jako przeczytany",
+  "+ Band {volume} gelesen": "+ Tom {volume} przeczytany"
 }

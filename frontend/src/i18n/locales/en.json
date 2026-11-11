@@ -3581,5 +3581,7 @@
   "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
     "one": "{n} volume as “Missing”",
     "other": "{n} volumes as “Missing”"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "Mark the next unread volume as read",
+  "+ Band {volume} gelesen": "+ Volume {volume} read"
 }

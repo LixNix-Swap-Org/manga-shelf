@@ -32,7 +32,7 @@ import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
 import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { viewSessionEnding } from './utils/viewState';
-import { inferVolumeType, regularVolumeNumber, normalizePubName, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems } from './utils/volumeHelpers';
+import { inferVolumeType, regularVolumeNumber, normalizePubName, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems, hasUserRead } from './utils/volumeHelpers';
 import { t } from './i18n/index.js';
 import { useShelfAccess } from './hooks/useShelfViewer';
 import { editionCurrency } from './utils/editions';
@@ -276,6 +276,12 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const currentReaderStats = readers.find(r => String(r.user_id) === String(selectedReaderId)) || readers.find(r => String(r.user_id) === String(user?.id)) || null;
   const currentReaderReadCount = currentReaderStats ? currentReaderStats.read_count : volumes.filter(v => v.is_read && v.status === 'Vorhanden').length;
   const currentReaderUnreadCount = currentReaderStats ? currentReaderStats.unread_count : Math.max(0, ownedCount - currentReaderReadCount);
+  // "+ Band n gelesen" in the reader bar: the first owned regular volume the shown reader has not read
+  const nextReaderId = canToggleOthers && selectedReaderId && selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
+  const shownReaderId = selectedReaderId && selectedReaderId !== 'ALL' ? selectedReaderId : user?.id;
+  const nextUnreadVolume = canToggle && String(shownReaderId) === String(nextReaderId)
+    ? volumes.find((v) => v.status === 'Vorhanden' && inferVolumeType(v) === 'volume' && !hasUserRead(v, nextReaderId, user?.id)) || null
+    : null;
 
   // Items to render across Spine Shelf, Grid View, and Table View (interleaving gaps if showGaps is active)
   const gapsOfficial = Boolean(mpGapData?.matched && mpGapData.link_confirmed !== false);
@@ -689,6 +695,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
             canToggle={canToggle}
             readDate={readDate}
             setReadDate={setReadDate}
+            nextUnreadVolume={nextUnreadVolume}
+            onMarkNextRead={nextUnreadVolume ? () => handleToggleVolumeRead(nextUnreadVolume, nextReaderId) : undefined}
           />
 
           {/* Ownership per person (only with several users) */}

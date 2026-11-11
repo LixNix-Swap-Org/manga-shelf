@@ -3687,5 +3687,7 @@
     "one": "{n} volume como “Falta”",
     "many": "{n} volumes como “Falta”",
     "other": "{n} volumes como “Falta”"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "Marcar o próximo volume não lido como lido",
+  "+ Band {volume} gelesen": "+ Volume {volume} lido"
 }

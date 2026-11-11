@@ -3687,5 +3687,7 @@
     "one": "{n} tomo como «Falta»",
     "many": "{n} tomos como «Falta»",
     "other": "{n} tomos como «Falta»"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "Marcar el siguiente tomo sin leer como leído",
+  "+ Band {volume} gelesen": "+ Tomo {volume} leído"
 }

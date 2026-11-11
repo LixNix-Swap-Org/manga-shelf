@@ -3581,5 +3581,7 @@
   "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
     "one": "{n} deel als „Ontbreekt”",
     "other": "{n} delen als „Ontbreekt”"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "Het volgende ongelezen deel als gelezen markeren",
+  "+ Band {volume} gelesen": "+ Deel {volume} gelezen"
 }

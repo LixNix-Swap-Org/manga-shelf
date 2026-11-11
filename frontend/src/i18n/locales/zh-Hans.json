@@ -3475,5 +3475,7 @@
   },
   "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
     "other": "{n} 卷 记为“缺少”"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "将下一本未读卷标为已读",
+  "+ Band {volume} gelesen": "+ 第 {volume} 卷已读"
 }

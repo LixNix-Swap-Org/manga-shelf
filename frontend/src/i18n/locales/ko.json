@@ -3475,5 +3475,7 @@
   },
   "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
     "other": "{n}권 „없음“으로"
-  }
+  },
+  "Den nächsten ungelesenen Band als gelesen markieren": "다음 안 읽은 권을 읽음으로 표시",
+  "+ Band {volume} gelesen": "+ {volume}권 읽음"
 }
