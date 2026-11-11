@@ -731,6 +731,7 @@ function App() {
               )}
               {app && <Route path="/lokal" element={<LocalSetup user={localMode ? user : null} onStart={handleStartLocal} />} />}
               <Route path="/" element={<RequireAuth user={user}><div className={user?.offline ? 'max-sm:pb-[calc(env(safe-area-inset-bottom)+4rem)]' : 'max-sm:pb-[calc(env(safe-area-inset-bottom)+0.5rem)]'}><Dashboard user={user} onLogout={handleLogout} onLocalReplaced={handleLocalReplaced} /></div></RequireAuth>} />
+              <Route path="/statistik/:tab?" element={<RequireAuth user={user}><div className={user?.offline ? 'max-sm:pb-[calc(env(safe-area-inset-bottom)+4rem)]' : 'max-sm:pb-[calc(env(safe-area-inset-bottom)+0.5rem)]'}><Dashboard user={user} onLogout={handleLogout} onLocalReplaced={handleLocalReplaced} /></div></RequireAuth>} />
               <Route path="/manga/:id" element={<RequireAuth user={user}><MangaDetail user={user} onUnauthorized={handleUnauthorized} /></RequireAuth>} />
               <Route path="*" element={<Navigate to={user ? '/' : (app && (localMode || !activeServer) ? '/server' : '/login')} replace />} />
             </Routes>

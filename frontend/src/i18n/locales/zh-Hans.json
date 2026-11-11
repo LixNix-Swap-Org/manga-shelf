@@ -1072,7 +1072,6 @@
   "Filter & Suche zurücksetzen": "重置筛选和搜索",
   "Filter und Suche zurücksetzen": "重置筛选和搜索",
   "Filter zurücksetzen": "重置筛选",
-  "Finanzen & Sammelzeit": "财务和收集时长",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "财务、每月支出、出版社图表、收集时长和阅读追踪",
   "Folge": "集",
   "Folge muss eine ganze Zahl ab 1 sein": "集数必须是不小于 1 的整数",
@@ -1536,7 +1535,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "设置每一季从第几集开始。季的划分对所有人生效。",
   "Lese-Fortschritt der Community": "社区阅读进度",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "阅读追踪与 TBR（待读书堆）",
-  "Lese-Tracking (Nutzer)": "阅读追踪（用户）",
   "Lesefortschritt": "阅读进度",
   "Lesefortschritt (höchster %)": "阅读进度（最高 %）",
   "Leser": "读者",
@@ -2321,7 +2319,6 @@
   "Startstatus": "初始状态",
   "Statistik offline nicht verfügbar": "离线时统计不可用",
   "Statistik öffnen": "打开统计",
-  "Statistik- & Finanz-Dashboard": "统计和财务面板",
   "Statistik- & Finanz-Dashboard öffnen": "打开统计和财务面板",
   "Statistiken": "统计",
   "Statistiken konnten nicht geladen werden": "无法加载统计数据",
@@ -2598,7 +2595,6 @@
   "Verlage zusammenführen": "合并出版社",
   "Verlage zusammenführen…": "合并出版社…",
   "Verlags-Aliase vereinheitlichen": "统一出版社别名",
-  "Verlagsdiagramm": "出版社图表",
   "Verlagsverteilung & Sammlungsanteile": "出版社分布和收藏占比",
   "Verlag|Verlage": {
     "other": "家出版社"
@@ -3424,5 +3420,12 @@
   "Regal und Person: {label}": "书架和人员：{label}",
   "Person filtern": "按人员筛选",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "显示此人拥有其中一卷的系列。",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "只有一个书架和一个人，这里无需切换。已保存的筛选在下方。"
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "只有一个书架和一个人，这里无需切换。已保存的筛选在下方。",
+  "Überblick": "概览",
+  "Finanzen": "财务",
+  "Pro Person": "按人",
+  "Lesen": "阅读",
+  "Verlage": "出版社",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "当多人拥有分册时，这里会显示谁拥有什么。",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "目前没有借出或借入的分册。"
 }

@@ -11,7 +11,7 @@ import useCollectionFilters from '../hooks/useCollectionFilters';
 import useShoppingList from '../hooks/useShoppingList';
 import CollectionToolbar from '../components/dashboard/CollectionToolbar';
 import ShelfScopeBadge from '../components/common/ShelfScopeBadge';
-import StatsModal from '../components/modals/StatsModal';
+import StatsPage from '../components/modals/StatsPage';
 import TrashModal from '../components/modals/TrashModal';
 import ShoppingListView from '../components/dashboard/ShoppingListView';
 import ReleaseRadarView from '../components/dashboard/ReleaseRadarView';
@@ -175,33 +175,34 @@ const statsBody = {
 };
 
 describe('screens narrowed by the shelf', () => {
-  it('StatsModal: asks for the shelf, names it, clears it; the reading history follows; a 404 drops the shelf', async () => {
+  it('StatsPage: asks for the shelf, names it in the chip, changes it; the reading history follows; a 404 drops the shelf', async () => {
     routes['/api/stats'] = () => fakeResponse(200, statsBody);
     routes['/api/stats/reading'] = () => fakeResponse(200, {
       user: { id: 1, username: 'anna' }, months: 1, by_month: [{ month: '2026-10', volumes: 0, pages: 0, series: 0 }],
       backlog_by_month: [{ month: '2026-10', owned: 1, read: 1, backlog: 0 }], this_year: { year: 2026, volumes: 0, pages: 0 },
       last_year: { year: 2025, volumes: 0, pages: 0 }, streak: { longest: 0, longest_end: null, current: 0 }, unknown_date: 0, continue_reading: []
     });
-    const onClearShelf = vi.fn();
+    const setShelfFilter = vi.fn();
     const onShelfMissing = vi.fn();
-    const ui = (shelfId, shelfName) => (
+    const shelves = [{ id: 1, name: 'Erstes', count: 4 }, { id: 3, name: 'Zweites', count: 2 }];
+    const ui = (shelfId, shelfName, tab = 'ueberblick') => (
       <MemoryRouter>
-        <StatsModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'admin' }} shelfId={shelfId} shelfName={shelfName} onClearShelf={onClearShelf} onShelfMissing={onShelfMissing} />
+        <StatsPage user={{ id: 1, role: 'admin' }} tab={tab} onTab={vi.fn()} onBack={vi.fn()} shelfId={shelfId} shelfName={shelfName} shelves={shelves} setShelfFilter={setShelfFilter} onShelfMissing={onShelfMissing} />
       </MemoryRouter>
     );
     const { rerender } = render(ui('3', 'Zweites'));
-    const dialog = await screen.findByRole('dialog', { name: /Statistik- & Finanz-Dashboard/ });
-    expect(within(dialog).getByText('Regal: Zweites')).toBeTruthy();
+    const page = await screen.findByRole('region', { name: 'Statistiken' });
+    expect(within(page).getByRole('button', { name: 'Regal und Person: Zweites' })).toBeTruthy();
     await waitFor(() => expect(requested('/api/stats?')).toEqual(['/api/stats?shelf_id=3']));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Alle Regale anzeigen' }));
-    expect(onClearShelf).toHaveBeenCalledTimes(1);
+    fireEvent.change(within(page).getByRole('combobox', { name: 'Regal filtern', hidden: true }), { target: { value: 'ALL' } });
+    expect(setShelfFilter).toHaveBeenCalledWith('ALL');
 
-    fireEvent.click(await screen.findByRole('button', { name: /Leseverlauf/ }));
+    rerender(ui('3', 'Zweites', 'verlauf'));
     await waitFor(() => expect(requested('/api/stats/reading')).toEqual(['/api/stats/reading?user_id=1&shelf_id=3']));
 
-    rerender(ui(null, null));
+    rerender(ui(null, null, 'verlauf'));
     await waitFor(() => expect(requested('/api/stats').filter((u) => u === '/api/stats')).toHaveLength(1));
-    expect(screen.queryByText('Regal: Zweites')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Regal und Person: Alle Regale' })).toBeTruthy();
 
     routes['/api/stats'] = (path) => (path.includes('shelf_id') ? fakeResponse(404, { error: 'Regal nicht gefunden' }) : fakeResponse(200, statsBody));
     rerender(ui('9', '#9'));

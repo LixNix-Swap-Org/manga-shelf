@@ -363,14 +363,20 @@ async function runDeepTestSuite() {
     await editionTour(page, frierenId, snap);
 
     // STEP 4: Statistics
-    console.log('\n--- Step 4: Statistics Modal & Tabs ---');
+    console.log('\n--- Step 4: Statistics page & tabs ---');
     await clickSelector(page, '#btn-open-stats');
+    await page.waitForFunction(() => location.pathname === '/statistik', { timeout: 10000 });
+    await page.waitForSelector('#btn-stats-tab-finanzen', { visible: true, timeout: 10000 });
     await snap('05_stats_overview');
-    await clickText(page, 'Verlagsdiagramm');
+    await clickSelector(page, '#btn-stats-tab-finanzen');
+    await snap('05a_stats_finances');
+    await clickSelector(page, '#btn-stats-tab-verlage');
+    await page.waitForFunction(() => location.pathname === '/statistik/verlage', { timeout: 10000 });
     await snap('05b_stats_publishers');
-    await clickText(page, 'Lese-Tracking');
+    await clickSelector(page, '#btn-stats-tab-lesen');
     await snap('05c_stats_reading');
-    await clickSelector(page, '#btn-close-stats-modal');
+    await clickSelector(page, '#btn-stats-back');
+    await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
 
     // STEP 5: Shopping list
     console.log('\n--- Step 5: Shopping List / Buchladen-Modus ---');

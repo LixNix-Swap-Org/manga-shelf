@@ -1112,7 +1112,6 @@
   "Filter & Suche zurücksetzen": "Restablecer filtros y búsqueda",
   "Filter und Suche zurücksetzen": "Restablecer filtros y búsqueda",
   "Filter zurücksetzen": "Restablecer filtros",
-  "Finanzen & Sammelzeit": "Finanzas y tiempo de colección",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Finanzas, gastos mensuales, gráfico de editoriales, tiempo de colección y seguimiento de lectura",
   "Folge": "Episodio",
   "Folge muss eine ganze Zahl ab 1 sein": "El episodio debe ser un número entero a partir de 1",
@@ -1592,7 +1591,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Indica en qué episodio empieza cada temporada. Las temporadas valen para todos.",
   "Lese-Fortschritt der Community": "Progreso de lectura de la comunidad",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Seguimiento de lectura y pila de pendientes (libros sin leer)",
-  "Lese-Tracking (Nutzer)": "Seguimiento de lectura (usuarios)",
   "Lesefortschritt": "Progreso de lectura",
   "Lesefortschritt (höchster %)": "Progreso de lectura (% más alto)",
   "Leser": "Lector",
@@ -2399,7 +2397,6 @@
   "Startstatus": "Estado inicial",
   "Statistik offline nicht verfügbar": "Estadísticas no disponibles sin conexión",
   "Statistik öffnen": "Abrir estadísticas",
-  "Statistik- & Finanz-Dashboard": "Panel de estadísticas y finanzas",
   "Statistik- & Finanz-Dashboard öffnen": "Abrir panel de estadísticas y finanzas",
   "Statistiken": "Estadísticas",
   "Statistiken konnten nicht geladen werden": "No se pudieron cargar las estadísticas",
@@ -2678,7 +2675,6 @@
   "Verlage zusammenführen": "Combinar editoriales",
   "Verlage zusammenführen…": "Combinar editoriales…",
   "Verlags-Aliase vereinheitlichen": "Unificar alias de editoriales",
-  "Verlagsdiagramm": "Gráfico de editoriales",
   "Verlagsverteilung & Sammlungsanteile": "Distribución por editorial y cuotas de la colección",
   "Verlag|Verlage": {
     "one": "editorial",
@@ -3632,5 +3628,12 @@
   "Regal und Person: {label}": "Estantería y persona: {label}",
   "Person filtern": "Filtrar por persona",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Muestra las series de las que esta persona tiene un tomo.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Una estantería, una persona: aquí no hay nada que cambiar. Tus filtros guardados están abajo."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Una estantería, una persona: aquí no hay nada que cambiar. Tus filtros guardados están abajo.",
+  "Überblick": "Resumen",
+  "Finanzen": "Finanzas",
+  "Pro Person": "Por persona",
+  "Lesen": "Lectura",
+  "Verlage": "Editoriales",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Cuando varias personas tengan tomos, aquí verás de quién es cada uno.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Ahora mismo no hay nada prestado."
 }

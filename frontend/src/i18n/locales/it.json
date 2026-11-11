@@ -1112,7 +1112,6 @@
   "Filter & Suche zurücksetzen": "Azzera filtri e ricerca",
   "Filter und Suche zurücksetzen": "Azzera filtri e ricerca",
   "Filter zurücksetzen": "Azzera filtri",
-  "Finanzen & Sammelzeit": "Finanze e tempo di collezione",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Finanze, spese mensili, grafico degli editori, tempo di collezione e tracciamento delle letture",
   "Folge": "Episodio",
   "Folge muss eine ganze Zahl ab 1 sein": "L’episodio deve essere un intero a partire da 1",
@@ -1592,7 +1591,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Indica da quale episodio inizia ogni stagione. Le stagioni valgono per tutti.",
   "Lese-Fortschritt der Community": "Progressi di lettura della community",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Tracciamento delle letture e pila da leggere (libri non ancora letti)",
-  "Lese-Tracking (Nutzer)": "Tracciamento delle letture (utenti)",
   "Lesefortschritt": "Progresso di lettura",
   "Lesefortschritt (höchster %)": "Progresso di lettura (% più alta)",
   "Leser": "Lettore",
@@ -2399,7 +2397,6 @@
   "Startstatus": "Stato iniziale",
   "Statistik offline nicht verfügbar": "Statistiche non disponibili offline",
   "Statistik öffnen": "Apri statistiche",
-  "Statistik- & Finanz-Dashboard": "Dashboard di statistiche e finanze",
   "Statistik- & Finanz-Dashboard öffnen": "Apri la dashboard di statistiche e finanze",
   "Statistiken": "Statistiche",
   "Statistiken konnten nicht geladen werden": "Impossibile caricare le statistiche",
@@ -2678,7 +2675,6 @@
   "Verlage zusammenführen": "Unisci editori",
   "Verlage zusammenführen…": "Unisci editori…",
   "Verlags-Aliase vereinheitlichen": "Unifica gli alias degli editori",
-  "Verlagsdiagramm": "Grafico degli editori",
   "Verlagsverteilung & Sammlungsanteile": "Distribuzione degli editori e quote della collezione",
   "Verlag|Verlage": {
     "one": "editore",
@@ -3632,5 +3628,12 @@
   "Regal und Person: {label}": "Scaffale e persona: {label}",
   "Person filtern": "Filtra per persona",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Mostra le serie di cui questa persona possiede un volume.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Uno scaffale, una persona: qui non c'è niente da cambiare. I filtri salvati sono qui sotto."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Uno scaffale, una persona: qui non c'è niente da cambiare. I filtri salvati sono qui sotto.",
+  "Überblick": "Panoramica",
+  "Finanzen": "Finanze",
+  "Pro Person": "Per persona",
+  "Lesen": "Lettura",
+  "Verlage": "Editori",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Quando più persone possiedono volumi, qui vedi chi possiede cosa.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Al momento non c’è nulla in prestito."
 }

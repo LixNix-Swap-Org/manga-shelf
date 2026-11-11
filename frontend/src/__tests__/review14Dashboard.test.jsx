@@ -16,7 +16,7 @@ vi.mock('../hooks/useShoppingList', () => ({ default: () => state.shopping }));
 vi.mock('../hooks/useReleaseRadar', () => ({ default: (args) => { state.radarArgs = args; return state.radar; } }));
 vi.mock('../hooks/usePwaInstall', () => ({ default: () => ({ isInstallable: false, isInstalledApp: false, handleInstallClick: vi.fn() }) }));
 vi.mock('../components/common/BarcodeScannerButton', () => ({ default: () => null }));
-vi.mock('../components/modals/StatsModal', () => ({ default: (props) => { state.statsProps = props; return <div>Statistik-Dialog</div>; } }));
+vi.mock('../components/modals/StatsPage', () => ({ default: (props) => { state.statsProps = props; return <div>Statistik-Dialog</div>; } }));
 vi.mock('../components/modals/AddMangaModal', () => ({ default: () => null }));
 vi.mock('../components/modals/UserManagementModal', () => ({ default: () => null }));
 vi.mock('../components/modals/ChangePasswordModal', () => ({ default: () => null }));
@@ -34,6 +34,7 @@ const renderDashboard = (url, user) => render(
   <MemoryRouter initialEntries={[url]}>
     <Routes>
       <Route path="/" element={<Dashboard user={user} onLogout={vi.fn()} />} />
+      <Route path="/statistik/:tab?" element={<Dashboard user={user} onLogout={vi.fn()} />} />
     </Routes>
   </MemoryRouter>
 );

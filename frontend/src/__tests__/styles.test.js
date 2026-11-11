@@ -221,7 +221,7 @@ describe('index.html and fonts', () => {
 
 describe('dialog overlays', () => {
   const OVERLAY_FILES = [
-    'components/modals/AddMangaModal.jsx', 'components/modals/StatsModal.jsx', 'components/modals/BackupRestoreModal.jsx',
+    'components/modals/AddMangaModal.jsx', 'components/modals/BackupRestoreModal.jsx',
     'components/modals/ToolDialog.jsx', 'components/modals/UserManagementModal.jsx', 'components/modals/AccountModal.jsx',
     'components/modals/SystemModal.jsx', 'components/modals/AddAnimeModal.jsx', 'components/detail/VolumeEditModal.jsx',
     'components/detail/GapFillModal.jsx', 'components/detail/BatchAddModal.jsx', 'components/detail/BatchReadModal.jsx',
@@ -307,7 +307,7 @@ describe('dialog overlays', () => {
   });
 
   it('dialogs with a capped height let the whole dialog scroll on short screens', () => {
-    for (const rel of ['components/modals/ToolDialog.jsx', 'components/modals/StatsModal.jsx', 'components/modals/BackupRestoreModal.jsx', 'components/detail/VolumeEditModal.jsx', 'components/detail/MpEditionModal.jsx']) {
+    for (const rel of ['components/modals/ToolDialog.jsx', 'components/modals/BackupRestoreModal.jsx', 'components/detail/VolumeEditModal.jsx', 'components/detail/MpEditionModal.jsx']) {
       const text = fs.readFileSync(path.join(srcDir, rel), 'utf8');
       expect(text, rel).toMatch(/dialog-box[^"]*max-h-\[9\ddvh\] short:max-h-none/);
     }

@@ -274,7 +274,7 @@ The interface switches between four tabs: shelf, shopping list, anime and radar.
 * **Statistics:** spending by purchase date, ownership per person, most valuable series, publishers, reading history over 24 months, series and volumes per language, anime figures (the status tiles count your own list). Totals add euro prices only and list other currencies beside them. The collecting time starts at the earliest purchase or creation date unless an admin sets the start date by hand; a hand-set date is marked, and the date form has a button to go back to the automatic start.
 * **CSV:** export and import of the whole collection with a dry run (owners, reading state, wishlist, editions, webtoons with their chapter progress included; a print edition and a webtoon of the same title stay two series). The import accepts German or English headers.
 * **Backups and restore** (admins): see [section 6](#backups-and-restore).
-* **Trash:** deleted series and volumes can be restored for 30 days ("Verwaltung" → "Papierkorb", also in the statistics dialog).
+* **Trash:** deleted series and volumes can be restored for 30 days ("Verwaltung" → "Papierkorb", also on the statistics page).
 * **Tidy up:** "Merge publishers" unifies spellings, editable tags, "Tidy up collection" lists incomplete or contradictory entries with one-click fixes.
 * **Shelves:** the household shelf is shared by default; more shelves keep a collection to their members, and the collection toolbar gets a shelf filter once you see more than one ([Users and shelves](#users-and-shelves)).
 * **Users and roles:** Admin, Editor, Guest ([Users and shelves](#users-and-shelves)); "End all sessions"; "Connect with app" shows a QR code for the phone apps.

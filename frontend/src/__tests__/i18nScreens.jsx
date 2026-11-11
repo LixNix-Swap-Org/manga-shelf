@@ -38,10 +38,6 @@ export function fixtureFetch({ signedIn = true } = {}) {
   });
 }
 
-const clickTab = (selector, index) => () => {
-  const tabs = document.querySelectorAll(selector);
-  if (tabs[index]) fireEvent.click(tabs[index]);
-};
 
 /** The main screens: URL, stored view settings and an optional step after the first render. */
 export const SCREENS = [
@@ -55,10 +51,14 @@ export const SCREENS = [
   { name: 'anime-radar', url: '/?view=episodes' },
   { name: 'anime-radar-manga', url: '/?view=episodes', step: () => fireEvent.click(document.getElementById('anime-radar-tab-manga') || document.querySelectorAll('[role="tab"]')[1]) },
   { name: 'detail', url: `/manga/${ID}` },
-  { name: 'stats', url: '/?view=stats' },
-  { name: 'stats-publishers', url: '/?view=stats', step: clickTab('[role="dialog"] [role="group"] button', 1) },
-  { name: 'stats-reading', url: '/?view=stats', step: clickTab('[role="dialog"] [role="group"] button', 2) },
-  { name: 'stats-timeline', url: '/?view=stats', step: clickTab('[role="dialog"] [role="group"] button', 3) },
+  { name: 'stats', url: '/statistik' },
+  { name: 'stats-finances', url: '/statistik/finanzen' },
+  { name: 'stats-persons', url: '/statistik/personen' },
+  { name: 'stats-publishers', url: '/statistik/verlage' },
+  { name: 'stats-reading', url: '/statistik/lesen' },
+  { name: 'stats-timeline', url: '/statistik/verlauf' },
+  { name: 'stats-lent', url: '/statistik/verliehen' },
+  { name: 'stats-anime', url: '/statistik/anime' },
   { name: 'account-password', url: '/', session: { mangashelf_reopen_account: 'password' } },
   { name: 'account-keys', url: '/', session: { mangashelf_reopen_account: 'keys' } },
   { name: 'account-language', url: '/', session: { mangashelf_reopen_account: 'language' } },

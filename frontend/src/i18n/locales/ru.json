@@ -1132,7 +1132,6 @@
   "Filter & Suche zurücksetzen": "Сбросить фильтры и поиск",
   "Filter und Suche zurücksetzen": "Сбросить фильтры и поиск",
   "Filter zurücksetzen": "Сбросить фильтры",
-  "Finanzen & Sammelzeit": "Финансы и время сбора",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Финансы, расходы по месяцам, диаграмма издательств, время сбора и учёт чтения",
   "Folge": "Эпизод",
   "Folge muss eine ganze Zahl ab 1 sein": "Эпизод должен быть целым числом от 1",
@@ -1620,7 +1619,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Укажите, с какого эпизода начинается каждый сезон. Сезоны действуют для всех.",
   "Lese-Fortschritt der Community": "Прогресс чтения сообщества",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Учёт чтения и стопка непрочитанного",
-  "Lese-Tracking (Nutzer)": "Учёт чтения (пользователи)",
   "Lesefortschritt": "Прогресс чтения",
   "Lesefortschritt (höchster %)": "Прогресс чтения (макс. %)",
   "Leser": "Читатель",
@@ -2438,7 +2436,6 @@
   "Startstatus": "Начальный статус",
   "Statistik offline nicht verfügbar": "Статистика недоступна офлайн",
   "Statistik öffnen": "Открыть статистику",
-  "Statistik- & Finanz-Dashboard": "Панель статистики и финансов",
   "Statistik- & Finanz-Dashboard öffnen": "Открыть панель статистики и финансов",
   "Statistiken": "Статистика",
   "Statistiken konnten nicht geladen werden": "Не удалось загрузить статистику",
@@ -2718,7 +2715,6 @@
   "Verlage zusammenführen": "Объединить издательства",
   "Verlage zusammenführen…": "Объединить издательства…",
   "Verlags-Aliase vereinheitlichen": "Объединить псевдонимы издательств",
-  "Verlagsdiagramm": "Диаграмма издательств",
   "Verlagsverteilung & Sammlungsanteile": "Распределение по издательствам и доли коллекции",
   "Verlag|Verlage": {
     "one": "издательство",
@@ -3736,5 +3732,12 @@
   "Regal und Person: {label}": "Полка и человек: {label}",
   "Person filtern": "Фильтр по человеку",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Показывает серии, в которых у этого человека есть том.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Одна полка, один человек: переключать нечего. Сохранённые фильтры ниже."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Одна полка, один человек: переключать нечего. Сохранённые фильтры ниже.",
+  "Überblick": "Обзор",
+  "Finanzen": "Финансы",
+  "Pro Person": "По людям",
+  "Lesen": "Чтение",
+  "Verlage": "Издательства",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Когда тома есть у нескольких людей, здесь видно, у кого что.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Сейчас ничего не одолжено и не взято."
 }

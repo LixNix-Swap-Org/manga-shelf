@@ -1092,7 +1092,6 @@
   "Filter & Suche zurücksetzen": "Filters en zoekopdracht wissen",
   "Filter und Suche zurücksetzen": "Filters en zoekopdracht wissen",
   "Filter zurücksetzen": "Filters wissen",
-  "Finanzen & Sammelzeit": "Financiën en verzameltijd",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Financiën, maanduitgaven, uitgeversdiagram, verzameltijd en leesvoortgang",
   "Folge": "Aflevering",
   "Folge muss eine ganze Zahl ab 1 sein": "Aflevering moet een geheel getal vanaf 1 zijn",
@@ -1564,7 +1563,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Leg vast bij welke aflevering elk seizoen begint. De seizoenen gelden voor iedereen.",
   "Lese-Fortschritt der Community": "Leesvoortgang van de community",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Leesvoortgang en TBR (stapel ongelezen boeken)",
-  "Lese-Tracking (Nutzer)": "Leesvoortgang (gebruikers)",
   "Lesefortschritt": "Leesvoortgang",
   "Lesefortschritt (höchster %)": "Leesvoortgang (hoogste %)",
   "Leser": "Lezer",
@@ -2360,7 +2358,6 @@
   "Startstatus": "Beginstatus",
   "Statistik offline nicht verfügbar": "Statistieken offline niet beschikbaar",
   "Statistik öffnen": "Statistieken openen",
-  "Statistik- & Finanz-Dashboard": "Statistieken- en financiëndashboard",
   "Statistik- & Finanz-Dashboard öffnen": "Statistieken- en financiëndashboard openen",
   "Statistiken": "Statistieken",
   "Statistiken konnten nicht geladen werden": "Statistieken konden niet worden geladen",
@@ -2638,7 +2635,6 @@
   "Verlage zusammenführen": "Uitgevers samenvoegen",
   "Verlage zusammenführen…": "Uitgevers samenvoegen…",
   "Verlags-Aliase vereinheitlichen": "Uitgeversaliassen samenvoegen",
-  "Verlagsdiagramm": "Uitgeversdiagram",
   "Verlagsverteilung & Sammlungsanteile": "Uitgeversverdeling en collectieaandelen",
   "Verlag|Verlage": {
     "one": "uitgever",
@@ -3528,5 +3524,12 @@
   "Regal und Person: {label}": "Plank en persoon: {label}",
   "Person filtern": "Filteren op persoon",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Toont de reeksen waarvan deze persoon een deel bezit.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Eén plank, één persoon: hier valt niets te wisselen. Je bewaarde filters staan hieronder."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Eén plank, één persoon: hier valt niets te wisselen. Je bewaarde filters staan hieronder.",
+  "Überblick": "Overzicht",
+  "Finanzen": "Financiën",
+  "Pro Person": "Per persoon",
+  "Lesen": "Lezen",
+  "Verlage": "Uitgevers",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Zodra meerdere personen delen bezitten, zie je hier wie wat heeft.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Er is nu niets uitgeleend of geleend."
 }

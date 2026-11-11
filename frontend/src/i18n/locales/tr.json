@@ -1092,7 +1092,6 @@
   "Filter & Suche zurücksetzen": "Filtreleri ve aramayı sıfırla",
   "Filter und Suche zurücksetzen": "Filtreleri ve aramayı sıfırla",
   "Filter zurücksetzen": "Filtreleri sıfırla",
-  "Finanzen & Sammelzeit": "Finans ve koleksiyon süresi",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Finans, aylık harcamalar, yayıncı grafiği, koleksiyon süresi ve okuma takibi",
   "Folge": "Bölüm",
   "Folge muss eine ganze Zahl ab 1 sein": "Bölüm 1 veya daha büyük bir tam sayı olmalı",
@@ -1564,7 +1563,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Her sezonun hangi bölümle başladığını belirle. Sezonlar herkes için geçerlidir.",
   "Lese-Fortschritt der Community": "Topluluğun okuma ilerlemesi",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Okuma takibi ve SuB (okunmamış kitap yığını)",
-  "Lese-Tracking (Nutzer)": "Okuma takibi (kullanıcılar)",
   "Lesefortschritt": "Okuma ilerlemesi",
   "Lesefortschritt (höchster %)": "Okuma ilerlemesi (en yüksek %)",
   "Leser": "Okuyucu",
@@ -2360,7 +2358,6 @@
   "Startstatus": "Başlangıç durumu",
   "Statistik offline nicht verfügbar": "İstatistikler çevrimdışı kullanılamaz",
   "Statistik öffnen": "İstatistikleri aç",
-  "Statistik- & Finanz-Dashboard": "İstatistik ve finans panosu",
   "Statistik- & Finanz-Dashboard öffnen": "İstatistik ve finans panosunu aç",
   "Statistiken": "İstatistikler",
   "Statistiken konnten nicht geladen werden": "İstatistikler yüklenemedi",
@@ -2638,7 +2635,6 @@
   "Verlage zusammenführen": "Yayıncıları birleştir",
   "Verlage zusammenführen…": "Yayıncıları birleştir…",
   "Verlags-Aliase vereinheitlichen": "Yayınevi takma adlarını birleştir",
-  "Verlagsdiagramm": "Yayıncı grafiği",
   "Verlagsverteilung & Sammlungsanteile": "Yayıncı dağılımı ve koleksiyon payları",
   "Verlag|Verlage": {
     "one": "yayıncı",
@@ -3528,5 +3524,12 @@
   "Regal und Person: {label}": "Raf ve kişi: {label}",
   "Person filtern": "Kişiye göre filtrele",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Bu kişinin cildine sahip olduğu serileri gösterir.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Tek raf, tek kişi: burada değiştirilecek bir şey yok. Kayıtlı filtrelerin aşağıda."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Tek raf, tek kişi: burada değiştirilecek bir şey yok. Kayıtlı filtrelerin aşağıda.",
+  "Überblick": "Genel bakış",
+  "Finanzen": "Finans",
+  "Pro Person": "Kişi başına",
+  "Lesen": "Okuma",
+  "Verlage": "Yayınevleri",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Birden fazla kişinin cildi olduğunda burada kimin neye sahip olduğu görünür.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Şu anda ödünç verilen veya alınan bir şey yok."
 }

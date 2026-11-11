@@ -1,8 +1,9 @@
-// StatsModal and its cards plus the statsFormat helpers (de-DE numbers, UTC timestamps, publisher colours).
+// StatsPage and its cards plus the statsFormat helpers (de-DE numbers, UTC timestamps, publisher colours).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import StatsModal from '../components/modals/StatsModal';
+import StatsPage from '../components/modals/StatsPage';
 import SpendingCard from '../components/modals/SpendingCard';
 import OwnerStatsCard from '../components/modals/OwnerStatsCard';
 import ReadingTab from '../components/modals/stats/ReadingTab';
@@ -44,9 +45,14 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+// the page with its tab kept in state, as the address keeps it in the app
+function Page({ tab: firstTab = 'ueberblick', ...props }) {
+  const [tab, setTab] = useState(firstTab);
+  return <StatsPage user={{ id: 1, role: 'admin' }} onBack={vi.fn()} {...props} tab={tab} onTab={setTab} />;
+}
 const ui = (props) => (
   <MemoryRouter>
-    <StatsModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'admin' }} {...props} />
+    <Page {...props} />
   </MemoryRouter>
 );
 
@@ -91,7 +97,7 @@ describe('statsFormat', () => {
   });
 });
 
-describe('StatsModal', () => {
+describe('StatsPage', () => {
   it('formats KPIs for German readers and uses the new summary fields', async () => {
     fetchMock.mockResolvedValue(response(statsBody()));
     render(ui());
@@ -105,17 +111,41 @@ describe('StatsModal', () => {
     expect(screen.queryByText(/5\.48/)).toBeNull();
   });
 
-  it('below sm the whole dialog scrolls in the overlay instead of a short inner strip', async () => {
+  it('is a page: no dialog, a Zurück button, the heading takes the focus', async () => {
+    fetchMock.mockResolvedValue(response(statsBody()));
+    const onBack = vi.fn();
+    render(ui({ onBack }));
+    await screen.findByText('1.234,50 €');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const heading = screen.getByRole('heading', { level: 2, name: 'Statistiken' });
+    expect(document.activeElement).toBe(heading);
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück' }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Finanzen, Monatsausgaben/).className).toContain('max-sm:hidden');
+  });
+
+  it('spreads the cards over the tabs: Finanzen, Pro Person, Verliehen, Anime', async () => {
     fetchMock.mockResolvedValue(response(statsBody()));
     render(ui());
     await screen.findByText('1.234,50 €');
-    const box = screen.getByRole('dialog').querySelector('.dialog-box');
-    expect(box.className).toContain('max-sm:max-h-none');
-    expect(box.className).toContain('short:max-h-none');
-    const body = box.querySelector(':scope > .overflow-y-auto');
-    expect(body.className).toContain('max-sm:overflow-visible');
-    expect(body.className).toContain('short:overflow-visible');
-    expect(screen.getByText(/Finanzen, Monatsausgaben/).className).toContain('max-sm:hidden');
+    expect(screen.getByRole('heading', { name: 'Wertvollste Reihen' })).toBeTruthy();
+    expect(document.getElementById('stats-top-series')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Finanzen' }));
+    expect(screen.getByRole('button', { name: 'Finanzen' }).getAttribute('aria-pressed')).toBe('true');
+    expect(document.getElementById('stats-top-series')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Ausgaben nach Kaufdatum' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Pro Person' }));
+    expect(screen.getByText(/Sobald mehrere Personen Bände besitzen/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Verliehen' }));
+    expect(await screen.findByText('Gerade ist nichts verliehen oder ausgeliehen.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Anime' }));
+    expect(screen.getByText('Noch keine Anime in der Liste')).toBeTruthy();
+  });
+
+  it('opens on the tab it is given', async () => {
+    fetchMock.mockResolvedValue(response(statsBody()));
+    render(ui({ tab: 'verlage' }));
+    await screen.findByRole('button', { name: 'Verlage', pressed: true });
   });
 
   it('uses singular forms for one month, one year and one day', async () => {
@@ -126,32 +156,31 @@ describe('StatsModal', () => {
     expect(screen.getByText('1 Tag aktiv')).toBeTruthy();
   });
 
-  it('names the dialog by its h2 title and never skips a heading level', async () => {
+  it('names the page by its h2 title and never skips a heading level', async () => {
     fetchMock.mockResolvedValue(response(statsBody()));
     render(ui());
     await screen.findByText('1.234,50 €');
-    const dialog = screen.getByRole('dialog', { name: 'Statistik- & Finanz-Dashboard' });
-    expect(dialog.getAttribute('aria-label')).toBeNull();
+    const dialog = screen.getByRole('region', { name: 'Statistiken' });
     const checkLevels = () => {
       const levels = [...dialog.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(h => Number(h.tagName[1]));
       expect(levels[0]).toBe(2);
       levels.forEach((lvl, i) => { if (i > 0) expect(lvl).toBeLessThanOrEqual(levels[i - 1] + 1); });
     };
     checkLevels();
-    fireEvent.click(screen.getByRole('button', { name: /Lese-Tracking/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lesen' }));
     checkLevels();
-    fireEvent.click(screen.getByRole('button', { name: /Verlagsdiagramm/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verlage' }));
     checkLevels();
   });
 
-  it('shows the error instead of the previous numbers when a reopen fails, and can retry', async () => {
+  it('shows the error instead of the previous numbers when opening it again fails, and can retry', async () => {
     fetchMock.mockResolvedValueOnce(response(statsBody()));
-    const { rerender } = render(ui());
+    const view = render(ui());
     await screen.findByText('1.234,50 €');
 
-    rerender(ui({ isOpen: false }));
+    view.unmount();
     fetchMock.mockResolvedValueOnce(response({ error: 'Wiederherstellung läuft, bitte gleich erneut versuchen.' }, { ok: false, status: 503 }));
-    rerender(ui());
+    render(ui());
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Wiederherstellung läuft');
     expect(screen.queryByText('1.234,50 €')).toBeNull();
@@ -167,46 +196,46 @@ describe('StatsModal', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/Netzwerkfehler/);
   });
 
-  it('drops a stats response that arrives after the modal was closed and reopened', async () => {
+  it('drops a stats response that arrives after the page was left and opened again', async () => {
     const slow = deferred();
     fetchMock.mockReturnValueOnce(slow.promise);
-    const { rerender } = render(ui());
-    rerender(ui({ isOpen: false }));
+    const view = render(ui());
+    view.unmount();
     fetchMock.mockResolvedValueOnce(response(statsBody({ summary: { total_owned_value: 50 } })));
-    rerender(ui());
+    render(ui());
     expect(await screen.findByText('50,00 €')).toBeTruthy();
     await act(async () => { slow.resolve(response(statsBody({ summary: { total_owned_value: 777 } }))); });
     expect(screen.queryByText('777,00 €')).toBeNull();
     expect(screen.getByText('50,00 €')).toBeTruthy();
   });
 
-  it('closing the dialog aborts the running stats request', async () => {
+  it('leaving the page aborts the running stats request', async () => {
     fetchMock.mockReturnValueOnce(new Promise(() => {}));
-    const { rerender } = render(ui());
+    const view = render(ui());
     expect(fetchMock.mock.calls[0][0]).toBe('/api/stats');
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
-    rerender(ui({ isOpen: false }));
+    view.unmount();
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
   });
 
-  it('ignores reader details that arrive after a close and reopen', async () => {
+  it('ignores reader details that arrive after leaving and reopening the page', async () => {
     fetchMock.mockResolvedValueOnce(response(statsBody()));
-    const { rerender } = render(ui());
+    const view = render(ui());
     await screen.findByText('1.234,50 €');
-    fireEvent.click(screen.getByRole('button', { name: /Lese-Tracking/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lesen' }));
     const slow = deferred();
     fetchMock.mockReturnValueOnce(slow.promise);
     fireEvent.click(screen.getByRole('button', { name: 'Alle gelesenen Bände anzeigen' }));
     expect(screen.getByRole('button', { name: 'Lädt...' })).toBeTruthy();
 
-    rerender(ui({ isOpen: false }));
+    view.unmount();
     fetchMock.mockResolvedValueOnce(response(statsBody()));
-    rerender(ui());
+    render(ui());
     await screen.findByText('1.234,50 €');
     await act(async () => {
       slow.resolve(response({ user: { id: 1, username: 'anna' }, stats: { totalVolumes: 1, totalPages: 0, readMangas: [] } }));
     });
-    fireEvent.click(screen.getByRole('button', { name: /Lese-Tracking/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lesen' }));
     expect(screen.queryByText(/Gelesene Mangas von/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Alle gelesenen Bände anzeigen' })).toBeTruthy();
   });
@@ -216,7 +245,7 @@ describe('StatsModal', () => {
     fetchMock.mockResolvedValueOnce(response(statsBody()));
     render(ui());
     await screen.findByText('1.234,50 €');
-    fireEvent.click(screen.getByRole('button', { name: /Lese-Tracking/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lesen' }));
     fetchMock.mockResolvedValueOnce(response({
       user: { id: 1, username: 'anna' },
       stats: {
@@ -250,7 +279,7 @@ describe('StatsModal', () => {
     fetchMock.mockResolvedValueOnce(response(statsBody()));
     render(ui());
     await screen.findByText('1.234,50 €');
-    fireEvent.click(screen.getByRole('button', { name: /Lese-Tracking/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lesen' }));
     const readMangas = Array.from({ length: 35 }, (_, i) => ({
       id: i + 1, title: `Reihe ${i + 1}`, cover_image: null,
       volumes: [{ id: 100 + i, volume_number: '1', type: 'volume', notes: null, read_at: '2026-10-03T15:07:43Z' }]
@@ -267,7 +296,7 @@ describe('StatsModal', () => {
     fetchMock.mockResolvedValueOnce(response(statsBody()));
     render(ui());
     await screen.findByText('1.234,50 €');
-    fireEvent.click(screen.getByRole('button', { name: /Lese-Tracking/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lesen' }));
     fetchMock.mockResolvedValueOnce(response({ error: 'Sitzung abgelaufen' }, { ok: false, status: 401 }));
     fireEvent.click(screen.getByRole('button', { name: 'Alle gelesenen Bände anzeigen' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Sitzung abgelaufen');
@@ -305,13 +334,13 @@ describe('StatsModal', () => {
 
   it('shows the wishlist KPI only when there are wished series', async () => {
     fetchMock.mockResolvedValueOnce(response(statsBody()));
-    const { rerender } = render(ui());
+    const view = render(ui());
     await screen.findByText('1.234,50 €');
     expect(document.getElementById('stats-wishlist')).toBeNull();
 
-    rerender(ui({ isOpen: false }));
+    view.unmount();
     fetchMock.mockResolvedValueOnce(response(statsBody({ summary: { wished_series: 2, wished_known_cost: 21 } })));
-    rerender(ui());
+    render(ui());
     await screen.findByText('1.234,50 €');
     const kpi = document.getElementById('stats-wishlist');
     expect(kpi.textContent).toMatch(/Wunschliste/);
@@ -340,7 +369,7 @@ describe('StatsModal', () => {
     fetchMock.mockResolvedValue(response(statsBody({ publishers })));
     render(ui());
     await screen.findByText('1.234,50 €');
-    fireEvent.click(screen.getByRole('button', { name: /Verlagsdiagramm/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verlage' }));
     const card = document.getElementById('stats-publishers');
     const names = () => [...card.querySelectorAll('span.font-bold.text-sm:not(.font-mono)')].map(n => n.textContent);
     expect(names()).toEqual(['Carlsen', 'EMA', 'Ohne Preis']);
@@ -372,7 +401,7 @@ describe('StatsModal', () => {
     expect(quickRow.querySelector('.bg-sky-500').style.width).toBe('55%');
     expect(within(quickRow).getByText(/\(55%\)/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Verlagsdiagramm/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verlage' }));
     expect(screen.queryByText(/Fahre mit der Maus/)).toBeNull();
     const bar = container.querySelector('div[aria-hidden="true"].flex');
     expect(bar.children).toHaveLength(9);
@@ -511,14 +540,6 @@ describe('OwnerStatsCard', () => {
   });
 });
 
-describe('StatsModal closed', () => {
-  it('renders nothing and does not fetch while closed', async () => {
-    render(ui({ isOpen: false }));
-    await waitFor(() => expect(fetchMock).not.toHaveBeenCalled());
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-});
-
 const readingBody = () => {
   const months = Array.from({ length: 24 }, (_, i) => {
     const d = new Date(2024, 10 + i, 15);
@@ -537,7 +558,7 @@ const readingBody = () => {
   };
 };
 
-describe('StatsModal: Leseverlauf and the collection tools', () => {
+describe('StatsPage: Leseverlauf and the collection tools', () => {
   const route = (handlers) => fetchMock.mockImplementation(async (url, init = {}) => {
     const path = String(url).replace(/^.*\/api/, '/api');
     for (const [pattern, answer] of handlers) if (pattern.test(path)) return response(typeof answer === 'function' ? answer(path, init) : answer);

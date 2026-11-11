@@ -36,7 +36,9 @@ vi.mock('../hooks/usePwaInstall', () => ({ default: () => ({ isInstallable: fals
 vi.mock('../components/common/BarcodeScannerButton', () => ({
   default: ({ onDetected }) => <button type="button" onClick={() => onDetected(state.scanCode)}>Scan-Test</button>
 }));
-vi.mock('../components/modals/StatsModal', () => ({ default: ({ isOpen }) => (isOpen ? <div>Statistik-Dialog</div> : null) }));
+vi.mock('../components/modals/StatsPage', () => ({ default: ({ tab, onTab, onBack }) => (
+  <div>Statistik-Seite {tab}<button type="button" onClick={() => onTab('lesen')}>Reiter Lesen</button><button type="button" onClick={onBack}>Zurück</button></div>
+) }));
 vi.mock('../components/modals/AddMangaModal', () => ({
   default: ({ isOpen, onClose, onSeriesCreated, prefill }) => (isOpen ? (
     <div>
@@ -74,6 +76,7 @@ const renderDashboard = (url = '/', user = { id: 1, username: 'anna', role: 'edi
     <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/" element={<Dashboard user={user} onLogout={vi.fn()} />} />
+        <Route path="/statistik/:tab?" element={<Dashboard user={user} onLogout={vi.fn()} />} />
         <Route path="/manga/:id" element={<div>Detailseite</div>} />
       </Routes>
       <LocationProbe />
@@ -134,18 +137,35 @@ describe('Dashboard', () => {
     expect(header.parentElement.className).toContain('overflow-x-clip');
   });
 
-  it('?view=stats opens the statistics over the shelf and cleans the URL', async () => {
+  it('?view=stats leads to the statistics page in place of the shelf', async () => {
     renderDashboard('/?view=stats');
-    expect(await screen.findByText('Statistik-Dialog')).toBeTruthy();
-    expect(document.getElementById('btn-nav-shelf').getAttribute('aria-current')).toBe('page');
-    await waitFor(() => expect(currentUrl()).toBe('/'));
+    expect(await screen.findByText('Statistik-Seite ueberblick')).toBeTruthy();
+    await waitFor(() => expect(currentUrl()).toBe('/statistik'));
+    expect(document.getElementById('btn-nav-shelf')).toBeNull();
   });
 
-  it('?view=stats does not open the statistics offline', async () => {
+  it('the statistics page: tabs change the address, a view leaves it, Zurück leads to the shelf', async () => {
+    renderDashboard('/statistik/verlage');
+    expect(await screen.findByText('Statistik-Seite verlage')).toBeTruthy();
+    expect(document.title).toContain('Statistiken');
+    fireEvent.click(screen.getByRole('button', { name: 'Reiter Lesen' }));
+    await waitFor(() => expect(currentUrl()).toBe('/statistik/lesen'));
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück' }));
+    await waitFor(() => expect(currentUrl()).toBe('/'));
+    expect(screen.queryByText(/Statistik-Seite/)).toBeNull();
+    expect(document.getElementById('btn-nav-shelf').getAttribute('aria-current')).toBe('page');
+  });
+
+  it('an unknown tab shows the overview', async () => {
+    renderDashboard('/statistik/gibtsnicht');
+    expect(await screen.findByText('Statistik-Seite ueberblick')).toBeTruthy();
+  });
+
+  it('?view=stats and /statistik do not open the statistics offline', async () => {
     state.offline = true;
     renderDashboard('/?view=stats', { id: 1, username: 'anna', role: 'visitor', realRole: 'editor', offline: true });
     await waitFor(() => expect(currentUrl()).toBe('/'));
-    expect(screen.queryByText('Statistik-Dialog')).toBeNull();
+    expect(screen.queryByText(/Statistik-Seite/)).toBeNull();
   });
 
   it('passes the user to the shopping hook (queue sync when offline mode ends) and the offline flag to the radar', () => {

@@ -5,6 +5,7 @@ import MangaCollectionGrid, { SHELF_SCROLL_KEY } from './components/dashboard/Ma
 import CollectionToolbar from './components/dashboard/CollectionToolbar';
 import DashboardHeader, { opensCollection } from './components/dashboard/DashboardHeader';
 import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
+import { STATS_PATH, statsPath, statsTabFromPath } from './utils/statsRoute';
 import CollectionStats from './components/dashboard/CollectionStats';
 import ContinueReading from './components/dashboard/ContinueReading';
 import TodoList from './components/dashboard/TodoList';
@@ -53,7 +54,7 @@ const AddAnimeModal = lazy(() => import('./components/modals/AddAnimeModal'));
 const AnimeDetailModal = lazy(() => import('./components/modals/AnimeDetailModal'));
 const ShareLinkDialog = lazy(() => import('./components/modals/ShareLinkDialog'));
 const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
-const StatsModal = lazy(() => import('./components/modals/StatsModal'));
+const StatsPage = lazy(() => import('./components/modals/StatsPage'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
 const AnimeRadarView = lazy(() => import('./components/dashboard/AnimeRadarView'));
@@ -103,10 +104,11 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const searchInputRef = useRef(null);
 
   // 'shelf' | 'shopping' | 'radar' from ?view= (each change is a history entry, so Back returns to the previous view);
-  // ?view=stats (app shortcut) opens the statistics over the shelf
+  // ?view=stats (app shortcut) leads to the statistics page; /statistik/<tab> shows it in place of the main views
   const [initialView] = useState(() => parseInitialView(location.search));
   const activeMainView = parseInitialView(location.search).mainView;
-  useDocumentTitle(t(VIEW_TITLES[activeMainView] || VIEW_TITLES.shelf));
+  const statsRoute = statsTabFromPath(location.pathname);
+  useDocumentTitle(t(statsRoute ? 'Statistiken' : (VIEW_TITLES[activeMainView] || VIEW_TITLES.shelf)));
   const headingRef = usePageHeading();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -117,7 +119,6 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const scanToastRef = useRef(null);
 
   // Modal visibility states
-  const [showStatsModal, setShowStatsModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [accountTab, setAccountTab] = useState('password');
@@ -173,6 +174,22 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   }, [setShelfFilter]);
 
   const lookupAvailable = Boolean(user) && !user.offline && !isOfflineMode;
+  // the statistics page needs the server: offline, /statistik shows the shelf
+  const statsTab = isOfflineMode ? null : statsRoute;
+  const shownView = statsTab ? null : activeMainView;
+  const leaveStats = useCallback(() => {
+    // back where the page was opened from; a page opened from outside (a link, the app shortcut) leads to the shelf
+    if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
+    else navigate('/', { replace: true });
+  }, [navigate]);
+  useEffect(() => {
+    if (statsRoute && isOfflineMode) navigate('/', { replace: true });
+  }, [statsRoute, isOfflineMode, navigate]);
+  const statsShown = Boolean(statsTab);
+  useEffect(() => {
+    if (!statsShown) return;
+    try { window.scrollTo(0, 0); } catch (_) { /* jsdom */ }
+  }, [statsShown]);
   const searchScope = useSearchScope({ enabled: lookupAvailable });
   const { onlineQuery, onlineSeq, pending: onlinePending, submitOnline, clearOnline } = searchScope;
   const searchCleared = search.trim() === '';
@@ -266,11 +283,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to the URL
   }, [location.search]);
 
-  // the start URL was read once; strip ?view=stats so a reload does not reopen the dialog
+  // the start URL was read once; ?view=stats becomes the statistics page
   useEffect(() => {
     if (!initialView.openStats) return;
-    if (!isOfflineMode) setShowStatsModal(true);
-    navigate({ search: viewSearch(location.search, 'shelf') }, { replace: true });
+    navigate({ pathname: isOfflineMode ? '/' : STATS_PATH, search: viewSearch(location.search, 'shelf') }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
   }, []);
 
@@ -315,6 +331,11 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   /** The one way to change the main view: a ?view= history entry; choosing the open view again reloads its data. */
   const setView = (next) => {
     const nextSearch = viewSearch(location.search, next);
+    if (statsRoute) {
+      // a view chosen on the statistics page leaves it
+      navigate({ pathname: '/', search: nextSearch });
+      return;
+    }
     if (nextSearch === location.search) {
       loadViewData(next);
       return;
@@ -330,7 +351,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   }, []);
 
   useDashboardKeyboard({
-    showAddModal, setShowAddModal, closeAddModal, showStatsModal, setShowStatsModal, showUsersModal, setShowUsersModal,
+    showAddModal, setShowAddModal, closeAddModal, showUsersModal, setShowUsersModal,
     showRestoreModal, setShowRestoreModal, showPasswordModal, setShowPasswordModal,
     activeToolModal, closeToolModal: () => setActiveToolModal(null),
     mobileMenuOpen, setMobileMenuOpen, search, setSearch, searchInputRef
@@ -489,8 +510,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
 
   const handleOpenStats = useCallback(() => {
     if (isOfflineMode) return;
-    setShowStatsModal(true);
-  }, [isOfflineMode]);
+    navigate(STATS_PATH);
+  }, [isOfflineMode, navigate]);
 
   const handleOpenModal = useCallback(() => {
     if (!canEdit) return;
@@ -590,7 +611,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     <div className="min-h-screen pb-16 overflow-x-clip">
       <SkipLink />
       <DashboardHeader
-        activeMainView={activeMainView}
+        activeMainView={statsTab ? 'stats' : activeMainView}
         canEdit={canEdit}
         handleBarcodeDetected={handleBarcodeDetected}
         handleInstallClick={handleInstallClick}
@@ -636,17 +657,40 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
 
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
 
-        <MainViewSwitcher
+        {statsTab && (
+          <Suspense fallback={<p role="status" className="py-16 text-center text-sm text-slate-400">{t('Lädt...')}</p>}>
+            <StatsPage
+              user={user}
+              tab={statsTab}
+              onTab={(tab) => navigate(statsPath(tab), { replace: true })}
+              onBack={leaveStats}
+              onDataChanged={() => {
+                loadPublisherNames({ force: true });
+                fetchMangas();
+                fetchShoppingList();
+                fetchReleaseRadar();
+              }}
+              shelfId={scopedShelfId}
+              shelfName={scopedShelfName}
+              shelves={availableShelves}
+              setShelfFilter={setShelfFilter}
+              onClearShelf={clearShelfScope}
+              onShelfMissing={onShelfMissing}
+            />
+          </Suspense>
+        )}
+
+        {!statsTab && <MainViewSwitcher
           activeMainView={activeMainView}
           onSelectView={setView}
           mangaCount={mangas.length}
           animeCount={anime.list.length}
           shoppingData={shoppingData}
           radarData={radarData}
-        />
+        />}
 
         {/* SHELF VIEW */}
-        {activeMainView === 'shelf' && (
+        {shownView === 'shelf' && (
           <>
             <h2 className="sr-only">{t('Sammlung')}</h2>
             <CollectionStats
@@ -760,7 +804,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     )}
 
     {/* SHOPPING LIST VIEW */}
-    {activeMainView === 'shopping' && (
+    {shownView === 'shopping' && (
       <ShoppingListView
         shoppingData={shoppingData}
         loadingShopping={loadingShopping}
@@ -790,7 +834,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       />
     )}
 
-    {activeMainView === ANIME_VIEW && (
+    {shownView === ANIME_VIEW && (
       <AnimeView
         list={anime.list}
         loaded={anime.loaded}
@@ -815,7 +859,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       />
     )}
 
-    {activeMainView === 'episodes' && (
+    {shownView === 'episodes' && (
       <Suspense fallback={null}>
         <AnimeRadarView
           list={anime.list}
@@ -837,7 +881,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     )}
 
     {/* RELEASE RADAR / ERSCHEINUNGSKALENDER VIEW */}
-    {activeMainView === 'radar' && (
+    {shownView === 'radar' && (
       <ReleaseRadarView
         isOffline={Boolean(user?.offline)}
         foreignEditions={availableLanguages.some((l) => l.code !== 'de')}
@@ -993,24 +1037,6 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchShoppingList();
               fetchReleaseRadar();
             }}
-          />
-        )}
-
-        {showStatsModal && (
-          <StatsModal
-            isOpen
-            onClose={() => setShowStatsModal(false)}
-            user={user}
-            onDataChanged={() => {
-              loadPublisherNames({ force: true });
-              fetchMangas();
-              fetchShoppingList();
-              fetchReleaseRadar();
-            }}
-            shelfId={scopedShelfId}
-            shelfName={scopedShelfName}
-            onClearShelf={clearShelfScope}
-            onShelfMissing={onShelfMissing}
           />
         )}
 

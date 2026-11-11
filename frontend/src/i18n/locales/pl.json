@@ -1132,7 +1132,6 @@
   "Filter & Suche zurücksetzen": "Zresetuj filtry i wyszukiwanie",
   "Filter und Suche zurücksetzen": "Zresetuj filtry i wyszukiwanie",
   "Filter zurücksetzen": "Zresetuj filtry",
-  "Finanzen & Sammelzeit": "Finanse i czas kolekcjonowania",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Finanse, wydatki miesięczne, wykres wydawców, czas kolekcjonowania i śledzenie czytania",
   "Folge": "Odcinek",
   "Folge muss eine ganze Zahl ab 1 sein": "Odcinek musi być liczbą całkowitą od 1",
@@ -1620,7 +1619,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Ustal, od którego odcinka zaczyna się każdy sezon. Sezony obowiązują wszystkich.",
   "Lese-Fortschritt der Community": "Postęp czytania społeczności",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Śledzenie czytania i SuB (stos nieprzeczytanych książek)",
-  "Lese-Tracking (Nutzer)": "Śledzenie czytania (użytkownicy)",
   "Lesefortschritt": "Postęp czytania",
   "Lesefortschritt (höchster %)": "Postęp czytania (najwyższy %)",
   "Leser": "Czytelnik",
@@ -2438,7 +2436,6 @@
   "Startstatus": "Status początkowy",
   "Statistik offline nicht verfügbar": "Statystyki niedostępne offline",
   "Statistik öffnen": "Otwórz statystyki",
-  "Statistik- & Finanz-Dashboard": "Pulpit statystyk i finansów",
   "Statistik- & Finanz-Dashboard öffnen": "Otwórz pulpit statystyk i finansów",
   "Statistiken": "Statystyki",
   "Statistiken konnten nicht geladen werden": "Nie udało się wczytać statystyk",
@@ -2718,7 +2715,6 @@
   "Verlage zusammenführen": "Scal wydawców",
   "Verlage zusammenführen…": "Scal wydawców…",
   "Verlags-Aliase vereinheitlichen": "Ujednolić aliasy wydawców",
-  "Verlagsdiagramm": "Wykres wydawców",
   "Verlagsverteilung & Sammlungsanteile": "Rozkład wydawców i udziały w kolekcji",
   "Verlag|Verlage": {
     "one": "wydawca",
@@ -3736,5 +3732,12 @@
   "Regal und Person: {label}": "Półka i osoba: {label}",
   "Person filtern": "Filtruj według osoby",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Pokazuje serie, z których ta osoba ma tom.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Jedna półka, jedna osoba: nie ma tu nic do przełączania. Zapisane filtry są poniżej."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Jedna półka, jedna osoba: nie ma tu nic do przełączania. Zapisane filtry są poniżej.",
+  "Überblick": "Przegląd",
+  "Finanzen": "Finanse",
+  "Pro Person": "Na osobę",
+  "Lesen": "Czytanie",
+  "Verlage": "Wydawcy",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Gdy kilka osób posiada tomy, zobaczysz tutaj, kto ma co.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Obecnie nic nie jest wypożyczone ani pożyczone."
 }

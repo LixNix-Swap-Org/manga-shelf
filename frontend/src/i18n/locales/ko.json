@@ -1072,7 +1072,6 @@
   "Filter & Suche zurücksetzen": "필터 및 검색 초기화",
   "Filter und Suche zurücksetzen": "필터와 검색 초기화",
   "Filter zurücksetzen": "필터 초기화",
-  "Finanzen & Sammelzeit": "재무 & 수집 기간",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "재무, 월별 지출, 출판사 차트, 수집 기간 & 독서 기록",
   "Folge": "에피소드",
   "Folge muss eine ganze Zahl ab 1 sein": "에피소드는 1 이상의 정수여야 해요",
@@ -1536,7 +1535,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "각 시즌이 몇 화부터 시작하는지 정하세요. 시즌은 모든 사용자에게 적용됩니다.",
   "Lese-Fortschritt der Community": "커뮤니티의 읽기 진행 상황",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "독서 기록 & 쌓아둔 책 (안 읽은 책 더미)",
-  "Lese-Tracking (Nutzer)": "독서 기록 (사용자)",
   "Lesefortschritt": "읽기 진행 상황",
   "Lesefortschritt (höchster %)": "읽기 진행 상황 (최고 %)",
   "Leser": "독자",
@@ -2321,7 +2319,6 @@
   "Startstatus": "시작 상태",
   "Statistik offline nicht verfügbar": "통계는 오프라인에서 사용할 수 없어요",
   "Statistik öffnen": "통계 열기",
-  "Statistik- & Finanz-Dashboard": "통계 & 재무 대시보드",
   "Statistik- & Finanz-Dashboard öffnen": "통계 & 재무 대시보드 열기",
   "Statistiken": "통계",
   "Statistiken konnten nicht geladen werden": "통계를 불러오지 못했어요",
@@ -2598,7 +2595,6 @@
   "Verlage zusammenführen": "출판사 병합",
   "Verlage zusammenführen…": "출판사 병합…",
   "Verlags-Aliase vereinheitlichen": "출판사 별칭 통일",
-  "Verlagsdiagramm": "출판사 차트",
   "Verlagsverteilung & Sammlungsanteile": "출판사 분포 & 컬렉션 비율",
   "Verlag|Verlage": {
     "other": "출판사"
@@ -3424,5 +3420,12 @@
   "Regal und Person: {label}": "책장과 사람: {label}",
   "Person filtern": "사람으로 필터",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "이 사람이 권을 가진 시리즈를 표시합니다.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "책장도 사람도 하나뿐이라 바꿀 것이 없습니다. 저장한 필터는 아래에 있습니다."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "책장도 사람도 하나뿐이라 바꿀 것이 없습니다. 저장한 필터는 아래에 있습니다.",
+  "Überblick": "개요",
+  "Finanzen": "재정",
+  "Pro Person": "사람별",
+  "Lesen": "읽기",
+  "Verlage": "출판사",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "여러 사람이 권을 소유하면 여기에서 누가 무엇을 가졌는지 볼 수 있습니다.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "현재 빌려주거나 빌린 것이 없습니다."
 }

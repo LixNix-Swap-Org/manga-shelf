@@ -1112,7 +1112,6 @@
   "Filter & Suche zurücksetzen": "Réinitialiser filtres et recherche",
   "Filter und Suche zurücksetzen": "Réinitialiser filtres et recherche",
   "Filter zurücksetzen": "Réinitialiser les filtres",
-  "Finanzen & Sammelzeit": "Finances et durée de collection",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Finances, dépenses mensuelles, graphique des éditeurs, durée de collection et suivi de lecture",
   "Folge": "Épisode",
   "Folge muss eine ganze Zahl ab 1 sein": "L'épisode doit être un entier à partir de 1",
@@ -1592,7 +1591,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Indique à quel épisode commence chaque saison. Les saisons valent pour tout le monde.",
   "Lese-Fortschritt der Community": "Progression de lecture de la communauté",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Suivi de lecture et PAL (pile à lire)",
-  "Lese-Tracking (Nutzer)": "Suivi de lecture (utilisateurs)",
   "Lesefortschritt": "Progression de lecture",
   "Lesefortschritt (höchster %)": "Progression de lecture (% max.)",
   "Leser": "Lecteur",
@@ -2399,7 +2397,6 @@
   "Startstatus": "Statut initial",
   "Statistik offline nicht verfügbar": "Statistiques indisponibles hors ligne",
   "Statistik öffnen": "Ouvrir les statistiques",
-  "Statistik- & Finanz-Dashboard": "Tableau de bord des statistiques et finances",
   "Statistik- & Finanz-Dashboard öffnen": "Ouvrir le tableau de bord des statistiques et finances",
   "Statistiken": "Statistiques",
   "Statistiken konnten nicht geladen werden": "Impossible de charger les statistiques",
@@ -2678,7 +2675,6 @@
   "Verlage zusammenführen": "Fusionner les éditeurs",
   "Verlage zusammenführen…": "Fusionner les éditeurs…",
   "Verlags-Aliase vereinheitlichen": "Unifier les alias d’éditeurs",
-  "Verlagsdiagramm": "Graphique des éditeurs",
   "Verlagsverteilung & Sammlungsanteile": "Répartition des éditeurs et parts de la collection",
   "Verlag|Verlage": {
     "one": "éditeur",
@@ -3632,5 +3628,12 @@
   "Regal und Person: {label}": "Étagère et personne : {label}",
   "Person filtern": "Filtrer par personne",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Affiche les séries dont cette personne possède un tome.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Une étagère, une personne : rien à changer ici. Tes filtres enregistrés sont en dessous."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Une étagère, une personne : rien à changer ici. Tes filtres enregistrés sont en dessous.",
+  "Überblick": "Vue d’ensemble",
+  "Finanzen": "Finances",
+  "Pro Person": "Par personne",
+  "Lesen": "Lecture",
+  "Verlage": "Éditeurs",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Dès que plusieurs personnes possèdent des tomes, tu vois ici qui possède quoi.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Rien n’est prêté ni emprunté en ce moment."
 }

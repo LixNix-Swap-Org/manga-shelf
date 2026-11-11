@@ -1072,7 +1072,6 @@
   "Filter & Suche zurücksetzen": "フィルターと検索をリセット",
   "Filter und Suche zurücksetzen": "フィルターと検索をリセット",
   "Filter zurücksetzen": "フィルターをリセット",
-  "Finanzen & Sammelzeit": "支出とコレクション期間",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "支出、月別支出、出版社グラフ、コレクション期間、読書の記録",
   "Folge": "話",
   "Folge muss eine ganze Zahl ab 1 sein": "話数は1以上の整数にしてください",
@@ -1536,7 +1535,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "各シーズンが何話から始まるかを設定します。シーズンは全員に適用されます。",
   "Lese-Fortschritt der Community": "コミュニティの読書進捗",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "読書の記録と積読(未読の本の山)",
-  "Lese-Tracking (Nutzer)": "読書の記録(ユーザー)",
   "Lesefortschritt": "読書進捗",
   "Lesefortschritt (höchster %)": "読書進捗(高い順)",
   "Leser": "読者",
@@ -2321,7 +2319,6 @@
   "Startstatus": "初期ステータス",
   "Statistik offline nicht verfügbar": "統計はオフラインでは利用できません",
   "Statistik öffnen": "統計を開く",
-  "Statistik- & Finanz-Dashboard": "統計と支出のダッシュボード",
   "Statistik- & Finanz-Dashboard öffnen": "統計と支出のダッシュボードを開く",
   "Statistiken": "統計",
   "Statistiken konnten nicht geladen werden": "統計を読み込めませんでした",
@@ -2598,7 +2595,6 @@
   "Verlage zusammenführen": "出版社を統合",
   "Verlage zusammenführen…": "出版社を統合…",
   "Verlags-Aliase vereinheitlichen": "出版社の別名を統一",
-  "Verlagsdiagramm": "出版社グラフ",
   "Verlagsverteilung & Sammlungsanteile": "出版社の分布とコレクションの割合",
   "Verlag|Verlage": {
     "other": "出版社"
@@ -3424,5 +3420,12 @@
   "Regal und Person: {label}": "本棚と人：{label}",
   "Person filtern": "人で絞り込む",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "この人が巻を持っているシリーズを表示します。",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "本棚も人も1つだけなので切り替えるものはありません。保存したフィルターは下にあります。"
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "本棚も人も1つだけなので切り替えるものはありません。保存したフィルターは下にあります。",
+  "Überblick": "概要",
+  "Finanzen": "費用",
+  "Pro Person": "人別",
+  "Lesen": "読書",
+  "Verlage": "出版社",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "複数の人が巻を所有すると、ここに誰が何を持っているかが表示されます。",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "現在、貸し出し中・借りているものはありません。"
 }

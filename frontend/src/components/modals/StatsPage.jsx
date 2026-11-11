@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useId, useRef } from 'react';
-import { TrendingUp, Coins, BuildingComplex, BookCheck, X, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge, Library } from 'lucide-react';
+import { TrendingUp, Coins, BuildingComplex, BookCheck, ArrowLeft, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge, Library, LayoutGrid, Users, HandHelping, Tv } from 'lucide-react';
 import SpendingCard from './SpendingCard';
 import OwnerStatsCard from './OwnerStatsCard';
 import KpiCards from './stats/KpiCards';
@@ -10,13 +10,13 @@ import EditionsCard from './stats/EditionsCard';
 import LentCard from './stats/LentCard';
 import PublisherTab, { TopPublishersCard } from './stats/PublisherTab';
 import ReadingTab, { ReadingSummaryCard } from './stats/ReadingTab';
-import useDialogA11y from '../../hooks/useDialogA11y';
 import { readApiError } from '../../hooks/useVolumeActions';
 import useLatestRequest from '../../hooks/useLatestRequest';
 import { apiFetch, isLocalMode, readJson } from '../../utils/api';
 import { shelfQuery } from '../../utils/shelfScope';
-import ShelfScopeBadge from '../common/ShelfScopeBadge';
+import ShelfPersonChip from '../dashboard/ShelfPersonChip';
 import { localISODate } from '../../utils/radarHelpers';
+import { STATS_TAB_IDS } from '../../utils/statsRoute';
 import { t } from '../../i18n/index.js';
 
 const ReadingOverTime = lazy(() => import('./stats/ReadingOverTime'));
@@ -25,13 +25,23 @@ const PublishersModal = lazy(() => import('./PublishersModal'));
 const ShelvesModal = lazy(() => import('./ShelvesModal'));
 const CleanupModal = lazy(() => import('./CleanupModal'));
 
+// The tabs of the statistics page, in the order of STATS_TAB_IDS; the id is the last part of the address.
 // i18n
-const TABS = [
-  { id: 'overview', label: 'Finanzen & Sammelzeit', Icon: Coins },
-  { id: 'publishers', label: 'Verlagsdiagramm', Icon: BuildingComplex },
-  { id: 'reading', label: 'Lese-Tracking (Nutzer)', Icon: BookCheck },
-  { id: 'timeline', label: 'Leseverlauf', Icon: ChartColumn }
+const STATS_TABS = [
+  { id: 'ueberblick', label: 'Überblick', Icon: LayoutGrid },
+  { id: 'finanzen', label: 'Finanzen', Icon: Coins },
+  { id: 'personen', label: 'Pro Person', Icon: Users },
+  { id: 'lesen', label: 'Lesen', Icon: BookCheck },
+  { id: 'verlauf', label: 'Leseverlauf', Icon: ChartColumn },
+  { id: 'verlage', label: 'Verlage', Icon: BuildingComplex },
+  { id: 'verliehen', label: 'Verliehen', Icon: HandHelping },
+  { id: 'anime', label: 'Anime', Icon: Tv }
 ];
+// a tab whose card has nothing to show yet says so instead of staying blank
+const EmptyTab = ({ children }) => (
+  <p className="py-12 text-center text-sm text-slate-400">{children}</p>
+);
+
 // i18n
 const LOADING_TEXT = 'Berechne Statistiken & Finanzdaten...';
 
@@ -40,12 +50,16 @@ const defaultStartDate = () => new Date().toISOString().slice(0, 10);
 const READER_SERIES_STEP = 30;
 
 /**
- * Statistics dialog; its footer also opens the collection tools (Papierkorb, Sammlung aufräumen, Verlage for admins)
- * above it. `onDataChanged` runs after a tool changed data (restore, merge, fix), so the caller can reload its lists.
- * `shelfId`/`shelfName`: the shelf chosen in the collection toolbar narrows the figures (badge with `onClearShelf`);
- * `onShelfMissing` runs when that shelf answers 404.
+ * The statistics page (/statistik/<tab>) in place of the shelf, with "Zurück" (`onBack`) and tabs (`tab`, `onTab`);
+ * its footer also opens the collection tools (Papierkorb, Sammlung aufräumen, Regale, Verlage for admins) as dialogs.
+ * `onDataChanged` runs after a tool changed data (restore, merge, fix), so the caller can reload its lists.
+ * `shelfId`: the shelf chosen in the collection toolbar narrows the figures; `shelves`/`setShelfFilter` show the shelf
+ * chip to change it. `onShelfMissing` runs when that shelf answers 404.
  */
-export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelfId = null, shelfName = null, onClearShelf, onShelfMissing }) {
+export default function StatsPage({
+  user, onDataChanged, shelfId = null, shelfName = null, shelves = [], setShelfFilter, onClearShelf, onShelfMissing,
+  tab = 'ueberblick', onTab, onBack
+}) {
   const [statsData, setStatsData] = useState(null);
   const [statsError, setStatsError] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
@@ -54,7 +68,8 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
   const [newStartDate, setNewStartDate] = useState('');
   const [savingStartDate, setSavingStartDate] = useState(false);
   const [startDateError, setStartDateError] = useState(null);
-  const [statsTab, setStatsTab] = useState('overview'); // 'overview' | 'publishers' | 'reading' | 'timeline'
+  const statsTab = STATS_TAB_IDS.includes(tab) ? tab : 'ueberblick';
+  const setStatsTab = (id) => onTab?.(id);
   const [tool, setTool] = useState(null); // null | 'trash' | 'cleanup' | 'publishers' | 'shelves'
   const [toolChanged, setToolChanged] = useState(false);
   const [detailedReaderStats, setDetailedReaderStats] = useState(null);
@@ -63,6 +78,9 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
   const [readerError, setReaderError] = useState(null);
   const [visibleReaderSeries, setVisibleReaderSeries] = useState(READER_SERIES_STEP);
   const titleId = useId();
+  const headingRef = useRef(null);
+  // arriving on the page puts the focus on its heading, like a page change
+  useEffect(() => { headingRef.current?.focus({ preventScroll: true }); }, []);
   const startDateId = useId();
   const shelfRef = useRef(shelfId);
   shelfRef.current = shelfId;
@@ -103,31 +121,21 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
   }, [beginStatsRequest]);
 
   useEffect(() => {
-    // Responses that arrive after a close or reopen belong to the old session: aborted and dropped.
-    beginReaderRequest();
-    setLoadingDetailedStats(false);
-    if (!isOpen) {
-      beginStatsRequest();
-      setLoadingStats(false);
-      return;
-    }
-    setStatsTab('overview');
-    setTool(null);
-    setDetailedReaderStats(null);
-    setReaderError(null);
-    setEditingStartDate(false);
-    setStartDateError(null);
-    setStatsData(null);
     fetchStats();
-  }, [isOpen, fetchStats, beginStatsRequest, beginReaderRequest]);
+    // responses that arrive after leaving the page are aborted and dropped
+    return () => {
+      beginStatsRequest();
+      beginReaderRequest();
+    };
+  }, [fetchStats, beginStatsRequest, beginReaderRequest]);
 
   // another shelf (or every shelf again) reloads the figures without leaving the tab
   const shownShelfRef = useRef(shelfId);
   useEffect(() => {
     if (shownShelfRef.current === shelfId) return;
     shownShelfRef.current = shelfId;
-    if (isOpen) fetchStats();
-  }, [shelfId, isOpen, fetchStats]);
+    fetchStats();
+  }, [shelfId, fetchStats]);
 
   const fetchReaderDetailedStats = async (userId) => {
     const { signal, isCurrent } = beginReaderRequest();
@@ -183,9 +191,6 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
     saveStartDate(newStartDate);
   };
 
-  const dialogRef = useDialogA11y(isOpen);
-  if (!isOpen) return null;
-
   const toolChangedData = () => {
     setToolChanged(true);
     onDataChanged?.();
@@ -198,55 +203,45 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
       fetchStats();
     }
   };
-  const navigateAway = () => {
-    setTool(null);
-    onClose();
-  };
+  const navigateAway = () => setTool(null);
+  const shelfPicker = setShelfFilter && shelves.length > 1;
 
   return (
     <>
-    <div 
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-md animate-fade-in"
-    >
-      <div className="dialog-box glass-panel max-w-4xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] short:max-h-none max-sm:max-h-none rounded-3xl p-6 sm:p-8 short:p-4 border border-slate-700/80 shadow-2xl relative flex flex-col overflow-hidden">
-        
-        <div className="flex items-start justify-between gap-3 pb-5 short:pb-2 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 short:hidden shrink-0 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/40">
-              <TrendingUp className="w-5 h-5" />
+    <section aria-labelledby={titleId} className="max-w-5xl mx-auto pt-2 pb-8 animate-fade-in">
+        <div className="flex flex-wrap items-center gap-3 pb-4 border-b border-slate-800">
+          <button
+            id="btn-stats-back"
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-1.5 min-h-[44px] rounded-xl px-2 -ml-2 text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60"
+          >
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" /> {t('Zurück')}
+          </button>
+          <div className="flex items-center gap-3 min-w-0 mr-auto">
+            <div className="w-10 h-10 short:hidden max-sm:hidden shrink-0 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/40">
+              <TrendingUp className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 id={titleId} className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                {t('Statistik- & Finanz-Dashboard')}
+              <h2 id={titleId} ref={headingRef} tabIndex={-1} className="text-xl font-extrabold text-white tracking-tight focus:outline-none">
+                {t('Statistiken')}
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5 short:hidden max-sm:hidden">
+              <p className="text-xs text-slate-400 mt-0.5 max-sm:hidden">
                 {t('Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking')}
               </p>
-              <ShelfScopeBadge name={shelfName} onClear={onClearShelf} className="mt-2" />
             </div>
           </div>
-          <button 
-            id="btn-close-stats-modal-x"
-            type="button"
-            onClick={onClose} 
-            className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition-colors"
-            title={t('Schließen')}
-            aria-label={t('Schließen')}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {shelfPicker && (
+            <ShelfPersonChip shelves={shelves} shelfFilter={shelfId ? String(shelfId) : 'ALL'} setShelfFilter={setShelfFilter} userId={user?.id} />
+          )}
+          {!shelfPicker && shelfName && <span className="text-xs text-slate-400">{t('Regal: {name}', { name: shelfName })}</span>}
         </div>
 
-        <div role="group" aria-label={t('Bereiche')} className="flex flex-nowrap items-center gap-2 pt-4 pb-2 shrink-0 border-b border-slate-800/80 overflow-x-auto no-scrollbar">
-          {TABS.map(({ id, label, Icon }) => (
+        <div role="group" aria-label={t('Bereiche')} className="flex flex-nowrap items-center gap-2 pt-4 pb-2 border-b border-slate-800/80 overflow-x-auto no-scrollbar">
+          {STATS_TABS.map(({ id, label, Icon }) => (
             <button
               key={id}
+              id={`btn-stats-tab-${id}`}
               type="button"
               aria-pressed={statsTab === id}
               onClick={() => setStatsTab(id)}
@@ -263,7 +258,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
 
         {/* one live region that stays mounted, so the loading text is announced */}
         <p role="status" className="sr-only">{loadingStats ? t(LOADING_TEXT) : ''}</p>
-        <div className="overflow-y-auto max-sm:overflow-visible short:overflow-visible custom-scrollbar flex-1 pr-1 pt-4 space-y-6">
+        <div className="pt-4 space-y-6">
           {loadingStats ? (
             <div aria-hidden="true" className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
               <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
@@ -288,7 +283,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
 
               return (
                 <>
-                  {statsTab === 'overview' && (
+                  {statsTab === 'ueberblick' && (
                     <div className="space-y-6 animate-fade-in">
                       <KpiCards
                         summary={summary}
@@ -338,28 +333,41 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <ReadingSummaryCard readers={readersList} ownedVols={ownedVols} />
-                        <SpendingCard spending={statsData.spending} />
-                        <OwnerStatsCard ownerStats={statsData.owner_stats} ownerPublishers={statsData.owner_publishers} />
-                        <TopPublishersCard publishers={publishersList} onShowAll={() => setStatsTab('publishers')} />
-                        <AnimeStatsCard anime={statsData.anime} />
-                        <AnimeInsightsCard insights={statsData.anime?.insights} />
+                        <TopPublishersCard publishers={publishersList} onShowAll={() => setStatsTab('verlage')} />
                         <EditionsCard languages={statsData.languages} currencies={statsData.currencies} />
-                        <LentCard shelfId={shelfId} onNavigate={onClose} />
                       </div>
 
-                      <TopSeriesCard topSeries={statsData.top_series} onNavigate={onClose} />
+                      <TopSeriesCard topSeries={statsData.top_series} />
                     </div>
                   )}
 
-                  {statsTab === 'publishers' && <PublisherTab publishers={publishersList} />}
+                  {statsTab === 'finanzen' && (statsData.spending
+                    ? <SpendingCard spending={statsData.spending} />
+                    : <EmptyTab>{t('Noch keine Käufe mit Kaufdatum erfasst.')}</EmptyTab>)}
 
-                  {statsTab === 'timeline' && (
+                  {statsTab === 'personen' && ((statsData.owner_stats || []).length >= 2
+                    ? <OwnerStatsCard ownerStats={statsData.owner_stats} ownerPublishers={statsData.owner_publishers} />
+                    : <EmptyTab>{t('Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.')}</EmptyTab>)}
+
+                  {statsTab === 'verliehen' && <LentCard shelfId={shelfId} emptyText={t('Gerade ist nichts verliehen oder ausgeliehen.')} />}
+
+                  {statsTab === 'anime' && !statsData.anime?.total && <EmptyTab>{t('Noch keine Anime in der Liste')}</EmptyTab>}
+                  {statsTab === 'anime' && Boolean(statsData.anime?.total) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <AnimeStatsCard anime={statsData.anime} />
+                      <AnimeInsightsCard insights={statsData.anime?.insights} />
+                    </div>
+                  )}
+
+                  {statsTab === 'verlage' && <PublisherTab publishers={publishersList} />}
+
+                  {statsTab === 'verlauf' && (
                     <Suspense fallback={<p className="text-sm text-slate-400 py-8 text-center">{t('Leseverlauf wird geladen…')}</p>}>
-                      <ReadingOverTime readers={readersList} user={user} onNavigate={onClose} shelfId={shelfId} />
+                      <ReadingOverTime readers={readersList} user={user} shelfId={shelfId} />
                     </Suspense>
                   )}
 
-                  {statsTab === 'reading' && (
+                  {statsTab === 'lesen' && (
                     <ReadingTab
                       readers={readersList}
                       ownedVols={ownedVols}
@@ -371,7 +379,6 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
                       readerError={readerError}
                       loadingDetails={loadingDetailedStats}
                       onLoadDetails={fetchReaderDetailedStats}
-                      onNavigate={onClose}
                     />
                   )}
                 </>
@@ -379,7 +386,7 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
             })()}
         </div>
 
-        <div className="pt-4 mt-4 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2 shrink-0">
+        <div className="pt-4 mt-6 border-t border-slate-800 flex flex-wrap items-center gap-2">
           <div role="group" aria-label={t('Werkzeuge')} className="flex flex-wrap gap-2 mr-auto">
             <button id="btn-open-trash" type="button" onClick={() => setTool('trash')} className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
               <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> {t('Papierkorb')}
@@ -398,18 +405,8 @@ export default function StatsModal({ isOpen, onClose, user, onDataChanged, shelf
               </button>
             )}
           </div>
-          <button 
-            id="btn-close-stats-modal"
-            type="button" 
-            onClick={onClose} 
-            className="btn-secondary text-xs px-4 py-2"
-          >
-            {t('Schließen')}
-          </button>
         </div>
-
-      </div>
-    </div>
+    </section>
     <Suspense fallback={null}>
     {tool === 'trash' && (
       <TrashModal

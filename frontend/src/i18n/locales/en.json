@@ -1092,7 +1092,6 @@
   "Filter & Suche zurücksetzen": "Reset filters & search",
   "Filter und Suche zurücksetzen": "Reset filters and search",
   "Filter zurücksetzen": "Reset filters",
-  "Finanzen & Sammelzeit": "Finances & collecting time",
   "Finanzen, Monatsausgaben, Verlagsdiagramm, Sammelzeit & Lese-Tracking": "Finances, monthly spending, publisher chart, collecting time & reading tracking",
   "Folge": "Episode",
   "Folge muss eine ganze Zahl ab 1 sein": "Episode must be a whole number from 1",
@@ -1564,7 +1563,6 @@
   "Lege fest, bei welcher Folge jede Staffel beginnt. Die Staffeln gelten für alle.": "Set the episode each season starts with. The seasons apply to everyone.",
   "Lese-Fortschritt der Community": "Community reading progress",
   "Lese-Tracking & SuB (Stapel ungelesener Bücher)": "Reading tracking & TBR (to-be-read pile)",
-  "Lese-Tracking (Nutzer)": "Reading tracking (users)",
   "Lesefortschritt": "Reading progress",
   "Lesefortschritt (höchster %)": "Reading progress (highest %)",
   "Leser": "Reader",
@@ -2360,7 +2358,6 @@
   "Startstatus": "Initial status",
   "Statistik offline nicht verfügbar": "Statistics not available offline",
   "Statistik öffnen": "Open statistics",
-  "Statistik- & Finanz-Dashboard": "Statistics & finance dashboard",
   "Statistik- & Finanz-Dashboard öffnen": "Open statistics & finance dashboard",
   "Statistiken": "Statistics",
   "Statistiken konnten nicht geladen werden": "Statistics could not be loaded",
@@ -2638,7 +2635,6 @@
   "Verlage zusammenführen": "Merge publishers",
   "Verlage zusammenführen…": "Merge publishers…",
   "Verlags-Aliase vereinheitlichen": "Unify publisher aliases",
-  "Verlagsdiagramm": "Publisher chart",
   "Verlagsverteilung & Sammlungsanteile": "Publisher distribution & collection shares",
   "Verlag|Verlage": {
     "one": "publisher",
@@ -3528,5 +3524,12 @@
   "Regal und Person: {label}": "Shelf and person: {label}",
   "Person filtern": "Filter by person",
   "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Shows the series in which this person owns a volume.",
-  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "One shelf, one person: nothing to switch here. Your saved filters are below."
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "One shelf, one person: nothing to switch here. Your saved filters are below.",
+  "Überblick": "Overview",
+  "Finanzen": "Finances",
+  "Pro Person": "Per person",
+  "Lesen": "Reading",
+  "Verlage": "Publishers",
+  "Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.": "Once several people own volumes, this shows who owns what.",
+  "Gerade ist nichts verliehen oder ausgeliehen.": "Nothing is lent out or borrowed right now."
 }
