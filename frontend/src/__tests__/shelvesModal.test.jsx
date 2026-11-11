@@ -24,6 +24,7 @@ beforeEach(() => {
   toasts = recordToasts();
   routes = {
     'GET /api/shelves': () => fakeResponse(200, { shelves: [HOME, SHARED] }),
+    'GET /api/shelves/others': () => fakeResponse(200, { shelves: [] }),
     'GET /api/users/directory': () => fakeResponse(200, { users: [{ id: 1, username: 'admin' }, { id: 2, username: 'erika' }, { id: 3, username: 'ben' }] }),
     'GET /api/shelves/1': () => fakeResponse(200, { ...HOME, members: [member(1, 'admin', 'owner'), member(2, 'erika', 'editor', { owned: 3, read: 5 })] }),
     'GET /api/shelves/2': () => fakeResponse(200, { ...SHARED, members: [member(3, 'ben', 'owner'), member(1, 'admin', 'editor', { owned: 1, read: 0 })] })
@@ -239,5 +240,23 @@ describe('ShelvesModal', () => {
     const question = await screen.findByRole('dialog', { name: 'Regal löschen' });
     fireEvent.click(within(question).getByRole('button', { name: 'Löschen' }));
     await waitFor(() => expect(toasts.messages('info')).toContain('rita, tom hatten kein anderes Regal und haben jetzt ein eigenes, leeres.'));
+  });
+});
+
+describe('ShelvesModal: other shelves for admins', () => {
+  it('lists shelves without membership with name, Verwalter and series count only', async () => {
+    routes['GET /api/shelves/others'] = () => fakeResponse(200, { shelves: [{ id: 9, name: 'Leas Regal', color: '#f00', managers: ['lea'], series_count: 3, member_count: 1 }] });
+    renderModal();
+    const section = await screen.findByRole('region', { name: 'Andere Regale' });
+    expect(within(section).getByText('Leas Regal')).toBeTruthy();
+    expect(within(section).getByText(/Verwalter: lea · 3 Reihen/)).toBeTruthy();
+    expect(within(section).queryByRole('button')).toBeNull();
+  });
+
+  it('does not ask for them without the admin role', async () => {
+    renderModal({ user: { id: 2, username: 'erika', role: 'editor' } });
+    await screen.findByRole('button', { name: /Familie/ });
+    expect(calls('GET').some(([url]) => url === '/api/shelves/others')).toBe(false);
+    expect(screen.queryByRole('region', { name: 'Andere Regale' })).toBeNull();
   });
 });

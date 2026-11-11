@@ -3514,5 +3514,9 @@
   "{read} von deinen {own}": "你的 {own} 卷中读了 {read} 卷",
   "{read} von {own} eigenen": "自己的 {own} 卷中读了 {read} 卷",
   "Gelesen von den eigenen Bänden": "自己拥有的卷中已读",
-  "Gelesen von allen Bänden im Regal": "书架上所有卷中已读"
+  "Gelesen von allen Bänden im Regal": "书架上所有卷中已读",
+  "Andere Regale": "其他书架",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "你不是成员的书架。你只能看到名称、管理者和系列数量，看不到内容。",
+  "Verwalter: {names}": "管理者：{names}",
+  "ohne Verwalter": "无管理者"
 }

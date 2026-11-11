@@ -3728,5 +3728,9 @@
   "{read} von deinen {own}": "{read} sur tes {own}",
   "{read} von {own} eigenen": "{read} sur {own} à soi",
   "Gelesen von den eigenen Bänden": "Lus parmi ses propres tomes",
-  "Gelesen von allen Bänden im Regal": "Lus parmi tous les tomes de l’étagère"
+  "Gelesen von allen Bänden im Regal": "Lus parmi tous les tomes de l’étagère",
+  "Andere Regale": "Autres étagères",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Étagères dont tu n’es pas membre. Tu ne vois que le nom, le gestionnaire et le nombre de séries, pas le contenu.",
+  "Verwalter: {names}": "Gestionnaire : {names}",
+  "ohne Verwalter": "sans gestionnaire"
 }

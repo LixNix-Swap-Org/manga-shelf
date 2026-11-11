@@ -24,6 +24,9 @@
 - Renaming a series no longer moves it to another catalog entry; only another language, format or Manga Passion edition does.
 - The cleanup of unused uploads keeps the covers the catalog still names.
 
+### Shelves
+- **Admins see that private shelves exist:** "Regale" lists, for an admin, the shelves he is no member of under "Andere Regale", with name, Verwalter and the number of series, never their content (`GET /api/shelves/others`).
+
 ### Copies
 - **Reading progress of your own copies:** in the reader chip of a series, a person who owns only some of its volumes also sees how many of their own they read ("2 von deinen 8"), beside the count over all volumes of the shelf. `reader_stats` carries `own_owned` and `own_read`.
 - **"Für wen?" when adding several volumes:** "Bände hinzufügen" asks whose the owned volumes become: yours (as before), nobody yet (a household copy that goes to whoever ticks it first as "Im Besitz") or, for an admin, any other person of the shelf. `POST /api/volumes/batch` takes `owner_user_id`.

@@ -3728,5 +3728,9 @@
   "{read} von deinen {own}": "{read} dei tuoi {own}",
   "{read} von {own} eigenen": "{read} di {own} propri",
   "Gelesen von den eigenen Bänden": "Letti tra i propri volumi",
-  "Gelesen von allen Bänden im Regal": "Letti tra tutti i volumi dello scaffale"
+  "Gelesen von allen Bänden im Regal": "Letti tra tutti i volumi dello scaffale",
+  "Andere Regale": "Altri scaffali",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Scaffali di cui non sei membro. Vedi solo il nome, il gestore e il numero di serie, non il contenuto.",
+  "Verwalter: {names}": "Gestore: {names}",
+  "ohne Verwalter": "senza gestore"
 }

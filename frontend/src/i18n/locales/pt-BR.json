@@ -3728,5 +3728,9 @@
   "{read} von deinen {own}": "{read} dos seus {own}",
   "{read} von {own} eigenen": "{read} de {own} próprios",
   "Gelesen von den eigenen Bänden": "Lidos entre os próprios volumes",
-  "Gelesen von allen Bänden im Regal": "Lidos entre todos os volumes da estante"
+  "Gelesen von allen Bänden im Regal": "Lidos entre todos os volumes da estante",
+  "Andere Regale": "Outras estantes",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Estantes das quais você não é membro. Você vê só o nome, o gestor e o número de séries, não o conteúdo.",
+  "Verwalter: {names}": "Gestor: {names}",
+  "ohne Verwalter": "sem gestor"
 }

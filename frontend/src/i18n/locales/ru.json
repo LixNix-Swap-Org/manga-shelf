@@ -3835,5 +3835,9 @@
   "{read} von deinen {own}": "{read} из твоих {own}",
   "{read} von {own} eigenen": "{read} из {own} своих",
   "Gelesen von den eigenen Bänden": "Прочитано из своих томов",
-  "Gelesen von allen Bänden im Regal": "Прочитано из всех томов на полке"
+  "Gelesen von allen Bänden im Regal": "Прочитано из всех томов на полке",
+  "Andere Regale": "Другие полки",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Полки, участником которых ты не являешься. Видны только название, управляющий и число серий, но не содержимое.",
+  "Verwalter: {names}": "Управляющий: {names}",
+  "ohne Verwalter": "без управляющего"
 }

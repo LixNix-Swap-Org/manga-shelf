@@ -3621,5 +3621,9 @@
   "{read} von deinen {own}": "{read} of your {own}",
   "{read} von {own} eigenen": "{read} of {own} own",
   "Gelesen von den eigenen Bänden": "Read of their own volumes",
-  "Gelesen von allen Bänden im Regal": "Read of all volumes on the shelf"
+  "Gelesen von allen Bänden im Regal": "Read of all volumes on the shelf",
+  "Andere Regale": "Other shelves",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Shelves you are not a member of. You only see the name, manager and number of series, not the content.",
+  "Verwalter: {names}": "Manager: {names}",
+  "ohne Verwalter": "no manager"
 }

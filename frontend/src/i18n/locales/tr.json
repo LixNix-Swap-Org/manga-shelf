@@ -3621,5 +3621,9 @@
   "{read} von deinen {own}": "{own} cildinden {read}",
   "{read} von {own} eigenen": "{own} kendi cildinden {read}",
   "Gelesen von den eigenen Bänden": "Kendi ciltlerinden okunan",
-  "Gelesen von allen Bänden im Regal": "Raftaki tüm ciltlerden okunan"
+  "Gelesen von allen Bänden im Regal": "Raftaki tüm ciltlerden okunan",
+  "Andere Regale": "Diğer raflar",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Üyesi olmadığın raflar. Yalnızca adı, yöneticiyi ve seri sayısını görürsün, içeriği değil.",
+  "Verwalter: {names}": "Yönetici: {names}",
+  "ohne Verwalter": "yönetici yok"
 }

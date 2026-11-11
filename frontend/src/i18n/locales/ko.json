@@ -3514,5 +3514,9 @@
   "{read} von deinen {own}": "내 {own}권 중 {read}권",
   "{read} von {own} eigenen": "본인 {own}권 중 {read}권",
   "Gelesen von den eigenen Bänden": "본인 소유 권 중 읽음",
-  "Gelesen von allen Bänden im Regal": "책장의 모든 권 중 읽음"
+  "Gelesen von allen Bänden im Regal": "책장의 모든 권 중 읽음",
+  "Andere Regale": "다른 책장",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "내가 멤버가 아닌 책장입니다. 이름, 관리자, 시리즈 수만 보이고 내용은 보이지 않습니다.",
+  "Verwalter: {names}": "관리자: {names}",
+  "ohne Verwalter": "관리자 없음"
 }

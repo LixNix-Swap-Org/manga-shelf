@@ -65,6 +65,7 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
   const [renaming, setRenaming] = useState(false);
   const [capped, setCapped] = useState(() => new Set());
   const [refocus, setRefocus] = useState(0);
+  const [others, setOthers] = useState([]);
   const openRef = useRef(null);
   const listRef = useRef(null);
   const membersHeadingRef = useRef(null);
@@ -75,6 +76,7 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
   const nameId = useId();
   const memberId = useId();
   const roleId = useId();
+  const othersId = useId();
   const canCreate = user?.role === 'admin' || user?.role === 'editor';
 
   const load = useCallback(async () => {
@@ -86,6 +88,14 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // admins: the shelves they are no member of (name, Verwalter and counts only), so a private shelf is not unknown to them
+  const isAdmin = user?.role === 'admin';
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    let active = true;
+    api.get('/api/shelves/others').then((d) => { if (active) setOthers(d?.shelves || []); }).catch(() => {});
+    return () => { active = false; };
+  }, [isAdmin, shelves]);
 
   const closeShelf = () => {
     openRef.current = null;
@@ -314,6 +324,23 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
           </li>
         ))}
       </ul>
+      {isAdmin && others.length > 0 && (
+        <section aria-labelledby={othersId} className="mt-5">
+          <h3 id={othersId} className="text-xs font-bold text-slate-300">{t('Andere Regale')}</h3>
+          <p className="text-[11px] text-slate-400 mt-0.5 mb-2">{t('Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.')}</p>
+          <ul className="space-y-1.5">
+            {others.map((shelf) => (
+              <li key={shelf.id} className="flex items-center gap-3 rounded-xl border border-slate-800 px-3 py-2 text-sm">
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: shelf.color }} aria-hidden="true" />
+                <span className="font-semibold text-slate-200 truncate flex-1">{shelf.name}</span>
+                <span className="text-xs text-slate-400 text-right">
+                  {shelf.managers?.length ? t('Verwalter: {names}', { names: shelf.managers.join(', ') }) : t('ohne Verwalter')} · {formatCount(shelf.series_count, 'Reihe', 'Reihen')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {memberToRemove && (
         <ConfirmDialog
           isOpen
