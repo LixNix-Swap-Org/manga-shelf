@@ -12,7 +12,7 @@ const TABLE_LAYERS = {
         'anime_airings', 'anime_work_links'],
     shelf: ['shelves', 'shelf_members', 'mangas', 'volumes', 'trash'],
     person: ['users', 'volume_copies', 'volume_reads', 'chapter_progress', 'anime_progress', 'anime_tags', 'anime_sync',
-        'user_api_credentials', 'calendar_feeds', 'saved_filters'],
+        'user_api_credentials', 'calendar_feeds', 'saved_filters', 'series_wishes'],
     technical: ['app_settings', 'schema_migrations', 'data_versions', 'api_cache', 'manga_passion_cache', 'sqlite_sequence',
         'sqlite_stat1', 'sqlite_stat4']
 };
@@ -29,6 +29,7 @@ const ACCOUNT_REFERENCES = {
     'volume_copies.lent_to_user_id': 'SET NULL',
     'volume_reads.user_id': 'CASCADE',
     'volumes.updated_by': 'SET NULL',
+    'series_wishes.user_id': 'CASCADE',
     'chapter_progress.user_id': 'CASCADE',
     'anime_progress.user_id': 'CASCADE',
     'anime_tags.user_id': 'CASCADE',

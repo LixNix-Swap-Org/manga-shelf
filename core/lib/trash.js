@@ -3,6 +3,7 @@
 // progress sit on the catalog (migration 43) and stay: other shelves holding the edition still show them, and the same
 // edition added again (or restored) shows them again. The payload keeps a copy as the shelf showed it.
 const { extraCopies } = require('./copies');
+const { wishRows } = require('./wishes');
 
 const TRASH_RETENTION_DAYS = 30;
 
@@ -53,7 +54,7 @@ function moveMangaToTrash(ctx, mangaId) {
     const chapters = ctx.db.prepare('SELECT * FROM shelf_chapter_progress WHERE manga_id = ? ORDER BY user_id').all(manga.id);
     const trashId = insertTrash(ctx, {
         kind: 'manga', refId: manga.id, mangaId: manga.id, title: manga.title,
-        payload: { manga, volumes, owners, reads, extra_copies, anime_ids: animeIds, chapters }, shelfId: manga.shelf_id
+        payload: { manga, volumes, owners, reads, extra_copies, anime_ids: animeIds, chapters, wishes: wishRows(ctx.db, manga.id) }, shelfId: manga.shelf_id
     });
     for (const v of volumes) deleteVolumeRows(ctx, v.id);
     ctx.db.prepare('DELETE FROM mangas WHERE id = ?').run(manga.id);

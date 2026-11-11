@@ -7,6 +7,7 @@ const { findDuplicate, duplicateError } = require('./volumes');
 const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners');
 const { addRead, setChapterProgress } = require('../lib/marks');
 const { addCopy, hasOwner, dropHouseholdCopies, restoreExtraCopies } = require('../lib/copies');
+const { restoreWishes, syncSeriesWish, adoptColumnWish } = require('../lib/wishes');
 const access = require('../lib/access');
 const animeLinks = require('../lib/animeLinks');
 const { qstr } = require('../lib/query');
@@ -205,6 +206,11 @@ function restoreManga(ctx, entry, payload) {
             OR EXISTS (SELECT 1 FROM anime_work_links l WHERE l.work_id = w.id AND l.origin = 'manual' AND l.hidden = 0))`).get(manga.work_key)) ? manga.work_key : null;
     edition.shelf_id = restoreShelf(ctx, entry, manga);
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
+    // the wishes per person come back (migration 57); an entry from before keeps its wish as the household's
+    if (Array.isArray(payload.wishes)) {
+        restoreWishes(ctx.db, manga.id, payload.wishes);
+        syncSeriesWish(ctx.db, manga.id);
+    } else adoptColumnWish(ctx.db, manga.id, null);
     restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || [], edition.shelf_id, payload.extra_copies);
     // chapter progress comes back for members of the shelf only, like reads; a chapter the catalog kept stays
     const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');

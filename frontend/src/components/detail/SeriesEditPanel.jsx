@@ -6,7 +6,7 @@ import useDialogA11y from '../../hooks/useDialogA11y';
 import { assetImgProps, get } from '../../utils/api';
 import { joinTags, splitTags, tagKey } from '../../utils/tags';
 import { formatCount } from '../../utils/format';
-import { PRIORITY_OPTIONS } from '../../utils/priority';
+import { PRIORITY_OPTIONS, othersWishing } from '../../utils/priority';
 import { isMpEdition } from '../../utils/editions';
 import { mangaStatusLabel } from '../../utils/enumLabels';
 import FilePickerButton from '../common/FilePickerButton';
@@ -422,7 +422,7 @@ export default function SeriesEditPanel({
                   checked={Boolean(formData.wish)}
                   onChange={e => patch({ wish: e.target.checked })}
                 />
-                {tr('Wunschliste')}
+                {tr('Auf meiner Wunschliste')}
               </label>
               {formData.wish && (
                 <label className="flex items-center gap-2 text-xs text-slate-400">
@@ -438,6 +438,11 @@ export default function SeriesEditPanel({
                 </label>
               )}
               <span className="text-[11px] text-slate-400 basis-full">{tr('Zählt als Wunschreihe, solange noch kein Band vorhanden ist.')}</span>
+              {othersWishing(manga) && (
+                <span className="text-[11px] text-rose-200/90 basis-full" data-other-wishes>
+                  {tr('Außerdem gewünscht von {names}', { names: othersWishing(manga) })}
+                </span>
+              )}
             </div>
 
             <div>

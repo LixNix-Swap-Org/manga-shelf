@@ -513,6 +513,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
           totalTarget={totalTarget}
           uploadingCover={uploadingCover}
           onCollectingSaved={(collecting) => patchManga((m) => ({ ...m, collecting }))}
+          canWish={Boolean(user) && !isOffline && !['guest', 'visitor'].includes(user?.role)}
+          onWishSaved={(wish) => patchManga((m) => ({ ...m, ...wish, wished: wish.wish_priority !== null && !(Number(m.owned_volumes) > 0) ? 1 : 0 }))}
           onEditionsChanged={fetchManga}
           onShowInfo={() => {
             setDetailTab('infos');

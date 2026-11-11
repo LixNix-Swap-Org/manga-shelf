@@ -9,6 +9,7 @@ import imageCheck from '../../../core/lib/imageCheck.js';
 import owners from '../../../core/lib/owners.js';
 import marks from '../../../core/lib/marks.js';
 import copies from '../../../core/lib/copies.js';
+import wishes from '../../../core/lib/wishes.js';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
 
@@ -166,6 +167,9 @@ export function fillFromSnapshot(conn, snapshot) {
   const volumeCols = columnsOf(conn, 'volumes');
   for (const manga of Object.values(snapshot.details || {})) {
     insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
+    // the device knows only this user: their own wish stays theirs, anybody else's becomes the household's (migration 57)
+    if (manga.my_wish !== null && manga.my_wish !== undefined) wishes.setWish(conn, manga.id, me.id, manga.my_wish);
+    else wishes.adoptColumnWish(conn, manga.id, null);
     if (manga.chapters_read > 0) marks.setChapterProgress(conn, manga.id, me.id, manga.chapters_read);
     for (const v of manga.volumes || []) {
       const vol = scalars(v, SKIP_VOLUME);

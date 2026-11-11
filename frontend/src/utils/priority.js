@@ -91,3 +91,26 @@ export const mergeWishedPublisherChips = (chips, wishedSeries, normalizePubName)
   }
   return result;
 };
+
+/**
+ * Who wishes a series (migration 57: wishes per person, `wishes` of the detail and of the shopping list), highest
+ * first: 'Max (hoch), Felix, Haushalt'. A wish without priority shows the name alone. '' when nobody does.
+ */
+export function wishersText(wishes) {
+  return (Array.isArray(wishes) ? wishes : [])
+    .map((w) => {
+      const name = w.username || t('Haushalt');
+      return w.priority > 0 && PRIORITY_WORDS[w.priority]
+        ? t('{name} ({priority})', { name, priority: t(PRIORITY_WORDS[w.priority]) })
+        : name;
+    })
+    .join(', ');
+}
+
+/** Whether the caller can take a series off the wishlist: their own wish, or the household wish nobody claimed yet. */
+export const canDropWish = (s) => !Array.isArray(s?.wishes) // a server from before migration 57: the one shared wish
+  || (s.my_wish !== null && s.my_wish !== undefined)
+  || s.wishes.some((w) => w.user_id === null);
+
+/** The other people who wish a series (not the caller, not the household), as wishersText; '' when nobody else does. */
+export const othersWishing = (manga) => wishersText((manga?.wishes || []).filter((w) => !w.mine && w.user_id !== null));

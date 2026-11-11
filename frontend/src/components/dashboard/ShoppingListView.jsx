@@ -400,10 +400,15 @@ export default function ShoppingListView({
     if (removingWish.has(series.id) || isOfflineMode) return;
     setRemovingWish((prev) => new Set(prev).add(series.id));
     try {
-      const res = await apiFetch(`/api/mangas/${series.id}`, { method: 'PUT', body: { wish_priority: null } });
+      // only the own wish goes (migration 57); the series stays while somebody else still wishes it
+      const res = await apiFetch(`/api/mangas/${series.id}/wish`, { method: 'PUT', body: { priority: null } });
       if (res.ok) {
-        setRemovedWish((prev) => new Set(prev).add(series.id));
-        notify.success(t('„{title}“ ist nicht mehr auf der Wunschliste', { title: series.title }));
+        const data = (await readJson(res)) ?? {};
+        const stillWished = data.wish_priority !== null && data.wish_priority !== undefined;
+        if (!stillWished) setRemovedWish((prev) => new Set(prev).add(series.id));
+        notify.success(stillWished
+          ? t('„{title}“ ist nicht mehr auf deiner Wunschliste, andere wünschen sie sich noch', { title: series.title })
+          : t('„{title}“ ist nicht mehr auf der Wunschliste', { title: series.title }));
         fetchShoppingList();
         if (fetchMangas) fetchMangas();
       } else if (res.status === 401) {

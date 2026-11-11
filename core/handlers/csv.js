@@ -1,5 +1,6 @@
 // CSV exchange: export of all series and volumes (GET /export/csv) and the import (POST /import/csv, dry run first).
 const { normalizePublisher } = require('../lib/publishers');
+const { setWish, adoptColumnWish } = require('../lib/wishes');
 const { csvLines, joinCsv, parseCsv, mapCsvRows, matchKey, rowNote, CsvFormatError, SERIES_DETAIL_KEYS, SERIES_ROW_TYPE } = require('../csvExchange');
 const { canonicalVolumeNumber } = require('../lib/volumeNumber');
 const { inferVolumeType } = require('../lib/volumeType');
@@ -331,6 +332,8 @@ function importCsv(ctx, { body }) {
                 meta.region ?? null, meta.currency || DEFAULT_CURRENCY, importedWorkKey(meta.work_key), shelfId,
                 format, meta.total_chapters ?? null
             ).lastInsertRowid);
+        // the wish of the file becomes the importer's own (migration 57)
+        if (!dryRun) adoptColumnWish(ctx.db, id, ctx.user.id);
         importChapters(r, id, meta);
         const entry = { id, pubKey: publisherKey(publisher), wish: meta.wish_priority ?? null, language, format };
         const key = matchKey(r.series);
@@ -362,7 +365,10 @@ function importCsv(ctx, { body }) {
                 const wish = r.series_meta?.wish_priority;
                 // a series row sets the wish of an existing series; otherwise existing series stay untouched
                 if (series && wish !== undefined && wish !== series.wish) {
-                    if (!dryRun && series.id > 0) updateWish.run(wish, ctx.user.id, series.id);
+                    if (!dryRun && series.id > 0) {
+                        updateWish.run(wish, ctx.user.id, series.id);
+                        setWish(ctx.db, series.id, ctx.user.id, wish);
+                    }
                     series.wish = wish;
                     result.updated_series++;
                 } else if (series) result.skipped_existing++;

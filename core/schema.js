@@ -7,6 +7,7 @@ const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
 const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL, ADOPT_SERIES_SQL, ADOPT_VOLUME_SQL } = require('./lib/catalog');
 const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
+const { SERIES_WISHES_SQL, WISH_TRIGGERS_SQL } = require('./lib/wishes');
 const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, OWNERS_VIEW_LENT_SQL, OWNERS_VIEW_FIRST_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
@@ -1473,6 +1474,22 @@ function migrationList(log = silentLog) {
                     DROP VIEW IF EXISTS volume_owners;
                     ${OWNERS_VIEW_FIRST_SQL}
                 `);
+            }
+        },
+        {
+            version: 57,
+            name: 'add_series_wishes',
+            up: (d) => {
+                // wishes per person (core/lib/wishes.js); the shared wish of a series becomes its household wish, since
+                // nobody knows who set it. mangas.wish_priority stays as the highest wish, kept by the triggers.
+                d.exec(SERIES_WISHES_SQL);
+                d.exec(WISH_TRIGGERS_SQL);
+                // part of the series detail and the shopping list (their ETags)
+                d.exec(dataVersionTriggersSql('series_wishes', 'collection'));
+                d.exec(`INSERT INTO series_wishes (manga_id, user_id, priority)
+                        SELECT id, NULL, MAX(0, MIN(3, CAST(wish_priority AS INTEGER))) FROM mangas
+                        WHERE wish_priority IS NOT NULL
+                          AND NOT EXISTS (SELECT 1 FROM series_wishes w WHERE w.manga_id = mangas.id)`);
             }
         }
     ];
