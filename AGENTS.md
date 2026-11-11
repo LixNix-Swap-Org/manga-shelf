@@ -316,8 +316,8 @@ manga-shelf/
 │       ├── App.jsx               # routing, auth/setup check, offline mode, logout, /server, /lokal; applies users.locale, rebuild per language (Fragment key)
 │       ├── AppErrorBoundary.jsx  # error boundary: stale chunk → reload once, otherwise an error screen
 │       ├── appShell.js           # app shell helpers: pending logout, clear the cover cache, return targets, runBeforeLogout, MESSAGES
-│       ├── Dashboard.jsx         # dashboard container (hooks + components, ?view=, dialogs)
-│       ├── MangaDetail.jsx       # container of the detail view
+│       ├── Dashboard.jsx         # dashboard container (hooks + components, ?view=, dialogs); the tool dialogs are components/dashboard/DashboardToolDialogs.jsx, the anime dialogs DashboardAnimeDialogs.jsx, scans and shares hooks/useDashboardScan.js, the account dialog requests hooks/useAccountDialogRequests.js
+│       ├── MangaDetail.jsx       # container of the detail view; page helpers (scroll per history entry, duplicates, back link) in components/detail/detailPage.js, the dialogs in DetailDialogs.jsx, VolumesHeader.jsx and VolumesEmptyState.jsx for the "Bände" tab
 │       ├── Login.jsx             # login form
 │       ├── Setup.jsx             # first setup (setup code, admin, connect sources)
 │       ├── fonts/                # self-hosted Plus Jakarta Sans (woff2, OFL.txt)
@@ -476,7 +476,7 @@ manga-shelf/
 │           │   ├── MangaCard.jsx # grid card (React.memo); the link covers the card via ::after, the author buttons lie above it in the frame
 │           │   ├── MangaRow.jsx  # table row of the list view (React.memo)
 │           │   ├── DashboardFooter.jsx # version, online state, offline copy, outbox, app installation; in standalone mode profile and save state of the device
-│           │   ├── ShoppingListView.jsx # shopping list, wishlist series, shop scan, share/print
+│           │   ├── ShoppingListView.jsx # shopping list, wishlist series, shop scan, share/print; parts in shopping/ (ShoppingSections.jsx: print sheet, load progress, wished series; ScanListPanel.jsx: scan list of a store visit; OthersOwnSection.jsx: "Bei anderen vorhanden")
 │           │   ├── ReleaseRadarView.jsx # release radar (calendar / Meine Vorbestellungen); the personal view carries ShelfPersonChip with several shelves, else ShelfScopeBadge
 │           │   ├── AnimeSearchHits.jsx # "In deiner Anime-Liste" under the shelf toolbar: anime entries matching the header search (filterAnime, from 2 characters, at most 6, "Alle im Anime-Tab"); Dashboard loads the anime list once for it
 │           │   ├── ContinueReading.jsx # bar "Weiterlesen" above the toolbar (continueReadingItems, CONTINUE_READING_LIMIT = 3)
@@ -531,7 +531,7 @@ manga-shelf/
 │           │   └── MpEditionModal.jsx # choose, sync, enrich an edition
 │           ├── system/           # parts of the system page: SystemSection.jsx (Section, Facts), UpdateSection.jsx (card "Updates": banner button, version picker, download and check, confirm, restart wait, last result), VersionPicker.jsx, PasswordConfirm.jsx (submitLabel, icon, blocked), RollbackPanel.jsx ("Zurück zu v…": button or steps, DataLossNotice), UpdateInstructions.jsx (instructionSteps per install kind, downgrade steps), updateModel.js (compareVersions, releaseLabel, restartKind, errorText, adminNotes, ROLLBACK_REASON_TEXT)
 │           └── modals/           # dialogs of the dashboard
-│               ├── AddMangaModal.jsx # create a series in three steps (Finden: title, Auto-Fill, hits, "Aus deinen Regalen"; Edition & Regal: the series fields; Bände: AddVolumesStep, wishlist, scanned volume; every step stays mounted and "Manga anlegen" works from each; picked volumes go to POST /volumes/batch in runs after the series exists) (Manga Passion + AniList/MAL in parallel, Manga Passion only for de; edition fields, work_key of a picked AniList/MAL hit; scan prefill, wishlist; with a second shelf the section "Aus deinen Regalen" (GET /mangas/copy-candidates, POST /mangas/copy))
+│               ├── AddMangaModal.jsx # create a series in three steps (Finden: title, Auto-Fill, hits, "Aus deinen Regalen"; Edition & Regal: the series fields; Bände: AddVolumesStep, wishlist, scanned volume; every step stays mounted and "Manga anlegen" works from each; picked volumes go to POST /volumes/batch in runs after the series exists) (Manga Passion + AniList/MAL in parallel, Manga Passion only for de; edition fields, work_key of a picked AniList/MAL hit; scan prefill, wishlist; with a second shelf the section "Aus deinen Regalen" (GET /mangas/copy-candidates, POST /mangas/copy)); parts in addManga/ (addMangaForm.js: defaults, texts, sameTitleSeries; CopyHitsSection.jsx; LookupResultsPanel.jsx)
 │               ├── AddVolumesStep.jsx # step "Bände" of "Neuer Manga": count, Alle/Keine/"Band 1 bis X", tap = owned, Shift-click range, the rest as "Fehlt" on request (helpers in utils/volumePicker.js)
 │               ├── AccountModal.jsx # account: password + API keys + language with the default visibility of anime ratings and, in the apps, the release-day reminder switch (useTabList)
 │               ├── ChangePasswordModal.jsx # only a re-export of AccountModal
@@ -555,7 +555,7 @@ manga-shelf/
 │               ├── PublishersModal.jsx # merge publishers
 │               ├── CleanupModal.jsx # clean up the collection (data quality)
 │               ├── AddAnimeModal.jsx # add an anime, film or show (search with source and kind chips, or manual; initialQuery, returnFocusRef, animeOnly)
-│               ├── AnimeDetailModal.jsx # anime detail with progress, the episode grid "Einzelne Folgen" (single episodes, sections per season or per 100, taps saved together after 600 ms for their own entry; "Folgen bewerten" rates single episodes 1–10 and marks them), the season editor "Staffeln bearbeiten", watched language, IMDb and TMDB links, seasons and "Weiter auf Crunchyroll" or "Auf Crunchyroll suchen"
+│               ├── AnimeDetailModal.jsx # anime detail with progress, the episode grid "Einzelne Folgen" (single episodes, sections per season or per 100, taps saved together after 600 ms for their own entry; "Folgen bewerten" rates single episodes 1–10 and marks them), the season editor "Staffeln bearbeiten", watched language, IMDb and TMDB links, seasons and "Weiter auf Crunchyroll" or "Auf Crunchyroll suchen"; parts in animeDetail/ (OwnProgress.jsx, EpisodeGrid.jsx, SeasonEditor.jsx, CommunityRatings.jsx)
 │               └── EpisodeLinkDialog.jsx # share dialog (lazy): paste field, confirm the episode, choose an entry, episode field, "Link merken", "Zur Liste hinzufügen", "Anlegen und als gesehen markieren" (suggestion)
 ├── desktop/                      # desktop app (Electron, electron-builder); its own package.json, version = root
 │   ├── main.js                   # main process: operating mode, server via index.js start()/stop(), window, menu, tray, app://, deep links, IPC
