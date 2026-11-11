@@ -924,6 +924,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         GERMAN_MONTHS={monthNames('long')}
         shelfName={scopedShelfName}
         onClearShelf={clearShelfScope}
+        shelves={availableShelves}
+        shelfFilter={shelfFilter}
+        setShelfFilter={setShelfFilter}
+        userId={user?.id}
       />
     )}
     </main>

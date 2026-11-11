@@ -357,6 +357,26 @@ describe('statistics and radar', () => {
     rerender(<MemoryRouter><ReleaseRadarView {...props} foreignEditions /></MemoryRouter>);
     expect(document.getElementById('radar-mp-market-note').textContent).toContain('Nur deutscher Markt');
   });
+
+  it('the personal radar carries the shelf chip with several shelves, otherwise the shelf badge', () => {
+    const props = {
+      radarSubView: 'personal', setRadarSubView: vi.fn(), radarData: { upcoming: [], recent: [] }, loadingRadar: false, fetchReleaseRadar: vi.fn(),
+      radarPublisherFilter: 'ALL', setRadarPublisherFilter: vi.fn(), radarStatusFilter: 'ALL', setRadarStatusFilter: vi.fn(), radarSearch: '',
+      setRadarSearch: vi.fn(), mpData: null, loadingMp: false, fetchMangaPassionReleases: vi.fn(), mpYear: 2026, setMpYear: vi.fn(), mpMonth: 10,
+      setMpMonth: vi.fn(), handlePrevMonth: vi.fn(), handleNextMonth: vi.fn(), handleCurrentMonth: vi.fn(), mpPrintOnly: false,
+      setMpPrintOnly: vi.fn(), mpMySeriesOnly: false, setMpMySeriesOnly: vi.fn(), mpPublisherFilter: 'ALL', setMpPublisherFilter: vi.fn(), mpSearch: '',
+      setMpSearch: vi.fn(), canEdit: false, handleImportMangaPassion: vi.fn(), importingMpIds: new Set(), handleMarkDelivered: vi.fn(),
+      markingDeliveredIds: new Set(), GERMAN_MONTHS: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+      shelfName: 'Familie', onClearShelf: vi.fn()
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, {})));
+    const shelves = [{ id: 1, name: 'Familie', count: 2 }, { id: 2, name: 'Anna allein', count: 1 }];
+    const { rerender } = render(<MemoryRouter><ReleaseRadarView {...props} shelves={shelves} shelfFilter="1" setShelfFilter={vi.fn()} userId={1} /></MemoryRouter>);
+    expect(screen.getByRole('button', { name: /^Regal und Person: Familie/ })).toBeTruthy();
+    rerender(<MemoryRouter><ReleaseRadarView {...props} shelves={[shelves[0]]} shelfFilter="1" setShelfFilter={vi.fn()} userId={1} /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: /^Regal und Person/ })).toBeNull();
+    expect(screen.getByText(/Familie/)).toBeTruthy();
+  });
 });
 
 describe('account default language', () => {
