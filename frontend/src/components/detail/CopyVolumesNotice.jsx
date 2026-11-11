@@ -51,7 +51,7 @@ export default function CopyVolumesNotice({ mangaId, enabled, version, onCopied 
   };
 
   return (
-    <div className="mb-4 p-3 bg-slate-900/60 border border-slate-700 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300" data-copy-volumes="">
+    <div className="mb-4 p-3 bg-slate-900/60 border border-slate-700 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300" data-copy-volumes="" data-notice={t('Bände übernehmen')}>
       <p className="flex items-center gap-2 min-w-0">
         <Library className="w-4 h-4 shrink-0 text-brand-400" aria-hidden="true" />
         <span>{tn('{n} Band aus „{shelf}“ fehlt hier.', '{n} Bände aus „{shelf}“ fehlen hier.', count, { shelf: source.shelf_name })}</span>

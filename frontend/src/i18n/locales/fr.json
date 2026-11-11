@@ -3689,5 +3689,8 @@
     "other": "{n} tomes comme « Manquant »"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "Marquer le prochain tome non lu comme lu",
-  "+ Band {volume} gelesen": "+ Tome {volume} lu"
+  "+ Band {volume} gelesen": "+ Tome {volume} lu",
+  "Doppelte Einträge": "Entrées en double",
+  "Bandzahl anpassen": "Ajuster le nombre de tomes",
+  "Hinweise ({count})": "Remarques ({count})"
 }

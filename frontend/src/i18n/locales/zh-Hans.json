@@ -3477,5 +3477,8 @@
     "other": "{n} 卷 记为“缺少”"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "将下一本未读卷标为已读",
-  "+ Band {volume} gelesen": "+ 第 {volume} 卷已读"
+  "+ Band {volume} gelesen": "+ 第 {volume} 卷已读",
+  "Doppelte Einträge": "重复条目",
+  "Bandzahl anpassen": "调整卷数",
+  "Hinweise ({count})": "提示（{count}）"
 }

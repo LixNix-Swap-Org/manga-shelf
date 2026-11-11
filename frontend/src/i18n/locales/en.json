@@ -3583,5 +3583,8 @@
     "other": "{n} volumes as “Missing”"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "Mark the next unread volume as read",
-  "+ Band {volume} gelesen": "+ Volume {volume} read"
+  "+ Band {volume} gelesen": "+ Volume {volume} read",
+  "Doppelte Einträge": "Duplicate entries",
+  "Bandzahl anpassen": "Adjust volume count",
+  "Hinweise ({count})": "Notices ({count})"
 }

@@ -12,6 +12,7 @@ import ReaderBar from './components/detail/ReaderBar';
 import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
 import CopyVolumesNotice from './components/detail/CopyVolumesNotice';
+import NoticesGroup from './components/detail/NoticesGroup';
 import EditionTab from './components/detail/EditionTab';
 import SeriesInfo from './components/detail/SeriesInfo';
 import useTabList from './hooks/useTabList';
@@ -756,6 +757,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
             onToggleSelectionMode={selection.toggleMode}
           />
 
+          {/* from two notices on they fold into "Hinweise (n)" with a badge per notice */}
+          <NoticesGroup>
           {/* the same edition in another own shelf with volumes this one lacks (catalog stage c2) */}
           <CopyVolumesNotice mangaId={id} enabled={Boolean(canEdit) && !isOffline && shelfCount > 1} version={volumes.length} onCopied={fetchManga} />
 
@@ -784,6 +787,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
             setShowMpEditionModal={setShowMpEditionModal}
             collecting={manga.collecting}
           />
+          </NoticesGroup>
 
           {/* Volumes Grid */}
           {displayVolumeItems.length === 0 ? (

@@ -3477,5 +3477,8 @@
     "other": "{n}권 „없음“으로"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "다음 안 읽은 권을 읽음으로 표시",
-  "+ Band {volume} gelesen": "+ {volume}권 읽음"
+  "+ Band {volume} gelesen": "+ {volume}권 읽음",
+  "Doppelte Einträge": "중복 항목",
+  "Bandzahl anpassen": "권 수 조정",
+  "Hinweise ({count})": "안내 ({count})"
 }

@@ -383,3 +383,8 @@
 }
 html:has(#detail-bottom-bar) { scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 html:has(header[data-sticky-header]) { scroll-padding-top: calc(var(--sticky-header-h, 0px) + 0.5rem); }
+
+/* "Hinweise (n)" folded: the notices stay mounted (they are counted and load on their own), only hidden */
+.notices-folded [data-notice] {
+  display: none;
+}

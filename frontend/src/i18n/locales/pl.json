@@ -3795,5 +3795,8 @@
     "other": "{n} tomu jako „Brak”"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "Oznacz następny nieprzeczytany tom jako przeczytany",
-  "+ Band {volume} gelesen": "+ Tom {volume} przeczytany"
+  "+ Band {volume} gelesen": "+ Tom {volume} przeczytany",
+  "Doppelte Einträge": "Zduplikowane wpisy",
+  "Bandzahl anpassen": "Dostosuj liczbę tomów",
+  "Hinweise ({count})": "Wskazówki ({count})"
 }

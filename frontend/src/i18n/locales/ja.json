@@ -3477,5 +3477,8 @@
     "other": "{n} 巻 を「不足」として"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "次の未読巻を既読にする",
-  "+ Band {volume} gelesen": "+ {volume}巻を既読"
+  "+ Band {volume} gelesen": "+ {volume}巻を既読",
+  "Doppelte Einträge": "重複エントリ",
+  "Bandzahl anpassen": "巻数を調整",
+  "Hinweise ({count})": "お知らせ ({count})"
 }

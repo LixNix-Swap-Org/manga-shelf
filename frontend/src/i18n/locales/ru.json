@@ -3795,5 +3795,8 @@
     "other": "{n} тома как «Нет»"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "Отметить следующий непрочитанный том как прочитанный",
-  "+ Band {volume} gelesen": "+ Том {volume} прочитан"
+  "+ Band {volume} gelesen": "+ Том {volume} прочитан",
+  "Doppelte Einträge": "Повторяющиеся записи",
+  "Bandzahl anpassen": "Изменить число томов",
+  "Hinweise ({count})": "Подсказки ({count})"
 }

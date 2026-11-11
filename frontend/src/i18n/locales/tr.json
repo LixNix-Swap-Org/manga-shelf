@@ -3583,5 +3583,8 @@
     "other": "{n} cilt „Eksik“ olarak"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "Sonraki okunmamış cildi okundu olarak işaretle",
-  "+ Band {volume} gelesen": "+ Cilt {volume} okundu"
+  "+ Band {volume} gelesen": "+ Cilt {volume} okundu",
+  "Doppelte Einträge": "Yinelenen girişler",
+  "Bandzahl anpassen": "Cilt sayısını ayarla",
+  "Hinweise ({count})": "Notlar ({count})"
 }

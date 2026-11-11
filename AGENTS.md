@@ -504,6 +504,7 @@ manga-shelf/
 │           │   ├── ReaderBar.jsx # reader toggle, "Gelesen am", "+ Band n gelesen" (first owned regular volume the shown reader has not read, via handleToggleVolumeRead)
 │           │   ├── ChapterProgress.jsx # panel "Kapitel" of a webtoon: own chapter (+1, "Gelesen bis Kapitel", undo toast), the other readers; withChapter() patches the detail
 │           │   ├── CopyVolumesNotice.jsx # notice above the volumes (catalog stage c2): "N Bände aus „<Regal>“ fehlen hier." with "Bände übernehmen" (GET …/volume-sources, POST …/volumes/copy); only for editors online with more than one shelf
+│           │   ├── NoticesGroup.jsx # "Hinweise (n)" above the volumes: from two `data-notice` children on they fold into one row with a badge per notice (badge opens and focuses it); open/folded in localStorage `mangashelf_detail_notices_open`
 │           │   ├── CatalogNotice.jsx # notice in the series edit form (migration 46): an edition also in a shelf the caller only reads keeps changes in this shelf, local fields, "Auf Katalogstand zurücksetzen" (POST /mangas/:id/catalog-reset)
 │           │   ├── OwnerFilterBar.jsx # ownership per person
 │           │   ├── OwnerBadges.jsx # owner badges

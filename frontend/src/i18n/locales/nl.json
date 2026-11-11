@@ -3583,5 +3583,8 @@
     "other": "{n} delen als „Ontbreekt”"
   },
   "Den nächsten ungelesenen Band als gelesen markieren": "Het volgende ongelezen deel als gelezen markeren",
-  "+ Band {volume} gelesen": "+ Deel {volume} gelezen"
+  "+ Band {volume} gelesen": "+ Deel {volume} gelezen",
+  "Doppelte Einträge": "Dubbele items",
+  "Bandzahl anpassen": "Aantal delen aanpassen",
+  "Hinweise ({count})": "Meldingen ({count})"
 }

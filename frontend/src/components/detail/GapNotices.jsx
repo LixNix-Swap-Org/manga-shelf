@@ -51,7 +51,7 @@ export default function GapNotices({
   return (
     <>
       {mpGapData?.matched && unconfirmed && canEdit && !isOffline && (
-        <div className="mb-4 p-3 bg-sky-500/10 border border-sky-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-sky-100">
+        <div data-notice={t('Edition bestätigen')} className="mb-4 p-3 bg-sky-500/10 border border-sky-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-sky-100">
           <div className="flex items-center gap-2.5">
             <CircleExclamationPoint className="w-5 h-5 text-sky-300 shrink-0" aria-hidden="true" />
             <div>
@@ -85,7 +85,7 @@ export default function GapNotices({
       )}
 
       {duplicateEntries.length > 0 && canEdit && (
-        <div role="status" className="mb-4 p-3 bg-rose-500/10 border border-rose-500/40 rounded-xl flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-rose-200">
+        <div role="status" data-notice={t('Doppelte Einträge')} className="mb-4 p-3 bg-rose-500/10 border border-rose-500/40 rounded-xl flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-rose-200">
           <TriangleExclamationPoint className="w-4 h-4 text-rose-400 shrink-0" aria-hidden="true" />
           <span>
             <strong>{t('Doppelte Einträge:')}</strong> {duplicateEntries.map(d => `${d.label} (${d.count}×)`).join(', ')}
@@ -96,7 +96,7 @@ export default function GapNotices({
 
       {/* reported by the gap check whether or not gaps exist (e.g. all 11 volumes of the German edition owned, stored total 22) */}
       {showDiscrepancy && (
-        <div className="mb-4 p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+        <div data-notice={t('Bandzahl anpassen')} className="mb-4 p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
           <div className="flex items-center gap-2.5">
             <CircleExclamationPoint className="w-5 h-5 text-amber-400 shrink-0" aria-hidden="true" />
             <div>
@@ -121,7 +121,7 @@ export default function GapNotices({
       )}
 
       {showGapBanner && (
-        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
+        <div data-notice={formatCount(detectedGaps.length, 'Lücke', 'Lücken')} className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
             <span>
