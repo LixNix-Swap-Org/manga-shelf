@@ -3487,5 +3487,6 @@
   "★★★ hoch": "★★★ high",
   "✓ Im Besitz": "✓ Owned",
   "✕ Fehlt": "✕ Missing",
-  "✕ Fehlt (Lücke)": "✕ Missing (gap)"
+  "✕ Fehlt (Lücke)": "✕ Missing (gap)",
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} had no other shelf and now have an empty one of their own."
 }

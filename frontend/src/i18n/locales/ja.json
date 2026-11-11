@@ -3384,5 +3384,6 @@
   "★★★ hoch": "★★★ 高",
   "✓ Im Besitz": "✓ 所持",
   "✕ Fehlt": "✕ 未所持",
-  "✕ Fehlt (Lücke)": "✕ 未所持(欠番)"
+  "✕ Fehlt (Lücke)": "✕ 未所持(欠番)",
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} にはほかの本棚がなかったため、空の専用本棚ができました。"
 }

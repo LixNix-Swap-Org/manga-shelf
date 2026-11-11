@@ -54,6 +54,11 @@
 - **The user directory lists only people you share a shelf with** (an admin sees all). Adding a member by typing the name works as before.
 - The text of the shelf mode "Eigenes Regal" now says that backups still contain the collection.
 
+### Shelves
+- Deleting a shelf now says which members had no other shelf and got an empty one of their own.
+- A visitor or guest account never becomes the owner of an empty household shelf, so the shelf always keeps someone who can manage it.
+- A new series without a chosen shelf lands in a shelf you own today, also after a shelf was handed over to you or away from you.
+
 ## 3.7.0
 
 ### Before updating

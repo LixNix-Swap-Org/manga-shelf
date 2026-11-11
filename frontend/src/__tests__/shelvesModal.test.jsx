@@ -198,4 +198,16 @@ describe('ShelvesModal', () => {
     await waitFor(() => expect(calls('DELETE')).toEqual([['/api/shelves/7', undefined]]));
     await waitFor(() => expect(shelvesDialog().contains(document.activeElement)).toBe(true));
   });
+  it('deleting a shelf tells which members got an empty shelf of their own', async () => {
+    const own = { id: 7, name: 'Leer', color: '#6366f1', is_default: false, role: 'owner', series_count: 0, member_count: 3 };
+    routes['GET /api/shelves'] = () => fakeResponse(200, { shelves: [HOME, own] });
+    routes['GET /api/shelves/7'] = () => fakeResponse(200, { ...own, members: [member(1, 'admin', 'owner'), member(4, 'rita', 'editor'), member(5, 'tom', 'viewer')] });
+    routes['DELETE /api/shelves/7'] = () => fakeResponse(200, { success: true, personal_shelves: ['rita', 'tom'] });
+    renderModal();
+    await openShelf('Leer');
+    fireEvent.click(screen.getByRole('button', { name: 'Regal löschen' }));
+    const question = await screen.findByRole('dialog', { name: 'Regal löschen' });
+    fireEvent.click(within(question).getByRole('button', { name: 'Löschen' }));
+    await waitFor(() => expect(toasts.messages('info')).toContain('rita, tom hatten kein anderes Regal und haben jetzt ein eigenes, leeres.'));
+  });
 });
