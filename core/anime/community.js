@@ -1,5 +1,6 @@
 // Who may see which rating of a shared anime entry. Every user rates for themselves; a rating is public (with the name),
-// anonymous (counts, no name) or private (only the owner sees it). Notes are never shared.
+// anonymous (listed without a name) or private (only the owner sees it). Every rating, a private one too, counts without a
+// name in the community averages, so everybody sees how an entry is rated. Notes are never shared.
 const episodeMarks = require('./episodes');
 
 const VISIBILITIES = ['public', 'anonymous', 'private'];
@@ -28,9 +29,9 @@ function othersView(progress, row) {
     return out;
 }
 
-/** { average, count, watchers } over the ratings that are public or anonymous; null average without ratings. */
+/** { average, count, watchers } over every rating, private ones included (no name in it); null average without ratings. */
 function summarize(rows) {
-    const rated = rows.filter((r) => r.score !== null && r.score !== undefined && visibilityOf(r) !== 'private');
+    const rated = rows.filter((r) => r.score !== null && r.score !== undefined);
     const sum = rated.reduce((a, r) => a + r.score, 0);
     return {
         average: rated.length ? roundOne(sum / rated.length) : null,
@@ -65,7 +66,7 @@ function byScoreAndComment(a, b) {
  * user, visibility and time; then the anonymous ones of others with score and comment only, by byScoreAndComment, so
  * neither a field nor the position points to their author. Private ratings of others are left out.
  */
-function ratingsOf(rows, viewerId) {
+function ratingsOf(rows, viewerId, mayName = () => true) {
     const named = [];
     const anonymous = [];
     for (const r of rows) {
@@ -74,7 +75,7 @@ function ratingsOf(rows, viewerId) {
         const visibility = visibilityOf(r);
         if (visibility === 'private' && !own) continue;
         const comment = r.public_comment || null;
-        if (own || visibility === 'public') {
+        if (own || (visibility === 'public' && mayName(r))) {
             named.push({ user_id: r.user_id, username: r.username, score: r.score, comment, visibility, own, updated_at: r.updated_at });
         } else {
             anonymous.push({ user_id: null, username: null, score: r.score, comment, own: false });
@@ -85,15 +86,14 @@ function ratingsOf(rows, viewerId) {
 }
 
 /**
- * Per-episode community ratings: { "7": { average, count } }. The count takes the public and the anonymous ratings, the
- * average the public ones and the anonymous ones only when at least MIN_ANONYMOUS of them rate that episode (null when
+ * Per-episode community ratings: { "7": { average, count } }. The count takes every rating, the average the public ones
+ * and the anonymous and private ones (no name) only when at least MIN_ANONYMOUS of them rate that episode (null when
  * nothing is left).
  */
 function episodeCommunity(rows) {
     const acc = new Map();
     for (const r of rows) {
         const visibility = visibilityOf(r);
-        if (visibility === 'private') continue;
         const scores = episodeMarks.parseScores(r.episode_scores);
         for (const [ep, value] of Object.entries(scores)) {
             const cur = acc.get(ep) || { sum: 0, count: 0, anonymousSum: 0, anonymousCount: 0 };

@@ -1,4 +1,5 @@
-// Anime ratings of a shared entry: public (named), anonymous (counted, no name), private (hidden); notes are never shared.
+// Anime ratings of a shared entry: public (named), anonymous (listed, no name), private (hidden); every one counts in the
+// community average without a name; notes are never shared.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('../helpers');
@@ -35,7 +36,8 @@ test('ratings follow their visibility and notes stay private', async () => {
     assert.equal(b.status, 200, JSON.stringify(b.body));
 
     const forBen = (await ben('GET', `/anime/${id}/ratings`)).body;
-    assert.equal(forBen.summary.count, 1, 'private rating of ben is not counted');
+    assert.equal(forBen.summary.count, 2, 'the private rating of ben counts too');
+    assert.equal(forBen.summary.average, 8);
     const foreign = forBen.ratings.find((r) => !r.own);
     assert.equal(foreign.username, null);
     assert.equal(foreign.user_id, null);
@@ -51,10 +53,10 @@ test('ratings follow their visibility and notes stay private', async () => {
     assert.equal(annaRow.notes, null);
     assert.equal('rating_visibility' in annaRow, false, 'the visibility of others stays hidden');
     assert.equal('public_comment' in annaRow ? annaRow.public_comment : null, null);
-    assert.equal(detail.community.average, 9);
+    assert.equal(detail.community.average, 8, 'anna 9 and ben 7, without names');
 
     const list = (await ben('GET', '/anime')).body.find((x) => x.id === id);
-    assert.equal(list.community.count, 1);
+    assert.equal(list.community.count, 2);
 });
 
 test('default visibility comes from the profile and bad values are refused', async () => {
@@ -147,4 +149,62 @@ test('an admin acting for another user leaves the rating alone and gets the row 
     const adminId = (await admin('GET', '/auth/me')).body.user.id;
     const self = await admin('PUT', `/anime/${id}/progress`, { user_id: adminId, score: 6, rating_visibility: 'private' });
     assert.deepEqual([self.status, self.body.score, self.body.rating_visibility], [200, 6, 'private'], 'the own id is the own row');
+});
+
+test('the anime list is shared across shelves: separate accounts see each other by name', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'dora', password: 'password123', role: 'editor', separate_shelf: true })).status, 200);
+    const dora = ctx.client();
+    assert.equal((await dora('POST', '/auth/login', { username: 'dora', password: 'password123' })).status, 200);
+    const id = (await anna('POST', '/anime', { title: 'Getrennt', episodes: 10 })).body.id;
+    assert.equal((await anna('PUT', `/anime/${id}/progress`, { status: 'Schaue', episodes_watched: 4, score: 8, rating_visibility: 'public' })).status, 200);
+    assert.equal((await dora('PUT', `/anime/${id}/progress`, { status: 'Schaue', episodes_watched: 2 })).status, 200);
+
+    const names = (rows) => rows.map((p) => p.username).sort();
+    const forDora = (await dora('GET', '/anime')).body.find((x) => x.id === id);
+    assert.deepEqual(names(forDora.progress_users), ['anna', 'dora'], 'dora shares no shelf with anna and still sees her');
+    assert.deepEqual(names((await dora('GET', `/anime/${id}`)).body.progress), ['anna', 'dora']);
+    assert.deepEqual((await dora('GET', `/anime/${id}/ratings`)).body.ratings.filter((r) => !r.own).map((r) => r.username), ['anna'],
+        'a rating anna made public stays named');
+    assert.equal((await dora('GET', '/stats')).body.anime.per_user.some((r) => r.username === 'anna'), true);
+    assert.deepEqual(names((await anna('GET', '/anime')).body.find((x) => x.id === id).progress_users), ['anna', 'dora']);
+});
+
+test('an account that does not share its anime list is hidden by name, even from admins, and still counts', async () => {
+    const id = (await anna('POST', '/anime', { title: 'Verborgen', episodes: 10 })).body.id;
+    assert.equal((await ben('PUT', `/anime/${id}/progress`, { status: 'Schaue', episodes_watched: 3, score: 9, rating_visibility: 'public' })).status, 200);
+    assert.equal((await carl('PUT', `/anime/${id}/progress`, { status: 'Geplant' })).status, 200);
+    const profile = await ben('PUT', '/auth/profile', { share_anime_activity: false });
+    assert.equal(profile.status, 200, JSON.stringify(profile.body));
+    assert.equal(profile.body.user.share_anime_activity, false);
+    assert.equal((await ben('PUT', '/auth/profile', { share_anime_activity: 'nein' })).status, 400);
+
+    const names = (rows) => rows.map((p) => p.username).sort();
+    for (const [who, client] of [['carl', carl], ['admin', admin]]) {
+        const row = (await client('GET', '/anime')).body.find((x) => x.id === id);
+        assert.deepEqual(names(row.progress_users), ['anna', 'carl'], `${who} does not see ben`);
+        assert.equal(row.community.watchers, 1, 'ben still counts as watching');
+        assert.equal(row.community.average, 9, 'and so does his rating');
+        assert.equal(names((await client('GET', `/anime/${id}`)).body.progress).includes('ben'), false);
+        const rated = (await client('GET', `/anime/${id}/ratings`)).body.ratings.filter((r) => !r.own);
+        assert.deepEqual(rated.map((r) => [r.username, r.score]), [[null, 9]], 'his public rating loses the name');
+        assert.equal((await client('GET', '/stats')).body.anime.per_user.some((r) => r.username === 'ben'), false);
+    }
+    const own = (await ben('GET', '/anime')).body.find((x) => x.id === id);
+    assert.deepEqual(names(own.progress_users), ['anna', 'ben', 'carl'], 'ben still sees himself and the others');
+
+    assert.equal((await ben('PUT', '/auth/profile', { share_anime_activity: true })).status, 200);
+    assert.deepEqual(names((await carl('GET', '/anime')).body.find((x) => x.id === id).progress_users), ['anna', 'ben', 'carl']);
+});
+
+test('private episode ratings count like anonymous ones: from two on in the average, never in the list', async () => {
+    const id = (await carl('POST', '/anime', { title: 'Privat', episodes: 4 })).body.id;
+    const rate = async (client, body) => assert.equal((await client('PUT', `/anime/${id}/progress`, { status: 'Schaue', ...body })).status, 200);
+    await rate(anna, { score: 2, rating_visibility: 'private', episode_scores: { 1: 4 } });
+    let view = (await carl('GET', `/anime/${id}/ratings`)).body;
+    assert.deepEqual(view.episodes, { 1: { average: null, count: 1 } }, 'a lone private episode rating does not show');
+    assert.deepEqual([view.summary.count, view.summary.average], [1, 2]);
+    assert.deepEqual(view.ratings.filter((r) => !r.own), [], 'nor is it listed');
+    await rate(ben, { rating_visibility: 'private', episode_scores: { 1: 8 } });
+    view = (await carl('GET', `/anime/${id}/ratings`)).body;
+    assert.deepEqual(view.episodes, { 1: { average: 6, count: 2 } });
 });

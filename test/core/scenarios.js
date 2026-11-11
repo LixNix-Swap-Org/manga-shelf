@@ -336,7 +336,7 @@ const scenarios = [
             const entry = (await vis('GET', '/anime')).body.find(a => a.id === id);
             assert.deepEqual([entry.my_progress, entry.progress_users.map(p => p.username)], [null, ['ed']]);
             assert.equal((await ed('GET', `/anime/${id}`)).body.my_progress.status, 'Gesehen');
-            assert.equal((await ed('PUT', `/anime/${id}`, { notes: 'DVD' })).body.notes, 'DVD');
+            assert.equal((await ed('PUT', `/anime/${id}`, { notes: 'DVD' })).body.my_progress.notes, 'DVD');
             assert.equal((await vis('GET', '/export/anime.csv')).status, 200);
             assert.equal((await ed('POST', `/anime/${id}/refresh`, {})).status, 400, 'manual entries have no source');
 
@@ -594,7 +594,7 @@ const scenarios = [
             await newVolume(ed, id, '9', { status: 'Vorbestellt', release_date: `${monthFromNow(1)}-10`, price: 8 });
             const token = `kern${'A'.repeat(36)}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, 'x');
             const hash = require('crypto').createHash('sha256').update(token, 'utf8').digest('hex');
-            run('INSERT INTO app_settings (key, value) VALUES (?, ?)', `calendar_feed:${hash}`, JSON.stringify({ user_id: 2, created_at: new Date().toISOString(), last_used_at: null }));
+            run("INSERT INTO calendar_feeds (token_hash, user_id, scope, created_at) VALUES (?, 2, 'radar', ?)", hash, new Date().toISOString());
 
             const feed = await anonymous.raw('GET', `/radar/feed.ics?token=${token}`);
             assert.equal(feed.status, 200);
@@ -606,12 +606,11 @@ const scenarios = [
             assert.deepEqual([wrong.status, wrong.body.code], [404, 'NOT_FOUND']);
             assert.equal((await anonymous('GET', '/radar/feed.ics')).status, 404);
 
-            // a token opens only the feed of its scope; one without a scope (stored before 3.5.0) is a radar token
+            // a token opens only the feed of its scope
             assert.equal((await anonymous('GET', `/anime/feed.ics?token=${token}`)).status, 404);
             const animeToken = token.replace(/^kern/, 'anim');
             const animeHash = require('crypto').createHash('sha256').update(animeToken, 'utf8').digest('hex');
-            run('INSERT INTO app_settings (key, value) VALUES (?, ?)', `calendar_feed:${animeHash}`,
-                JSON.stringify({ user_id: 2, scope: 'anime', created_at: new Date().toISOString(), last_used_at: null }));
+            run("INSERT INTO calendar_feeds (token_hash, user_id, scope, created_at) VALUES (?, 2, 'anime', ?)", animeHash, new Date().toISOString());
             const anime = await anonymous.raw('GET', `/anime/feed.ics?token=${animeToken}`);
             assert.equal(anime.status, 200);
             assert.ok(anime.text.startsWith('BEGIN:VCALENDAR'));

@@ -46,10 +46,13 @@ test('removes only old files nobody references', () => {
 });
 
 test('keeps files referenced in any form: JSON, markdown, HTML, absolute URLs, edition data, odd names', () => {
-    const manga = db.prepare(`INSERT INTO mangas (title, cover_image, banner_image, description, manga_passion_edition_data)
-        VALUES ('B', 'https://shelf.example/uploads/abs-cover.jpg?v=2', 'banner-bare.png', ?, ?)`).run(
-        'Text ![](/uploads/md-image.jpg) und <img src="/uploads/html-image.webp"> sowie ein Leerzeichen: /uploads/mit leer zeichen.jpg',
-        JSON.stringify({ cover: 'C:\\data\\uploads\\edition-local.jpg', esc: '\\/uploads\\/escaped.jpg' })
+    const manga = db.prepare(`INSERT INTO mangas (title, cover_image, banner_image, description)
+        VALUES ('B', 'https://shelf.example/uploads/abs-cover.jpg?v=2', 'banner-bare.png', ?)`).run(
+        'Text ![](/uploads/md-image.jpg) und <img src="/uploads/html-image.webp"> sowie ein Leerzeichen: /uploads/mit leer zeichen.jpg'
+    );
+    // the stored edition sits on the catalog series since migration 51
+    db.prepare('UPDATE catalog_series SET mp_edition_data = ? WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = ?)').run(
+        JSON.stringify({ cover: 'C:\\data\\uploads\\edition-local.jpg', esc: '\\/uploads\\/escaped.jpg' }), manga.lastInsertRowid
     );
     db.prepare("INSERT INTO volumes (manga_id, volume_number, cover_image, images, notes) VALUES (?, '2', ?, ?, ?)").run(
         manga.lastInsertRowid,
@@ -130,6 +133,8 @@ test('the token index finds exactly the orphans a plain substring scan finds', (
 
     const rows = [
         ...db.prepare('SELECT cover_image, banner_image, description, manga_passion_edition_data FROM mangas').all(),
+        ...db.prepare(`SELECT c.cover_image, c.banner_image, c.description, c.mp_edition_data FROM catalog_series c
+            WHERE EXISTS (SELECT 1 FROM mangas m WHERE m.catalog_series_id = c.id)`).all(),
         ...db.prepare('SELECT cover_image, images, notes FROM volumes').all()
     ];
     const text = rows.flatMap(r => Object.values(r)).filter(Boolean).map(String).join('\n');

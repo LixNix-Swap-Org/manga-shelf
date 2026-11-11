@@ -54,7 +54,7 @@ const openShelf = async (name) => {
 describe('memberRemovalText', () => {
   it('names the owned volumes that go, says reading marks stay, and stays general without counts', () => {
     expect(memberRemovalText(member(2, 'erika', 'editor', { owned: 3, read: 1 })))
-      .toBe('„erika“ aus diesem Regal entfernen? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht (3 Bände). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.');
+      .toBe('„erika“ aus diesem Regal entfernen? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht (3 Bände). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.');
     expect(memberRemovalText({ user_id: 2, username: 'erika', role: 'editor' }))
       .toMatch(/^„erika“ aus diesem Regal entfernen\? Die Besitzmarkierungen von erika in diesem Regal werden gelöscht\. .*Die Lesemarkierungen bleiben erhalten\./);
     expect(memberRemovalText(member(2, 'erika', 'viewer'))).toBe('„erika“ aus diesem Regal entfernen? erika besitzt hier keine Bände; die Lesemarkierungen bleiben erhalten.');
@@ -140,6 +140,34 @@ describe('ShelvesModal', () => {
     expect(calls('DELETE')).toEqual([['/api/shelves/2/members/1', undefined]]);
   });
 
+  it('the removal toast takes it back through the undo endpoint and shows the member again', async () => {
+    routes['DELETE /api/shelves/1/members/2'] = () => fakeResponse(200, { success: true, members: [member(1, 'admin', 'owner')], undo_token: 'tok-1' });
+    routes['POST /api/shelves/undo'] = () => fakeResponse(200, { success: true, restored_copies: 3, members: [member(1, 'admin', 'owner'), member(2, 'erika', 'editor')] });
+    renderModal();
+    await openShelf('Familie');
+    fireEvent.click(screen.getByRole('button', { name: 'erika: Entfernen' }));
+    const question = await screen.findByRole('dialog', { name: 'Mitglied entfernen' });
+    fireEvent.click(within(question).getByRole('button', { name: 'Entfernen' }));
+    await waitFor(() => expect(screen.queryByText('erika')).toBeNull());
+    const toast = toasts.last();
+    expect(toast.message).toBe('erika ist kein Mitglied mehr.');
+    expect(toast.action.label).toBe('Rückgängig');
+    toast.action.onClick();
+    await waitFor(() => expect(screen.getByText('erika')).toBeTruthy());
+    expect(calls('POST')).toEqual([['/api/shelves/undo', { undo_token: 'tok-1' }]]);
+    expect(toasts.messages('success')).toContain('Rückgängig gemacht');
+  });
+
+  it('a removal without undo token shows no undo action', async () => {
+    routes['DELETE /api/shelves/2/members/1'] = () => fakeResponse(200, { success: true });
+    renderModal();
+    await openShelf('Bens Regal');
+    fireEvent.click(screen.getByRole('button', { name: 'admin: Entfernen' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Regal verlassen' })).getByRole('button', { name: 'Verlassen' }));
+    await waitFor(() => expect(toasts.messages('success')).toContain('Du hast das Regal verlassen.'));
+    expect(toasts.last().action).toBeFalsy();
+  });
+
   it('the only owner can neither demote nor remove themselves; with a second owner both are offered', async () => {
     renderModal();
     await openShelf('Familie');
@@ -197,5 +225,17 @@ describe('ShelvesModal', () => {
     fireEvent.click(within(question).getByRole('button', { name: 'Löschen' }));
     await waitFor(() => expect(calls('DELETE')).toEqual([['/api/shelves/7', undefined]]));
     await waitFor(() => expect(shelvesDialog().contains(document.activeElement)).toBe(true));
+  });
+  it('deleting a shelf tells which members got an empty shelf of their own', async () => {
+    const own = { id: 7, name: 'Leer', color: '#6366f1', is_default: false, role: 'owner', series_count: 0, member_count: 3 };
+    routes['GET /api/shelves'] = () => fakeResponse(200, { shelves: [HOME, own] });
+    routes['GET /api/shelves/7'] = () => fakeResponse(200, { ...own, members: [member(1, 'admin', 'owner'), member(4, 'rita', 'editor'), member(5, 'tom', 'viewer')] });
+    routes['DELETE /api/shelves/7'] = () => fakeResponse(200, { success: true, personal_shelves: ['rita', 'tom'] });
+    renderModal();
+    await openShelf('Leer');
+    fireEvent.click(screen.getByRole('button', { name: 'Regal löschen' }));
+    const question = await screen.findByRole('dialog', { name: 'Regal löschen' });
+    fireEvent.click(within(question).getByRole('button', { name: 'Löschen' }));
+    await waitFor(() => expect(toasts.messages('info')).toContain('rita, tom hatten kein anderes Regal und haben jetzt ein eigenes, leeres.'));
   });
 });

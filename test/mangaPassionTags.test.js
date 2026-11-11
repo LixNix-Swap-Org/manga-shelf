@@ -36,9 +36,14 @@ function withFakeMangaPassion(handler) {
 }
 
 let nextEdition = 990100;
-const createSeries = (editionId, { tags = null, editionData = null } = {}) => Number(db.prepare(
-    'INSERT INTO mangas (title, tags, manga_passion_id, manga_passion_edition_data) VALUES (?, ?, ?, ?)'
-).run(`Genres ${editionId}`, tags, editionId, editionData ? JSON.stringify(editionData) : null).lastInsertRowid);
+// the stored edition sits on the catalog series of the row since migration 51
+const createSeries = (editionId, { tags = null, editionData = null } = {}) => {
+    const id = Number(db.prepare('INSERT INTO mangas (title, tags, manga_passion_id) VALUES (?, ?, ?)').run(`Genres ${editionId}`, tags, editionId).lastInsertRowid);
+    if (editionData) {
+        db.prepare('UPDATE catalog_series SET mp_edition_data = ? WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = ?)').run(JSON.stringify(editionData), id);
+    }
+    return id;
+};
 const seedCache = (key, data) => db.prepare('INSERT INTO manga_passion_cache (cache_key, json_data, created_at) VALUES (?, ?, ?)')
     .run(key, JSON.stringify(data), Date.now());
 const tagsOf = (id) => db.prepare('SELECT tags FROM mangas WHERE id = ?').get(id).tags;
