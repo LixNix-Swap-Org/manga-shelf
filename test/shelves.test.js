@@ -147,12 +147,45 @@ test('shelves: moving a series needs editor rights in both shelves; trash and lo
     assert.ok(own.id);
 });
 
+test('shelves: deleting a shelf names the members who got an empty shelf of their own', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'rita', password: 'password123', role: 'editor', separate_shelf: true })).status, 200);
+    const rita = ctx.client();
+    assert.equal((await rita('POST', '/auth/login', { username: 'rita', password: 'password123' })).status, 200);
+    const ritaId = (await rita('GET', '/auth/me')).body.user.id;
+    const own = (await myShelf(rita)).id;
+    const extra = (await anna('POST', '/shelves', { name: 'Kurz' })).body.id;
+    assert.equal((await anna('POST', `/shelves/${extra}/members`, { username: 'rita', role: 'editor' })).status, 201);
+    assert.equal((await anna('POST', `/shelves/${extra}/members`, { username: 'ben', role: 'viewer' })).status, 201);
+    // rita leaves her own shelf by deleting it, so "Kurz" is her only one
+    assert.equal((await rita('DELETE', `/shelves/${own}`)).status, 200);
+    const res = await anna('DELETE', `/shelves/${extra}`);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.personal_shelves, ['rita'], 'ben and anna still have shelves');
+    assert.equal((await rita('GET', '/shelves')).body.shelves[0].name, 'Sammlung von rita');
+    assert.ok(ritaId);
+});
+
 test('shelves: the user directory lists names only and is closed to guests', async () => {
     const res = await anna('GET', '/users/directory');
     assert.equal(res.status, 200);
     assert.ok(res.body.users.some(u => u.username === 'ben'));
     assert.deepEqual(Object.keys(res.body.users[0]).sort(), ['id', 'username']);
     assert.equal((await guest('GET', '/users/directory')).status, 403);
+});
+
+test('shelves: the user directory names only accounts that share a shelf with the caller; an admin sees all', async () => {
+    assert.equal((await admin('POST', '/users', { username: 'paula', password: 'password123', role: 'editor', separate_shelf: true })).status, 200);
+    const paula = ctx.client();
+    assert.equal((await paula('POST', '/auth/login', { username: 'paula', password: 'password123' })).status, 200);
+    const names = async (client) => (await client('GET', '/users/directory')).body.users.map(u => u.username);
+    assert.deepEqual(await names(paula), ['paula']);
+    assert.equal((await names(anna)).includes('paula'), false);
+    assert.equal((await names(admin)).includes('paula'), true);
+    const paulaShelf = (await myShelf(paula)).id;
+    assert.equal((await paula('POST', `/shelves/${paulaShelf}/members`, { username: 'anna', role: 'viewer' })).status, 201, 'adding by name still works');
+    assert.deepEqual((await names(paula)).sort(), ['anna', 'paula']);
+    assert.equal((await names(anna)).includes('paula'), true);
+    assert.equal((await paula('DELETE', `/shelves/${paulaShelf}/members/${annaId}`)).status, 200);
 });
 
 test('shelves: user creation modes - household by default, personal, share_same and share_mutual only from own shelves', async () => {

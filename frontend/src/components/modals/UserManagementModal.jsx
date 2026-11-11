@@ -35,7 +35,7 @@ const OWN_SHELF_MODES = new Set(['personal', 'share_mutual']);
 // i18n
 const SHELF_MODE_TEXT = {
   household: { title: 'Haushaltsregal', text: 'Wird Mitglied der gemeinsamen Sammlung „{name}“, die alle im Haushalt sehen (Standard).' },
-  personal: { title: 'Eigenes Regal', text: 'Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie, auch Admins nicht.' },
+  personal: { title: 'Eigenes Regal', text: 'Startet mit einer eigenen, leeren Sammlung. Nur das neue Konto sieht sie in der App, auch Admins nicht; Backups enthalten sie trotzdem.' },
   share_same: { title: 'Regal eines Benutzers mitnutzen', text: 'Wird Mitglied im Regal des gewählten Benutzers; das geht nur bei Regalen, die dir gehören.' },
   share_mutual: { title: 'Gegenseitig mit dir teilen', text: 'Bekommt ein eigenes Regal und Zugriff auf deins; du bekommst Zugriff auf das neue Regal.' }
 };

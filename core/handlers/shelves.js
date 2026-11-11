@@ -126,18 +126,22 @@ function remove(ctx, { params }) {
     if (ctx.db.prepare('SELECT 1 FROM mangas WHERE shelf_id = ? LIMIT 1').get(id)) {
         throw conflict('Das Regal ist nicht leer. Reihen zuerst verschieben oder löschen.', 'SHELF_NOT_EMPTY');
     }
-    const members = ctx.db.prepare('SELECT user_id FROM shelf_members WHERE shelf_id = ?').all(id).map(r => r.user_id);
+    const members = ctx.db.prepare('SELECT m.user_id, u.username FROM shelf_members m JOIN users u ON u.id = m.user_id WHERE m.shelf_id = ?').all(id);
+    // members left without any shelf get an empty one of their own; the answer names them so the owner is told
+    const personal = [];
     ctx.db.transaction(() => {
         // what is left in its trash belonged to this shelf only, so it goes with it
         ctx.db.prepare('DELETE FROM trash WHERE shelf_id = ?').run(id);
         ctx.db.prepare('DELETE FROM shelves WHERE id = ?').run(id);
-        for (const userId of members) {
+        for (const { user_id: userId, username } of members) {
             if (!ctx.db.prepare('SELECT 1 FROM shelf_members WHERE user_id = ? LIMIT 1').get(userId)) {
                 access.createPersonalShelf(ctx.db, userId);
+                personal.push(username);
             }
         }
     });
-    return { body: { success: true } };
+    personal.sort((a, b) => a.localeCompare(b));
+    return { body: { success: true, personal_shelves: personal } };
 }
 
 const LAST_OWNER = 'Das Regal braucht mindestens einen Besitzer';
@@ -401,9 +405,10 @@ function undoMove(ctx, prev) {
     return { id: prev.mangaId, shelf_id: prev.source, restored_copies: restored };
 }
 
+/** GET /users/directory: the accounts the caller may see by name (shares a shelf with them; an admin sees all). */
 function directory(ctx) {
-  const users = ctx.db.prepare('SELECT id, username FROM users ORDER BY username COLLATE NOCASE').all();
-  return { body: { users } };
+    const users = ctx.db.prepare('SELECT id, username FROM users ORDER BY username COLLATE NOCASE').all();
+    return { body: { users: access.visibleRows(ctx, users, 'id') } };
 }
 
 module.exports = { directory, list, detail, create, update, remove, addMember, setMemberRole, removeMember, movePreview, moveManga, undo };

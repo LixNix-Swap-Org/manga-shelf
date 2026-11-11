@@ -15,7 +15,7 @@ const scheduler = require('../services/scheduler');
 const lifecycle = require('../services/lifecycle');
 const { cleanOrphanUploads } = require('../services/uploadCleanup');
 const { appliedSchemaVersion, LATEST_SCHEMA_VERSION } = require('../core/schema');
-const { FEED_KEY_PREFIX, feedScopeOf, revokeFeedTokens } = require('../core/handlers/radar');
+const { feedsOf, addFeed, revokeFeedTokens } = require('../core/handlers/radar');
 const backupsRoutes = require('./backups');
 const updater = require('../services/update');
 const { REPOSITORY_URL } = require('../services/update/constants');
@@ -483,19 +483,11 @@ router.delete('/system/update/staging/:stagingId', requireAdmin, updateAvailable
 const FEED_PATHS = { radar: '/api/radar/feed.ics', anime: '/api/anime/feed.ics' };
 const feedLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 120, message: 'Zu viele Kalender-Abrufe. Bitte später erneut versuchen.' });
 
-function feedRows(userId, scope) {
-    return db.prepare('SELECT key, value FROM app_settings WHERE key LIKE ?').all(`${FEED_KEY_PREFIX}%`)
-        .map(row => {
-            try { return { key: row.key, entry: JSON.parse(row.value) }; } catch (e) { return null; }
-        })
-        .filter(r => r && r.entry && r.entry.user_id === userId && feedScopeOf(r.entry) === scope);
-}
-
 const feedPath = (scope, token) => `${FEED_PATHS[scope]}?token=${encodeURIComponent(token)}`;
 const absolute = (req, p) => `${req.protocol}://${req.get('host')}${p}`;
 
 function feedState(req, scope) {
-    const row = feedRows(req.user.id, scope)[0];
+    const row = feedsOf(db, req.user.id, scope)[0];
     if (!row) return { active: false, path: null, url: null, created_at: null, last_used_at: null, unreadable: false };
     let token;
     try { token = openForServer(row.entry.sealed); } catch (e) { token = null; }
@@ -519,10 +511,10 @@ const showFeed = (scope) => (req, res) => {
 const mintFeed = (scope) => (req, res) => {
     const token = crypto.randomBytes(32).toString('base64url');
     const hash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
-    const entry = { user_id: req.user.id, scope, created_at: new Date().toISOString(), last_used_at: null, sealed: sealForServer(token) };
+    const sealed = sealForServer(token);
     runTransaction(() => {
         removeFeeds(req.user.id, scope);
-        db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run(FEED_KEY_PREFIX + hash, JSON.stringify(entry));
+        addFeed(db, hash, req.user.id, scope, sealed, new Date().toISOString());
     });
     res.json(feedState(req, scope));
 };

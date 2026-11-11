@@ -422,9 +422,6 @@ async function syncMangaWithEdition(ctx, mangaId, editionId, options = {}) {
   updates.push('manga_passion_id = ?');
   params.push(toEditionId(editionId));
 
-  updates.push('manga_passion_edition_data = ?');
-  params.push(JSON.stringify(edition));
-
   if (options.update_total_volumes && edition.total_volumes) {
     updates.push('total_volumes = ?');
     params.push(edition.total_volumes);
@@ -451,8 +448,13 @@ async function syncMangaWithEdition(ctx, mangaId, editionId, options = {}) {
   params.push(mangaId);
 
   const sql = `UPDATE mangas SET ${updates.join(', ')} WHERE id = ?`;
-  // Manga Passion is a source: the edition data goes to the catalog for everyone (core/lib/catalogWrite.js)
-  catalogWrite.track(ctx, 'series', mangaId, () => ctx.db.prepare(sql).run(...params), { source: true });
+  // Manga Passion is a source: the edition data goes to the catalog for everyone (core/lib/catalogWrite.js), and the
+  // edition itself onto the catalog series the row is linked to after the write (migration 51)
+  ctx.db.transaction(() => {
+    catalogWrite.track(ctx, 'series', mangaId, () => ctx.db.prepare(sql).run(...params), { source: true });
+    ctx.db.prepare('UPDATE catalog_series SET mp_edition_data = ? WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = ?)')
+      .run(JSON.stringify(edition), mangaId);
+  });
 
   const updatedManga = ctx.db.prepare('SELECT * FROM mangas WHERE id = ?').get(mangaId);
   return updatedManga;

@@ -37,6 +37,10 @@ function parseProfileBody(body) {
         if (!['public', 'anonymous', 'private'].includes(body.default_anime_visibility)) throw badRequest('Ungültige Sichtbarkeit (public, anonymous oder private)', 'BAD_REQUEST');
         out.default_anime_visibility = body.default_anime_visibility;
     }
+    if (Object.prototype.hasOwnProperty.call(body, 'share_anime_activity')) {
+        if (typeof body.share_anime_activity !== 'boolean') throw badRequest('Ungültige Angabe zum Teilen der Anime-Liste (true oder false)', 'BAD_REQUEST');
+        out.share_anime_activity = body.share_anime_activity ? 1 : 0;
+    }
     if (!Object.keys(out).length) throw badRequest('Keine Änderung angegeben');
     return out;
 }
@@ -50,11 +54,12 @@ function saveProfile(db, userId, fields) {
 
 /** { locale, default_language } of a user; defaults when the row is missing. */
 function readProfile(db, userId) {
-    const row = db.prepare('SELECT locale, default_language, default_anime_visibility FROM users WHERE id = ?').get(userId);
+    const row = db.prepare('SELECT locale, default_language, default_anime_visibility, share_anime_activity FROM users WHERE id = ?').get(userId);
     return {
         locale: row ? row.locale ?? null : null,
         default_language: (row && row.default_language) || 'de',
-        default_anime_visibility: (row && row.default_anime_visibility) || 'public'
+        default_anime_visibility: (row && row.default_anime_visibility) || 'public',
+        share_anime_activity: !row || row.share_anime_activity !== 0
     };
 }
 

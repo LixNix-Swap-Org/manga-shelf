@@ -220,6 +220,9 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
     setShelfToDelete(null);
     const res = await run(() => api.del(`/api/shelves/${target.id}`), t('Regal gelöscht'));
     if (res) closeShelf();
+    // members who had no other shelf got an empty one of their own
+    const names = (res?.personal_shelves || []).filter((n) => n !== user?.username);
+    if (names.length) notify.info(t('{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.', { names: names.join(', ') }));
     setRefocus((n) => n + 1);
   };
 
