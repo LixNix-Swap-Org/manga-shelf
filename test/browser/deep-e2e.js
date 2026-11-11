@@ -206,7 +206,7 @@ async function shelfProblems(page, minEntries = 26) {
 }
 
 /**
- * Account dialog, tab "Sprache": English (PUT /auth/profile, remount, the dialog reopens in English, survives a
+ * Settings dialog, tab "Allgemein": English (PUT /auth/profile, remount, the dialog reopens in English, survives a
  * reload), then back to the device language (--lang=de-DE). Ends with the dialog closed on the German shelf.
  */
 async function languageSwitch(page, snap = async () => {}) {
@@ -217,8 +217,8 @@ async function languageSwitch(page, snap = async () => {}) {
     const toEnglish = waitForApi(page, 'PUT', '/api/auth/profile');
     await page.select(languageSelect, 'en');
     assert.ok((await toEnglish).ok(), 'PUT /api/auth/profile (en) failed');
-    // the switch remounts the page; the account dialog comes back on its language tab, now English
-    await page.waitForSelector('[role="dialog"][aria-label="Language"]', { visible: true, timeout: 10000 });
+    // the switch remounts the page; the account dialog comes back on its tab "Allgemein", now English
+    await page.waitForSelector('[role="dialog"][aria-label="Settings"]', { visible: true, timeout: 10000 });
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
     assert.equal(await page.evaluate(() => localStorage.getItem('mangashelf_locale')), 'en');
     assert.equal((await apiOk(page, 'GET', '/api/auth/me')).user.locale, 'en');
@@ -233,7 +233,7 @@ async function languageSwitch(page, snap = async () => {}) {
     const toDevice = waitForApi(page, 'PUT', '/api/auth/profile');
     await page.select(languageSelect, '');
     assert.ok((await toDevice).ok(), 'PUT /api/auth/profile (device) failed');
-    await page.waitForSelector('[role="dialog"][aria-label="Sprache"]', { visible: true, timeout: 10000 });
+    await page.waitForSelector('[role="dialog"][aria-label="Einstellungen"]', { visible: true, timeout: 10000 });
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'de', 'back to the device language (--lang=de-DE)');
     assert.equal((await apiOk(page, 'GET', '/api/auth/me')).user.locale, null);
     await page.keyboard.press('Escape');
