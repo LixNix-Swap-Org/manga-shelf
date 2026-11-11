@@ -39,6 +39,7 @@
 ### Ownership
 - Ownership is stored as copies of a volume: a copy belongs to a person or, when nobody is named, to the household. The status "Vorhanden" now always follows the copies in the database itself, so status and owners can no longer disagree (the check "Besitzer bei nicht vorhandenem Band" stays empty). Nothing changes in the app yet; several copies per person and a purchase price per copy follow later.
 - A volume marked "Vorhanden" whose owners are gone (or that had none) keeps a household copy instead of looking unowned; restoring it from the trash keeps it owned when it had no owner, as before an admin restoring it becomes its owner.
+- **Undo for shelf changes:** removing a member, leaving a shelf and moving a series to a shelf where some owners are no members show a toast with "Rückgängig" for 10 seconds (15 for a move). It brings the membership or the series back together with the copies that went, with their price, date, condition and lending (`POST /api/shelves/undo`). A move now also names the people whose copies it removed. The undo is refused once the shelf changed in between (the member was added again, the series moved again, or someone bought a copy in the new shelf who is no member of the old one).
 
 ### Anime
 - Anime and manga works are now linked many-to-many in the database (`anime_work_links`): the series an anime is linked to and every manga in its AniList relations that the collection knows. Nothing reads them yet; they prepare the cross-media views.

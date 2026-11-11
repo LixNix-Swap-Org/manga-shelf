@@ -1,10 +1,11 @@
 // Shelves = collections with members (owner / editor / viewer): GET/POST /shelves, GET/PUT/DELETE /shelves/:id,
 // members under /shelves/:id/members, PUT /mangas/:id/shelf to move a series and GET /mangas/:id/shelf-move to preview it.
-const { msg, badRequest, notFound, conflict } = require('../errors');
+const { HttpError, msg, badRequest, notFound, conflict, forbidden } = require('../errors');
 const { parsePositiveInt } = require('../lib/validate');
 const { qstr } = require('../lib/query');
 const access = require('../lib/access');
 const { syncStatusWithOwners, purchaseDateFromRemainingOwners } = require('../lib/owners');
+const { rememberUndo } = require('./volumes');
 
 const ROLES = ['owner', 'editor', 'viewer'];
 const MAX_NAME = 80;
@@ -201,12 +202,51 @@ function setMemberRole(ctx, { params, body }) {
  */
 function forgetMarks(ctx, shelfId, userId) {
     const inShelf = 'SELECT v.id FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE m.shelf_id = ?';
-    const owned = ctx.db.prepare(`SELECT volume_id FROM volume_owners WHERE user_id = ? AND volume_id IN (${inShelf})`).all(userId, shelfId).map(r => r.volume_id);
+    const snapshot = snapshotCopies(ctx, `owner_user_id = ? AND volume_id IN (${inShelf})`, [userId, shelfId]);
     ctx.db.prepare(`DELETE FROM volume_copies WHERE owner_user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
-    for (const volumeId of owned) {
+    settleVolumes(ctx, snapshot.volumes.map(v => v.id));
+    return snapshot;
+}
+
+/**
+ * The copies `where` names (all their columns) and the purchase date of their volumes, taken before they are deleted, so
+ * that POST /shelves/undo can put them back exactly.
+ */
+function snapshotCopies(ctx, where, params) {
+    const copies = ctx.db.prepare(`SELECT * FROM volume_copies WHERE ${where} ORDER BY id`).all(...params);
+    const ids = [...new Set(copies.map(c => c.volume_id))];
+    const volumes = ids.map(id => ctx.db.prepare('SELECT id, purchase_date FROM volumes WHERE id = ?').get(id)).filter(Boolean);
+    return { copies, volumes };
+}
+
+/** After copies went: a volume takes the earliest purchase date of the owners left, and without any it is "Fehlt". */
+function settleVolumes(ctx, volumeIds) {
+    for (const volumeId of volumeIds) {
         purchaseDateFromRemainingOwners(ctx.db, volumeId);
         syncStatusWithOwners(ctx.db, volumeId);
     }
+}
+
+/**
+ * Puts copies of a snapshot back where their volume still exists and the owner holds no copy of it yet (the copy id is
+ * kept: ids are never reused), then the volumes' purchase dates. Returns how many came back.
+ */
+function restoreCopies(ctx, snapshot, keep = () => true) {
+    const columns = new Set(ctx.db.prepare('PRAGMA table_info(volume_copies)').all().map(c => c.name));
+    let restored = 0;
+    for (const copy of snapshot.copies) {
+        if (!keep(copy)) continue;
+        if (!ctx.db.prepare('SELECT 1 FROM volumes WHERE id = ?').get(copy.volume_id)) continue;
+        if (copy.owner_user_id !== null && !ctx.db.prepare('SELECT 1 FROM users WHERE id = ?').get(copy.owner_user_id)) continue;
+        const fields = Object.keys(copy).filter(k => columns.has(k));
+        const info = ctx.db.prepare(`INSERT OR IGNORE INTO volume_copies (${fields.join(', ')}) VALUES (${fields.map(() => '?').join(', ')})`)
+            .run(...fields.map(k => copy[k]));
+        restored += Number(info.changes || 0);
+    }
+    for (const v of snapshot.volumes) {
+        ctx.db.prepare("UPDATE volumes SET purchase_date = ? WHERE id = ? AND status = 'Vorhanden'").run(v.purchase_date, v.id);
+    }
+    return restored;
 }
 
 // An owner removes anyone; everybody can leave a shelf themselves.
@@ -218,14 +258,14 @@ function removeMember(ctx, { params }) {
     if (activeOwner(member) && access.activeOwnerCount(ctx.db, id, userId) === 0) {
         throw conflict(LAST_OWNER, 'SHELF_LAST_OWNER');
     }
-    ctx.db.transaction(() => {
+    const undo = ctx.db.transaction(() => {
         ctx.db.prepare('DELETE FROM shelf_members WHERE shelf_id = ? AND user_id = ?').run(id, userId);
-        forgetMarks(ctx, id, userId);
-        if (!ctx.db.prepare('SELECT 1 FROM shelf_members WHERE user_id = ? LIMIT 1').get(userId)) {
-            access.createPersonalShelf(ctx.db, userId);
-        }
+        const snapshot = forgetMarks(ctx, id, userId);
+        const personal = ctx.db.prepare('SELECT 1 FROM shelf_members WHERE user_id = ? LIMIT 1').get(userId)
+            ? null : access.createPersonalShelf(ctx.db, userId);
+        return { kind: 'member', shelfId: id, userId, role: member.role, own, personal, ...snapshot };
     });
-    return { body: { success: true, members: own ? undefined : membersOf(ctx, id) } };
+    return { body: { success: true, members: own ? undefined : membersOf(ctx, id), ...rememberUndo(ctx, undo, 'viewer') } };
 }
 
 const IN_MANGA = 'SELECT id FROM volumes WHERE manga_id = ?';
@@ -274,17 +314,95 @@ function movePreview(ctx, { params, query }) {
  */
 function moveManga(ctx, { params, body }) {
     const { mangaId, target } = moveTarget(ctx, params.id, body.shelf_id);
-    ctx.db.transaction(() => {
-        ctx.db.prepare('UPDATE mangas SET shelf_id = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?').run(target, ctx.user.id, mangaId);
-        ctx.db.prepare('UPDATE trash SET shelf_id = ? WHERE manga_id = ?').run(target, mangaId);
-        const owned = ctx.db.prepare(`SELECT DISTINCT volume_id FROM volume_owners WHERE volume_id IN (${IN_MANGA}) AND user_id NOT IN (${TARGET_MEMBERS})`).all(mangaId, target).map(r => r.volume_id);
-        ctx.db.prepare(`DELETE FROM volume_copies WHERE volume_id IN (${IN_MANGA}) AND owner_user_id NOT IN (${TARGET_MEMBERS})`).run(mangaId, target);
-        for (const volumeId of owned) {
-            purchaseDateFromRemainingOwners(ctx.db, volumeId);
-            syncStatusWithOwners(ctx.db, volumeId);
+    const source = ctx.db.prepare('SELECT shelf_id FROM mangas WHERE id = ?').get(mangaId).shelf_id;
+    const { snapshot, removed } = ctx.db.transaction(() => moveSeries(ctx, mangaId, target));
+    const answer = { success: true, id: mangaId, shelf_id: target, removed_owners: removed };
+    if (!snapshot.copies.length || source === target) return { body: answer };
+    return { body: { ...answer, ...rememberUndo(ctx, { kind: 'move', mangaId, source, target, ...snapshot }) } };
+}
+
+/** Moves a series into `target` and drops the copies of users who are no members there; returns their snapshot and names. */
+function moveSeries(ctx, mangaId, target) {
+    const lost = `volume_id IN (${IN_MANGA}) AND owner_user_id NOT IN (${TARGET_MEMBERS})`;
+    const snapshot = snapshotCopies(ctx, lost, [mangaId, target]);
+    const removed = ctx.db.prepare(`SELECT username FROM users WHERE id IN (SELECT owner_user_id FROM volume_copies WHERE ${lost}) ORDER BY username COLLATE NOCASE`)
+        .all(mangaId, target).map(r => r.username);
+    ctx.db.prepare('UPDATE mangas SET shelf_id = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?').run(target, ctx.user.id, mangaId);
+    ctx.db.prepare('UPDATE trash SET shelf_id = ? WHERE manga_id = ?').run(target, mangaId);
+    ctx.db.prepare(`DELETE FROM volume_copies WHERE ${lost}`).run(mangaId, target);
+    settleVolumes(ctx, snapshot.volumes.map(v => v.id));
+    return { snapshot, removed };
+}
+
+const UNDO_GONE = 'Rückgängig ist nicht mehr möglich (abgelaufen oder schon ausgeführt)';
+const UNDO_CHANGED = 'Das lässt sich nicht mehr rückgängig machen, weil sich das Regal inzwischen geändert hat';
+
+/**
+ * POST /shelves/undo { undo_token }: takes back a removal from a shelf (or leaving it) or a move of a series, with the
+ * ownership copies that went (price, date, condition, lending). Only the caller who made the change, within the bulk
+ * undo window, and only while the shelf allows it: the remover must still own the shelf, a move needs editor rights on
+ * both sides again, and nothing comes back over a membership or a move made since.
+ */
+function undo(ctx, { body }) {
+    const token = body && body.undo_token;
+    if (typeof token !== 'string' || token.trim() === '' || token.length > 100) throw badRequest('Ungültige Rückgängig-Daten', 'SHELF_UNDO');
+    const entry = ctx.undo.get(token);
+    const kind = entry && entry.previous && entry.previous.kind;
+    if (!entry || (kind !== 'member' && kind !== 'move') || entry.expires <= ctx.now().getTime() || entry.generation !== ctx.db.generation()) {
+        if (entry && (kind === 'member' || kind === 'move')) ctx.undo.delete(token);
+        throw new HttpError(410, UNDO_GONE, 'SHELF_UNDO_EXPIRED');
+    }
+    if (entry.userId !== ctx.user.id) throw forbidden('Nur wer die Änderung gemacht hat, kann sie rückgängig machen', 'SHELF_UNDO_FORBIDDEN');
+    const prev = entry.previous;
+    const result = kind === 'member' ? undoMember(ctx, prev) : undoMove(ctx, prev);
+    ctx.undo.delete(token);
+    return { body: { success: true, ...result } };
+}
+
+function undoMember(ctx, prev) {
+    const shelf = ctx.db.prepare('SELECT id FROM shelves WHERE id = ?').get(prev.shelfId);
+    const user = ctx.db.prepare('SELECT id, role FROM users WHERE id = ?').get(prev.userId);
+    if (!shelf || !user) throw conflict(UNDO_CHANGED, 'SHELF_UNDO_CHANGED');
+    if (!prev.own) access.requireShelf(ctx, prev.shelfId, 'owner');
+    if (ctx.db.prepare('SELECT 1 FROM shelf_members WHERE shelf_id = ? AND user_id = ?').get(prev.shelfId, prev.userId)) {
+        throw conflict(UNDO_CHANGED, 'SHELF_UNDO_CHANGED');
+    }
+    const role = access.isReadOnlyAccount(user.role) ? 'viewer' : prev.role;
+    const restored = ctx.db.transaction(() => {
+        ctx.db.prepare('INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(prev.shelfId, prev.userId, role);
+        // the empty shelf that leaving made goes again while nothing happened in it
+        const personal = prev.personal && ctx.db.prepare(`
+            SELECT 1 FROM shelves s WHERE s.id = ? AND s.is_default = 0
+               AND NOT EXISTS (SELECT 1 FROM mangas WHERE shelf_id = s.id) AND NOT EXISTS (SELECT 1 FROM trash WHERE shelf_id = s.id)
+               AND (SELECT count(*) FROM shelf_members WHERE shelf_id = s.id) = 1
+        `).get(prev.personal);
+        if (personal) {
+            ctx.db.prepare('DELETE FROM shelf_members WHERE shelf_id = ?').run(prev.personal);
+            ctx.db.prepare('DELETE FROM shelves WHERE id = ?').run(prev.personal);
         }
+        const inShelf = (copy) => ctx.db.prepare('SELECT 1 FROM volumes v JOIN mangas m ON m.id = v.manga_id WHERE v.id = ? AND m.shelf_id = ?').get(copy.volume_id, prev.shelfId);
+        return restoreCopies(ctx, prev, (copy) => Boolean(inShelf(copy)));
     });
-    return { body: { success: true, id: mangaId, shelf_id: target } };
+    access.ensureMembership(ctx);
+    return { shelf_id: prev.shelfId, user_id: prev.userId, restored_copies: restored, members: prev.own ? undefined : membersOf(ctx, prev.shelfId) };
+}
+
+function undoMove(ctx, prev) {
+    const row = ctx.db.prepare('SELECT shelf_id FROM mangas WHERE id = ?').get(prev.mangaId);
+    if (!row || row.shelf_id !== prev.target) throw conflict(UNDO_CHANGED, 'SHELF_UNDO_CHANGED');
+    access.mangaAccess(ctx, prev.mangaId, 'editor');
+    access.requireShelf(ctx, prev.source, 'editor');
+    // copies bought in the new shelf by someone who is no member of the old one would go: that is no undo any more
+    if (ctx.db.prepare(`SELECT 1 FROM volume_copies WHERE volume_id IN (${IN_MANGA}) AND owner_user_id NOT IN (${TARGET_MEMBERS}) LIMIT 1`).get(prev.mangaId, prev.source)) {
+        throw conflict(UNDO_CHANGED, 'SHELF_UNDO_CHANGED');
+    }
+    const restored = ctx.db.transaction(() => {
+        moveSeries(ctx, prev.mangaId, prev.source);
+        const member = (copy) => copy.owner_user_id === null
+            || Boolean(ctx.db.prepare('SELECT 1 FROM shelf_members WHERE shelf_id = ? AND user_id = ?').get(prev.source, copy.owner_user_id));
+        return restoreCopies(ctx, prev, member);
+    });
+    return { id: prev.mangaId, shelf_id: prev.source, restored_copies: restored };
 }
 
 /** GET /users/directory: the accounts the caller may see by name (shares a shelf with them; an admin sees all). */
@@ -293,4 +411,4 @@ function directory(ctx) {
     return { body: { users: access.visibleRows(ctx, users, 'id') } };
 }
 
-module.exports = { directory, list, detail, create, update, remove, addMember, setMemberRole, removeMember, movePreview, moveManga };
+module.exports = { directory, list, detail, create, update, remove, addMember, setMemberRole, removeMember, movePreview, moveManga, undo };

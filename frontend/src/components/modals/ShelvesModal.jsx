@@ -8,6 +8,8 @@ import { formatCount } from '../../utils/format';
 import { invalidateShelves } from '../../utils/shelfScope';
 import { t, tc } from '../../i18n/index.js';
 
+const SHELF_UNDO_MS = 10000;
+
 const ROLES = ['owner', 'editor', 'viewer'];
 const ROLE_LABEL = {
   owner: () => tc('shelf-role', 'Besitzer'),
@@ -37,8 +39,8 @@ export function memberRemovalText(member, { self = false } = {}) {
   }
   const name = member?.username || '';
   if (none) return t('„{name}“ aus diesem Regal entfernen? {name} besitzt hier keine Bände; die Lesemarkierungen bleiben erhalten.', { name });
-  if (known) return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht ({owned}). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { name, owned });
-  return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Das lässt sich nicht rückgängig machen.', { name });
+  if (known) return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht ({owned}). Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.', { name, owned });
+  return t('„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.', { name });
 }
 
 /**
@@ -169,11 +171,25 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
       .then((res) => { if (res !== null) setRenaming(false); });
   };
 
+  // the answer carries an undo token: for 10 s the toast takes the removal back, with the copies that went
   const removeMember = (member) => run(async () => {
-    const res = await api.del(`/api/shelves/${open}/members/${member.user_id}`);
-    if (member.user_id === user?.id) closeShelf();
+    const shelfId = open;
+    const own = member.user_id === user?.id;
+    const res = await api.del(`/api/shelves/${shelfId}/members/${member.user_id}`);
+    if (own) closeShelf();
     else setMembers(res.members || []);
+    const token = typeof res?.undo_token === 'string' && res.undo_token ? res.undo_token : null;
+    const text = own ? t('Du hast das Regal verlassen.') : t('{name} ist kein Mitglied mehr.', { name: member.username });
+    notify.success(text, token ? {
+      duration: SHELF_UNDO_MS,
+      action: { label: t('Rückgängig'), onClick: () => undoRemoval(token, shelfId) }
+    } : undefined);
   });
+
+  const undoRemoval = (token, shelfId) => run(async () => {
+    const res = await api.post('/api/shelves/undo', { undo_token: token });
+    if (openRef.current === shelfId && res?.members) setMembers(res.members);
+  }, t('Rückgängig gemacht'));
 
   // the question closes first, so focus goes back into this dialog; once the row is gone it moves to the member list
   const handleConfirmRemove = async () => {

@@ -414,3 +414,92 @@ test('shelves: maintenance fix only modifies series in the caller editable shelv
     assert.equal((await ben('GET', `/mangas/${benSeries}`)).body.publisher, 'Tokyopop', 'ben shelf is untouched by anna maintenance fix');
 });
 
+
+test('shelves: removing a member can be undone with the copies, once, by the remover only', async () => {
+    const own = (await anna('POST', '/shelves', { name: 'Undo-Regal 1' })).body;
+    const id = (await anna('POST', '/mangas', { title: 'Undo-Mitglied', shelf_id: own.id })).body.id;
+    const vol = (await anna('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'editor' });
+    assert.equal((await ben('POST', `/volumes/${vol}/owners`, { owned: true })).status, 200);
+    const before = (await anna('GET', `/mangas/${id}`)).body.volumes.find(v => v.id === vol);
+    const removed = await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+    assert.equal(removed.status, 200);
+    assert.equal(typeof removed.body.undo_token, 'string');
+    assert.equal((await anna('GET', `/mangas/${id}`)).body.volumes.find(v => v.id === vol).status, 'Fehlt');
+
+    assert.equal((await ben('POST', '/shelves/undo', { undo_token: removed.body.undo_token })).status, 403, 'only the remover');
+    assert.equal((await anna('POST', '/volumes/bulk', { revert: removed.body.undo_token })).status, 410, 'no bulk token');
+    assert.equal((await anna('POST', '/shelves/undo', { undo_token: '' })).status, 400);
+    const undone = await anna('POST', '/shelves/undo', { undo_token: removed.body.undo_token });
+    assert.equal(undone.status, 200);
+    assert.equal(undone.body.restored_copies, 1);
+    assert.equal(undone.body.members.find(m => m.user_id === benId).role, 'editor');
+    const after = (await anna('GET', `/mangas/${id}`)).body.volumes.find(v => v.id === vol);
+    assert.deepEqual(after.owners.map(o => o.user_id), [benId]);
+    assert.equal(after.status, 'Vorhanden');
+    assert.equal(after.purchase_date, before.purchase_date);
+    assert.equal((await ben('GET', `/mangas/${id}`)).status, 200, 'ben is back in');
+    assert.equal((await anna('POST', '/shelves/undo', { undo_token: removed.body.undo_token })).status, 410, 'only once');
+    await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+});
+
+test('shelves: leaving the last shelf and undoing it drops the empty personal shelf again', async () => {
+    const eva = ctx.client();
+    const evaId = (await admin('POST', '/users', { username: 'eva', password: 'password123', role: 'editor', separate_shelf: true })).body.user.id;
+    await eva('POST', '/auth/login', { username: 'eva', password: 'password123' });
+    const evaShelf = await myShelf(eva);
+    const annaShelf = await myShelf(anna);
+    await anna('POST', `/shelves/${annaShelf.id}/members`, { username: 'eva', role: 'editor' });
+    assert.equal((await eva('DELETE', `/shelves/${evaShelf.id}`)).status, 200);
+    const left = await eva('DELETE', `/shelves/${annaShelf.id}/members/${evaId}`);
+    assert.equal(left.status, 200);
+    const fresh = (await eva('GET', '/shelves')).body.shelves;
+    assert.equal(fresh.length, 1);
+    assert.notEqual(fresh[0].id, annaShelf.id);
+    const undone = await eva('POST', '/shelves/undo', { undo_token: left.body.undo_token });
+    assert.equal(undone.status, 200);
+    assert.deepEqual((await eva('GET', '/shelves')).body.shelves.map(s => s.id), [annaShelf.id], 'back in, the empty shelf is gone');
+    await anna('DELETE', `/shelves/${annaShelf.id}/members/${evaId}`);
+});
+
+test('shelves: undoing a removal fails once the remover is no owner or the member is back', async () => {
+    const own = (await anna('POST', '/shelves', { name: 'Undo-Regal 2' })).body;
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'editor' });
+    const removed = await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'viewer' });
+    const again = await anna('POST', '/shelves/undo', { undo_token: removed.body.undo_token });
+    assert.equal(again.status, 409);
+    assert.equal(again.body.code, 'SHELF_UNDO_CHANGED');
+    await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+});
+
+test('shelves: moving a series names the owners who lost copies and can be undone', async () => {
+    const own = (await anna('POST', '/shelves', { name: 'Undo-Regal 3' })).body;
+    const target = (await anna('POST', '/shelves', { name: 'Undo-Archiv' })).body;
+    await anna('POST', `/shelves/${own.id}/members`, { username: 'ben', role: 'editor' });
+    const id = (await anna('POST', '/mangas', { title: 'Undo-Umzug', shelf_id: own.id })).body.id;
+    const vol = (await anna('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Fehlt' })).body.id;
+    assert.equal((await ben('POST', `/volumes/${vol}/owners`, { owned: true })).status, 200);
+    const quiet = (await anna('POST', '/mangas', { title: 'Ohne Exemplare', shelf_id: own.id })).body.id;
+    const plain = await anna('PUT', `/mangas/${quiet}/shelf`, { shelf_id: target.id });
+    assert.deepEqual(plain.body.removed_owners, []);
+    assert.equal(plain.body.undo_token, undefined, 'nothing lost, nothing to undo');
+
+    const moved = await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: target.id });
+    assert.equal(moved.status, 200);
+    assert.deepEqual(moved.body.removed_owners, ['ben']);
+    const undone = await anna('POST', '/shelves/undo', { undo_token: moved.body.undo_token });
+    assert.equal(undone.status, 200);
+    assert.equal(undone.body.shelf_id, own.id);
+    assert.equal(undone.body.restored_copies, 1);
+    const detail = (await anna('GET', `/mangas/${id}`)).body;
+    assert.equal(detail.shelf_id, own.id);
+    assert.deepEqual(detail.volumes.find(v => v.id === vol).owners.map(o => o.user_id), [benId]);
+    assert.equal(detail.volumes.find(v => v.id === vol).status, 'Vorhanden');
+
+    const twice = await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: target.id });
+    await anna('PUT', `/mangas/${id}/shelf`, { shelf_id: own.id });
+    const stale = await anna('POST', '/shelves/undo', { undo_token: twice.body.undo_token });
+    assert.equal(stale.status, 409, 'the series moved again since');
+    await anna('DELETE', `/shelves/${own.id}/members/${benId}`);
+});
