@@ -9,7 +9,7 @@ const escape = (target = window) => fireEvent.keyDown(target, { key: 'Escape' })
 const slash = (target = window) => fireEvent.keyDown(target, { key: '/' });
 
 const baseOptions = (extra = {}) => ({
-  showAddModal: false, setShowAddModal: vi.fn(), showStatsModal: false, setShowStatsModal: vi.fn(),
+  showAddModal: false, setShowAddModal: vi.fn(),
   showUsersModal: false, setShowUsersModal: vi.fn(), showRestoreModal: false, setShowRestoreModal: vi.fn(),
   mobileMenuOpen: false, setMobileMenuOpen: vi.fn(), search: '', setSearch: vi.fn(), searchInputRef: { current: null },
   ...extra
@@ -35,10 +35,10 @@ describe('useDashboardKeyboard', () => {
   });
 
   it('without a close callback the setter is still used', () => {
-    const opts = baseOptions({ showStatsModal: true });
+    const opts = baseOptions({ showUsersModal: true });
     renderHook(() => useDashboardKeyboard(opts));
     escape();
-    expect(opts.setShowStatsModal).toHaveBeenCalledWith(false);
+    expect(opts.setShowUsersModal).toHaveBeenCalledWith(false);
   });
 
   it('Escape does not close a dialog that marks itself busy (running restore / submit)', () => {

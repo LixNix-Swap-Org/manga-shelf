@@ -381,27 +381,27 @@ function DefaultVisibilityField({ offline }) {
 }
 
 /**
- * Whether the other accounts see by name what you watch, plan and have seen, your episodes, your line in the anime
- * statistics and the name on your public ratings (users.share_anime_activity, on by default). Hidden from admins too.
+ * A yes/no setting of the account (PUT /api/auth/profile with `field`); `storedKey` is its name in useAccountDefaults.
+ * The box follows the server's answer, on an error it goes back.
  */
-function ShareAnimeField({ offline }) {
+function ProfileSwitch({ offline, field, storedKey, label, hint }) {
   const id = useId();
   const stored = useAccountDefaults({ fresh: true, enabled: !offline });
   const [picked, setPicked] = useState(null);
   const [saving, setSaving] = useState(false);
-  const checked = picked ?? stored.shareAnime ?? true;
+  const checked = picked ?? stored[storedKey] ?? true;
 
   const save = async (next) => {
     setPicked(next);
     setSaving(true);
     try {
-      const res = await apiFetch('/api/auth/profile', { method: 'PUT', body: { share_anime_activity: next } });
+      const res = await apiFetch('/api/auth/profile', { method: 'PUT', body: { [field]: next } });
       const data = await readJson(res);
       if (!res.ok) {
         notify.error(serverText(data) || t('Speichern fehlgeschlagen'));
         return;
       }
-      rememberAccountDefaults({ ...data?.user, share_anime_activity: typeof data?.user?.share_anime_activity === 'boolean' ? data.user.share_anime_activity : next });
+      rememberAccountDefaults({ ...data?.user, [field]: typeof data?.user?.[field] === 'boolean' ? data.user[field] : next });
     } catch (_) {
       notify.error(t('Netzwerkfehler – bitte erneut versuchen.'));
     } finally {
@@ -412,14 +412,39 @@ function ShareAnimeField({ offline }) {
 
   return (
     <div className="space-y-2 pt-4 border-t border-slate-800">
-      <label htmlFor={`${id}-share`} className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-        <input id={`${id}-share`} type="checkbox" className="h-4 w-4 accent-brand-500" checked={checked} disabled={saving || offline || !stored.loaded} onChange={(e) => save(e.target.checked)} />
-        {t('Meine Anime-Liste mit Namen zeigen')}
+      <label htmlFor={`${id}-${field}`} className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+        <input id={`${id}-${field}`} type="checkbox" className="h-4 w-4 accent-brand-500" checked={checked} disabled={saving || offline || !stored.loaded} onChange={(e) => save(e.target.checked)} />
+        {label}
       </label>
-      <p className="text-xs text-slate-400">{t('Andere sehen dann, was du schaust, planst und gesehen hast. Ausgeschaltet sieht das niemand außer dir, auch Admins nicht; deine Noten zählen trotzdem ohne Namen im Schnitt mit.')}</p>
+      <p className="text-xs text-slate-400">{hint}</p>
     </div>
   );
 }
+
+/**
+ * Whether the other accounts see by name what you watch, plan and have seen, your episodes, your line in the anime
+ * statistics and the name on your public ratings (users.share_anime_activity, on by default). Hidden from admins too.
+ */
+const ShareAnimeField = ({ offline }) => (
+  <ProfileSwitch
+    offline={offline}
+    field="share_anime_activity"
+    storedKey="shareAnime"
+    label={t('Meine Anime-Liste mit Namen zeigen')}
+    hint={t('Andere sehen dann, was du schaust, planst und gesehen hast. Ausgeschaltet sieht das niemand außer dir, auch Admins nicht; deine Noten zählen trotzdem ohne Namen im Schnitt mit.')}
+  />
+);
+
+/** Whether the shelf shows "Zu erledigen" (users.show_todo, on by default); only for this account, on every device. */
+const ShowTodoField = ({ offline }) => (
+  <ProfileSwitch
+    offline={offline}
+    field="show_todo"
+    storedKey="showTodo"
+    label={t('„Zu erledigen“ in der Sammlung zeigen')}
+    hint={t('Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.')}
+  />
+);
 
 /** UI language of this account; the switch remounts the page, the dialog reopens on this tab. Apps: the reminder switch. */
 function LanguageTab({ user = null, offline = false }) {
@@ -432,6 +457,7 @@ function LanguageTab({ user = null, offline = false }) {
       <DefaultLanguageField offline={offline} />
       <DefaultVisibilityField offline={offline} />
       <ShareAnimeField offline={offline} />
+      <ShowTodoField offline={offline} />
       {ReminderSwitch && canRemind(user) && remindersAvailable() && (
         <div className="pt-4 border-t border-slate-800">
           <Suspense fallback={null}>

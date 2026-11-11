@@ -35,7 +35,6 @@ export default function useDashboardKeyboard(options) {
       const { opts, dialogOpen, busy } = snap;
       const modals = [
         [opts.showAddModal, opts.closeAddModal || (() => opts.setShowAddModal?.(false))],
-        [opts.showStatsModal, opts.closeStatsModal || (() => opts.setShowStatsModal?.(false))],
         [opts.showUsersModal, opts.closeUsersModal || (() => opts.setShowUsersModal?.(false))],
         [opts.showRestoreModal, opts.closeRestoreModal || (() => opts.setShowRestoreModal?.(false))],
         [opts.showPasswordModal, opts.closePasswordModal || (() => opts.setShowPasswordModal?.(false))],

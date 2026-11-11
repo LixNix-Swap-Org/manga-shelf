@@ -176,9 +176,10 @@ function EditionDialog({ manga, editions, onClose, onChanged }) {
 
 /**
  * The editions of the same work (same work_key) as pills under the title; the current one is marked. Editors get
- * "+ Ausgabe" to create or link an edition. Renders nothing for readers of an unlinked series.
+ * "+ Ausgabe" to create or link an edition. Renders nothing for readers of an unlinked series. `idSuffix` keeps the ids
+ * unique where a second switcher is shown (the tab "Edition & Abgleich").
  */
-export default function EditionSwitcher({ manga, canEdit = false, isOffline = false, onChanged }) {
+export default function EditionSwitcher({ manga, canEdit = false, isOffline = false, onChanged, idSuffix = '' }) {
   const [open, setOpen] = useState(false);
   const editions = editionsOf(manga);
   if (!manga || (editions.length === 0 && !canEdit)) return null;
@@ -187,7 +188,7 @@ export default function EditionSwitcher({ manga, canEdit = false, isOffline = fa
   const sorted = [...editions].sort((a, b) => editionLanguage(a).localeCompare(editionLanguage(b)));
 
   return (
-    <div id="edition-switcher" className="mt-2 flex flex-wrap items-center gap-1.5">
+    <div id={`edition-switcher${idSuffix}`} className="mt-2 flex flex-wrap items-center gap-1.5">
       {editions.length > 0 && (
         <ul className="flex flex-wrap items-center gap-1.5" aria-label={t('Ausgaben')}>
           <li>
@@ -217,7 +218,7 @@ export default function EditionSwitcher({ manga, canEdit = false, isOffline = fa
       )}
       {canEdit && !isOffline && (
         <button
-          id="btn-add-edition"
+          id={`btn-add-edition${idSuffix}`}
           type="button"
           onClick={() => setOpen(true)}
           className="hit-44 inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-600 px-2 py-0.5 text-[11px] font-semibold text-slate-300 hover:border-teal-400/60 hover:text-white"

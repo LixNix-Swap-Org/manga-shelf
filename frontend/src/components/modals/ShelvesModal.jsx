@@ -6,13 +6,14 @@ import api from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { formatCount } from '../../utils/format';
 import { invalidateShelves } from '../../utils/shelfScope';
-import { t, tc } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js';
 
 const SHELF_UNDO_MS = 10000;
 
 const ROLES = ['owner', 'editor', 'viewer'];
 const ROLE_LABEL = {
-  owner: () => tc('shelf-role', 'Besitzer'),
+  // the role is "owner" in the code; the label says Verwalter (manages members and the shelf)
+  owner: () => t('Verwalter'),
   editor: () => t('Bearbeiter'),
   viewer: () => t('Leser')
 };
@@ -285,7 +286,7 @@ export default function ShelvesModal({ onClose, user, onChanged }) {
                   ))}
                 </ul>
                 {members.some(soleOwner) && (
-                  <p className="text-[11px] text-slate-400">{t('Du bist der einzige Besitzer dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.', { role: ROLE_LABEL.owner() })}</p>
+                  <p className="text-[11px] text-slate-400">{t('Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.', { role: ROLE_LABEL.owner() })}</p>
                 )}
                 {shelf.role === 'owner' && (
                   <>

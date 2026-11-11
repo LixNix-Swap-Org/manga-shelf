@@ -11,6 +11,7 @@ import PersonalTimeline from './radar/PersonalTimeline';
 import useRadarDateChanges from './radar/useRadarDateChanges';
 import { filterMpItems, groupMpItemsByDate, mpMatchesSelection, importNotice } from '../../utils/radarHelpers';
 import ShelfScopeBadge from '../common/ShelfScopeBadge';
+import ShelfPersonChip from './ShelfPersonChip';
 import { t } from '../../i18n/index.js';
 
 const NOTICE_MS = 8000;
@@ -56,7 +57,11 @@ export default function ReleaseRadarView({
   markingDeliveredIds,
   GERMAN_MONTHS,
   shelfName = null,
-  onClearShelf
+  onClearShelf,
+  shelves = [],
+  shelfFilter = 'ALL',
+  setShelfFilter,
+  userId
 }) {
   const [notice, setNotice] = useState(null);
   const dateChanges = useRadarDateChanges({
@@ -114,7 +119,10 @@ export default function ReleaseRadarView({
   return (
     <div className="space-y-6 animate-fade-in">
       {/* only the personal radar follows the shelf; the Manga Passion calendar is the same for everybody */}
-      {shelfName && radarSubView === 'personal' && <ShelfScopeBadge name={shelfName} onClear={onClearShelf} />}
+      {/* with several shelves the same chip as in the collection: change or clear the shelf right here */}
+      {radarSubView === 'personal' && shelves.length > 1 && setShelfFilter
+        ? <div className="flex flex-wrap items-center gap-2 text-xs"><ShelfPersonChip shelves={shelves} shelfFilter={shelfFilter} setShelfFilter={setShelfFilter} userId={userId} /></div>
+        : shelfName && radarSubView === 'personal' && <ShelfScopeBadge name={shelfName} onClear={onClearShelf} />}
       <RadarTabs
         radarSubView={radarSubView}
         setRadarSubView={setRadarSubView}

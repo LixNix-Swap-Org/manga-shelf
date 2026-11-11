@@ -1,7 +1,7 @@
 // MangaDetail wiring of the extracted hooks, and ReaderBar.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 const scan = vi.hoisted(() => ({ code: '' }));
 vi.mock('../components/common/BarcodeScannerButton', () => ({
@@ -266,6 +266,7 @@ describe('MangaDetail wiring (round 5 hooks)', () => {
       }
     });
     renderPage();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Infos' }));
     const button = await screen.findByRole('button', { name: /Genres nachladen/ });
     expect(button.id).toBe('btn-fill-tags');
     fireEvent.click(button);
@@ -281,9 +282,75 @@ describe('MangaDetail wiring (round 5 hooks)', () => {
       serve({ manga });
       const view = renderPage(user);
       await screen.findByText('Server Titel');
+      fireEvent.click(screen.getByRole('tab', { name: 'Infos' }));
+      expect(document.getElementById('detail-info')).toBeTruthy();
       expect(document.getElementById('btn-fill-tags')).toBeNull();
       view.unmount();
     }
+  });
+});
+
+describe('MangaDetail tabs (Bände, Edition & Abgleich, Infos)', () => {
+  const VOLUMES_WITH_GAP = [
+    ...VOLUMES,
+    { id: 53, manga_id: 5, volume_number: '3', type: 'volume', status: 'Vorhanden', owners: [{ user_id: 2 }], read_users: [], read_by: [] }
+  ];
+  const renderAt = (url, user = editor) => render(
+    <MemoryRouter initialEntries={[url]}>
+      <Routes><Route path="/manga/:id" element={<><MangaDetail user={user} /><Where /></>} /></Routes>
+    </MemoryRouter>
+  );
+  function Where() {
+    const location = useLocation();
+    return <output data-testid="where">{location.pathname + location.search}</output>;
+  }
+
+  it('the volumes come first; a tab is kept in the address and arrow keys move between tabs', async () => {
+    serve({ manga: mangaWith({ volumes: VOLUMES_WITH_GAP, description: 'Klappentext' }) });
+    renderAt('/manga/5');
+    const volumesTab = await screen.findByRole('tab', { name: 'Bände (2)' });
+    expect(volumesTab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(volumesTab.id);
+    expect(document.getElementById('volumes-heading')).toBeTruthy();
+    // the head shows a short excerpt; the whole description is in "Infos"
+    expect(document.getElementById('detail-description-excerpt').textContent).toContain('Klappentext');
+    expect(document.getElementById('detail-info')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Mehr unter „Infos“' }));
+    expect(screen.getByTestId('where').textContent).toBe('/manga/5?tab=infos');
+    expect(document.getElementById('detail-info').textContent).toContain('Klappentext');
+    expect(document.getElementById('volumes-heading')).toBeNull();
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Infos' }), { key: 'ArrowLeft' });
+    expect(screen.getByTestId('where').textContent).toBe('/manga/5?tab=edition');
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Edition & Abgleich' }));
+  });
+
+  it('Edition & Abgleich gathers gap detection, the Manga Passion check, the editions and other shelves', async () => {
+    serve({ manga: mangaWith({ volumes: VOLUMES_WITH_GAP }) });
+    renderAt('/manga/5?tab=edition');
+    const gaps = await screen.findByRole('heading', { name: 'Lücken-Erkennung' });
+    const card = gaps.closest('#edition-card-gaps');
+    expect(within(card).getByText(/Nicht im Regal: 1 Band\./)).toBeTruthy();
+    const toggle = within(card).getByRole('switch', { name: 'Lücken zeigen' });
+    const before = toggle.getAttribute('aria-checked');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-checked')).not.toBe(before);
+    expect(within(card).getByRole('button', { name: 'Lücken füllen' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Manga-Passion-Abgleich' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Ausgabe wechseln' })).toBeTruthy();
+    expect(document.getElementById('btn-add-edition-tab')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Bände aus anderem Regal' })).toBeTruthy();
+  });
+
+  it('readers get no fill button; an unknown tab shows the volumes', async () => {
+    serve({ manga: mangaWith({ volumes: VOLUMES_WITH_GAP }) });
+    const view = renderAt('/manga/5?tab=edition', visitor);
+    await screen.findByRole('heading', { name: 'Lücken-Erkennung' });
+    expect(screen.queryByRole('button', { name: 'Lücken füllen' })).toBeNull();
+    view.unmount();
+    clearDataCache();
+    serve({ manga: mangaWith() });
+    renderAt('/manga/5?tab=quatsch');
+    expect((await screen.findByRole('tab', { name: 'Bände (1)' })).getAttribute('aria-selected')).toBe('true');
   });
 });
 

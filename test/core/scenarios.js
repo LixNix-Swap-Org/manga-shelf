@@ -136,6 +136,9 @@ const scenarios = [
             assert.equal((await vis('POST', `/volumes/${vid}/owners`, { owned: true })).status, 403);
             const forVis = await admin('POST', `/volumes/${vid}/owners`, { owned: true, user_id: users.find(u => u.username === 'vis').id, purchase_date: '2025-05-05' });
             assert.deepEqual(forVis.body.owners.map(o => o.username), ['ed', 'vis']);
+            const listed = (await ed('GET', '/mangas')).body.find(m => m.id === id);
+            const ids = ['ed', 'vis'].map(n => users.find(u => u.username === n).id).sort((a, b) => a - b);
+            assert.deepEqual(listed.owners.split('\n').map(p => Number(p.split('\t')[0])), ids, 'the list names who owns a volume');
             const leave = await ed('POST', `/volumes/${vid}/owners`, { owned: false });
             assert.deepEqual([leave.body.status, leave.body.purchase_date, leave.body.removed_owner.purchase_date], ['Vorhanden', '2025-05-05', '2025-03-04']);
             assert.equal((await ed('POST', '/volumes/999999/owners', {})).status, 404);
@@ -1149,6 +1152,79 @@ const scenarios = [
             assert.equal(scan.body.matched_volume.id, a1);
             assert.deepEqual(scan.body.matched_volume.owned_elsewhere, [{ shelf_id: shelfB, shelf_name: 'Kern Doppelt B', status: 'owned', owners: ['ed'] }]);
             assert.equal(JSON.stringify((await ed('GET', '/shopping-list')).body).includes('Kern Doppelt Fremd'), false);
+        }
+    },
+    {
+        name: 'todo: gaps, overdue orders and volumes owned in another own shelf, one entry per series and kind',
+        async run({ admin, ed }) {
+            const shelfOf = async (api, name) => {
+                const res = await api('POST', '/shelves', { name });
+                assert.equal(res.status, 201, JSON.stringify(res.body));
+                return res.body.id;
+            };
+            const shelfA = await shelfOf(ed, 'Kern Todo A');
+            const shelfB = await shelfOf(ed, 'Kern Todo B');
+            const foreign = await shelfOf(admin, 'Kern Todo Fremd');
+            const fields = { publisher: 'Kern Todo Verlag' };
+            const inA = await newSeries(ed, 'Kern Todo Reihe', { ...fields, shelf_id: shelfA });
+            const inB = await newSeries(ed, 'Kern Todo Reihe', { ...fields, shelf_id: shelfB });
+            const inForeign = await newSeries(admin, 'Kern Todo Reihe', { ...fields, shelf_id: foreign });
+            await newVolume(ed, inA, '1', { status: 'Vorhanden' });
+            await newVolume(ed, inA, '2', { status: 'Fehlt' });
+            await newVolume(ed, inA, '3', { status: 'Fehlt' });
+            await newVolume(ed, inA, '4', { status: 'Fehlt' });
+            await newVolume(ed, inA, '5', { status: 'Vorbestellt', release_date: '2020-01-10' });
+            await newVolume(ed, inA, '6', { status: 'Vorbestellt', release_date: '2999-01-10' });
+            await newVolume(ed, inB, '2', { status: 'Vorhanden' });
+            await newVolume(admin, inForeign, '3', { status: 'Vorhanden' });
+            // a wished series without owned volumes and a dropped one are no gaps
+            const wished = await newSeries(ed, 'Kern Todo Wunsch', { shelf_id: shelfA });
+            await newVolume(ed, wished, '1', { status: 'Fehlt' });
+            const dropped = await newSeries(ed, 'Kern Todo Abgebrochen', { shelf_id: shelfA, collecting: 'abgebrochen' });
+            await newVolume(ed, dropped, '1', { status: 'Vorhanden' });
+            await newVolume(ed, dropped, '2', { status: 'Fehlt' });
+
+            const res = await ed('GET', `/todo?shelf_id=${shelfA}`);
+            assert.equal(res.status, 200, JSON.stringify(res.body));
+            assert.deepEqual(res.body.items.map(i => [i.kind, i.manga_id, i.count, i.volumes]), [
+                ['elsewhere', inA, 1, ['2']],
+                ['overdue', inA, 1, ['5']],
+                ['gap', inA, 2, ['3', '4']]
+            ]);
+            assert.equal(res.body.items[0].shelf_name, 'Kern Todo B');
+            assert.equal(res.body.total, 3);
+            assert.equal(JSON.stringify((await ed('GET', '/todo')).body).includes('Kern Todo Fremd'), false);
+            assert.equal((await ed('GET', '/todo?shelf_id=' + foreign)).status, 404);
+        }
+    },
+    {
+        name: 'saved filters: own list, the same filters once, the newest 8, only own entries deleted',
+        async run({ admin, ed }) {
+            const f = (publisher, extra = {}) => ({ status: 'ALL', publisher, collect: 'ALL', author: '', tags: [], lang: 'ALL', shelf: 'ALL', person: 'ALL', sort: 'title_asc', group: 'none', ...extra });
+            const first = await ed('POST', '/saved-filters', { label: 'Carlsen', filters: f('Carlsen', { tags: ['Action'] }) });
+            assert.equal(first.status, 201, JSON.stringify(first.body));
+            assert.deepEqual(first.body.items.map(i => i.label), ['Carlsen']);
+            assert.deepEqual(first.body.items[0].filters.tags, ['Action']);
+            assert.equal(first.body.limit, 8);
+            // the same choice in another key order keeps the one entry
+            const again = await ed('POST', '/saved-filters', { label: 'Anders', filters: { ...f('Carlsen', { tags: ['Action'] }), group: 'none', status: 'ALL' } });
+            assert.equal(again.status, 200);
+            assert.deepEqual(again.body.items.map(i => i.label), ['Carlsen']);
+            // other accounts see nothing of it and cannot delete it
+            assert.deepEqual((await admin('GET', '/saved-filters')).body.items, []);
+            assert.equal((await admin('DELETE', `/saved-filters/${first.body.items[0].id}`)).status, 404);
+            for (let i = 1; i <= 8; i++) await ed('POST', '/saved-filters', { label: `P${i}`, filters: f(`P${i}`) });
+            const list = (await ed('GET', '/saved-filters')).body.items;
+            assert.deepEqual(list.map(i => i.label), ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8']);
+            const gone = await ed('DELETE', `/saved-filters/${list[0].id}`);
+            assert.equal(gone.status, 200);
+            assert.equal(gone.body.items.length, 7);
+            assert.equal((await ed('DELETE', `/saved-filters/${list[0].id}`)).status, 404);
+            assert.equal((await ed('DELETE', '/saved-filters/abc')).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: '  ', filters: f('X') })).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: 'X', filters: [] })).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: 'X', filters: f('X', { tags: 'Action' }) })).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: 'X', filters: f('X', { status: { a: 1 } }) })).status, 400);
         }
     },
     {

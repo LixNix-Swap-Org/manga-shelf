@@ -26,21 +26,26 @@ function CopyLine({ copy, text, showShelf, onNavigate }) {
  * Lent and borrowed copies (GET /api/copies/lent): what is lent out from the caller's shelves and what others lent to
  * the caller. Hidden while both lists are empty or the request failed.
  */
-export default function LentCard({ shelfId = null, onNavigate }) {
+export default function LentCard({ shelfId = null, onNavigate, emptyText = null }) {
   const [data, setData] = useState(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let live = true;
     const url = shelfId && shelfId !== 'all' ? `/api/copies/lent?shelf_id=${encodeURIComponent(shelfId)}` : '/api/copies/lent';
     apiFetch(url)
       .then(async (res) => { const body = res.ok ? await readJson(res) : null; if (live) setData(body); })
-      .catch(() => { if (live) setData(null); });
+      .catch(() => { if (live) setData(null); })
+      .finally(() => { if (live) setLoaded(true); });
     return () => { live = false; };
   }, [shelfId]);
 
   const lentOut = data?.lent_out || [];
   const borrowed = data?.borrowed || [];
-  if (lentOut.length === 0 && borrowed.length === 0) return null;
+  if (lentOut.length === 0 && borrowed.length === 0) {
+    // emptyText: shown once the answer is there (the Verliehen tab), otherwise the card stays away
+    return emptyText && loaded ? <p className="py-12 text-center text-sm text-slate-400">{emptyText}</p> : null;
+  }
   const showShelf = !shelfId || shelfId === 'all';
   const since = (c) => (c.lent_at ? formatDate(c.lent_at) : '');
   return (

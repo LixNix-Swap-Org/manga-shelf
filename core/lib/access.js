@@ -184,7 +184,7 @@ function parseShelfSetup(body = {}, appRole = 'editor') {
 
 function requireShelfOwnerFor(ctx, shelf) {
     if (shelfRole(ctx, shelf.id) !== 'owner') {
-        throw badRequest(msg('Nur ein Besitzer des Regals „{name}“ kann neue Konten dort aufnehmen', { name: shelf.name }), 'SHELF_NOT_OWNER');
+        throw badRequest(msg('Nur ein Verwalter des Regals „{name}“ kann neue Konten dort aufnehmen', { name: shelf.name }), 'SHELF_NOT_OWNER');
     }
 }
 

@@ -113,6 +113,8 @@ describe('AddMangaModal: lookup status and publisher', () => {
     fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
     await waitFor(() => expect(total.placeholder).toBe('bisher 22 erschienen'));
     expect(total.value).toBe('');
+    // a picked hit moves on to "Edition & Regal"; back in "Finden" the next search runs
+    fireEvent.click(screen.getByRole('button', { name: /Finden/ }));
     fireEvent.change(titleInput(), { target: { value: 'Monster' } });
     fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
     await waitFor(() => expect(total.value).toBe('9'));
@@ -145,7 +147,9 @@ describe('AddMangaModal: series created, scanned volume failed', () => {
     expect(onSeriesCreated).toHaveBeenCalledTimes(1);
     expect(onSeriesCreated.mock.calls[0][0].id).toBe(43);
     expect(titleInput().matches(':disabled')).toBe(true);
-    expect(screen.getByRole('button', { name: /Auto-Fill/ }).matches(':disabled')).toBe(true);
+    // the step "Bände" shows the scanned volume; the series fields of "Finden" stay locked
+    expect(screen.getByRole('button', { name: /Auto-Fill/, hidden: true }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: /Bände/ }).getAttribute('aria-current')).toBe('step');
 
     fireEvent.click(submitButton());
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
@@ -567,5 +571,87 @@ describe('AddMangaModal: same title already in the collection', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
     await waitFor(() => expect(onOpenExisting).toHaveBeenCalledWith(collection[0]));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AddMangaModal: three steps', () => {
+  const stepButton = (name) => screen.getByRole('button', { name: new RegExp(name) });
+
+  it('starts in "Finden", asks for a title before moving on and keeps every field across the steps', () => {
+    renderModal();
+    expect(stepButton('Finden').getAttribute('aria-current')).toBe('step');
+    fireEvent.click(screen.getByRole('button', { name: 'Ohne Vorlage weiter' }));
+    expect(screen.getByRole('alert').textContent).toMatch(/Bitte gib einen Titel ein/);
+    expect(stepButton('Finden').getAttribute('aria-current')).toBe('step');
+
+    fireEvent.change(titleInput(), { target: { value: 'Blame!' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ohne Vorlage weiter' }));
+    expect(stepButton('Edition & Regal').getAttribute('aria-current')).toBe('step');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Autor / Mangaka' }), { target: { value: 'Tsutomu Nihei' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Weiter' }));
+    expect(stepButton('Bände').getAttribute('aria-current')).toBe('step');
+    fireEvent.click(screen.getByRole('button', { name: 'Zurück' }));
+    expect(screen.getByRole('textbox', { name: 'Autor / Mangaka' }).value).toBe('Tsutomu Nihei');
+    // "Manga anlegen" is there in every step: a quick add needs no detour
+    expect(submitButton().textContent).toContain('Manga anlegen');
+  });
+
+  it('a picked hit moves on to "Edition & Regal"', async () => {
+    mockFetch({ 'GET /api/lookup/manga': () => json(200, [{ id: 'mp_9', source: 'manga_passion', title: 'Monster', status: 'Abgeschlossen', total_volumes: 9, manga_passion_id: 9 }]) });
+    renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Monster' } });
+    fireEvent.click(screen.getByRole('button', { name: /Auto-Fill/ }));
+    await waitFor(() => expect(stepButton('Edition & Regal').getAttribute('aria-current')).toBe('step'));
+    fireEvent.click(stepButton('Finden'));
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeTruthy();
+  });
+
+  it('picked volumes are created as owned, the rest up to the count as "Fehlt"; Shift-click picks a range', async () => {
+    const fetchFn = mockFetch({
+      'POST /api/mangas': () => json(200, { success: true, id: 51 }),
+      'POST /api/volumes/batch': () => json(200, { success: true, created: 1, skipped: [] })
+    });
+    const { onSuccess } = renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Blame!' } });
+    fireEvent.change(screen.getByLabelText('Geplante / Gesamtbände'), { target: { value: '5' } });
+    fireEvent.click(stepButton('Bände'));
+    expect(screen.getByText('Ohne Auswahl werden keine Bände angelegt.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Band 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Band 4' }), { shiftKey: true });
+    expect(['Band 1', 'Band 2', 'Band 3', 'Band 4', 'Band 5'].map((name) => screen.getByRole('button', { name }).getAttribute('aria-pressed')))
+      .toEqual(['false', 'true', 'true', 'true', 'false']);
+    expect(screen.getByText('3 Bände vorhanden · 2 Bände als „Fehlt“')).toBeTruthy();
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(callsTo(fetchFn, 'POST /api/volumes/batch').map((call) => {
+      const { manga_id: id, from, to, status } = bodyOf(call);
+      return [id, from, to, status];
+    })).toEqual([[51, 1, 1, 'Fehlt'], [51, 2, 4, 'Vorhanden'], [51, 5, 5, 'Fehlt']]);
+  });
+
+  it('without a pick no volumes are created; a failed batch keeps the series and retries only the volumes', async () => {
+    let batches = 0;
+    const fetchFn = mockFetch({
+      'POST /api/mangas': () => json(200, { success: true, id: 52 }),
+      'POST /api/volumes/batch': () => {
+        batches += 1;
+        return batches === 1 ? json(500, { error: 'kaputt' }) : json(200, { success: true, created: 3, skipped: [] });
+      }
+    });
+    const { onSuccess, onSeriesCreated } = renderModal();
+    fireEvent.change(titleInput(), { target: { value: 'Blame!' } });
+    fireEvent.click(stepButton('Bände'));
+    fireEvent.change(screen.getByLabelText('Erschienene Bände'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Alle' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Übrige Bände als „Fehlt“ anlegen' }));
+    fireEvent.click(submitButton());
+    expect((await screen.findByRole('alert')).textContent).toMatch(/die Bände aber nicht: kaputt/);
+    expect(onSeriesCreated).toHaveBeenCalledTimes(1);
+    expect(submitButton().textContent).toContain('Bände anlegen');
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(callsTo(fetchFn, 'POST /api/mangas')).toHaveLength(1);
+    expect(callsTo(fetchFn, 'POST /api/volumes/batch').map((call) => bodyOf(call).status)).toEqual(['Vorhanden', 'Vorhanden']);
+
   });
 });

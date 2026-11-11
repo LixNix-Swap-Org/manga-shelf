@@ -618,7 +618,7 @@ describe('UserManagementModal', () => {
 
     const deleteButton = await screen.findByTitle('Benutzer "erika" löschen');
     fireEvent.click(deleteButton);
-    expect((await screen.findByRole('dialog', { name: 'Benutzer erika löschen' })).textContent).toMatch(/Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Besitzer oder ein anderes Mitglied ihres Regals über\. Ist dort niemand mehr, gelten sie als „Fehlt“/);
+    expect((await screen.findByRole('dialog', { name: 'Benutzer erika löschen' })).textContent).toMatch(/Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über\. Ist dort niemand mehr, gelten sie als „Fehlt“/);
     fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Fehler beim Löschen des Benutzers');
     expect(screen.getByRole('status').textContent).toBe('');

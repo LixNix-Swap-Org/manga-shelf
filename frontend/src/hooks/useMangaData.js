@@ -15,6 +15,7 @@ import { t } from '../i18n/index.js';
 import { editionCurrency, editionLanguage, editionRegion, isMpEdition } from '../utils/editions';
 import { formatCount } from '../utils/format';
 import { invalidateShelves } from '../utils/shelfScope';
+import { rememberRecentSeries } from '../utils/recentSeries';
 
 const MOVE_UNDO_MS = 15000;
 
@@ -297,6 +298,7 @@ export default function useMangaData({ id, user, canEdit, onUnauthorized }) {
     if (mangaRef.current?.cover_image !== data.cover_image) setFailedCover(false);
     loadedIdRef.current = id;
     mangaRef.current = data;
+    if (idChanged && data?.id) rememberRecentSeries(user?.id, data.id);
     setManga(data);
     setNotFound(false);
     setLoadError(null);

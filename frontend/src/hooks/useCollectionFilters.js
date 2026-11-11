@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef, useSyncExternalStore } from 'react';
 import api, { apiFetch, getApiBase, readJson } from '../utils/api';
-import { invalidateShelves, readShelfFilter, writeShelfFilter } from '../utils/shelfScope';
+import { invalidateShelves, readShelfFilter, writeShelfFilter, readPersonFilter, writePersonFilter } from '../utils/shelfScope';
 import { useShelves } from './useShelfViewer';
 import { readCache, writeCache, touchCache, revalidateHeaders, volumeSearchMap, VOLUME_SEARCH_KEY } from '../utils/dataCache';
 import { loadOfflineVolumeSearch } from '../utils/offlineStore';
@@ -8,7 +8,7 @@ import { publisherNamesVersion, setPublisherNames, subscribePublisherNames } fro
 import {
   getAvailablePublishers, getFilterCounts, filterAndSortMangas, getCollectionTotals, getStatusTabs,
   sanitizePublisherFilter, isStatusFilter, isSortOption, isCollectFilter, isGroupOption, getCollectCounts, groupMangas,
-  readFilterParams, writeFilterParams, getAvailableTags, parseTagFilter, formatTagFilter, withVolumeSearch, isLanguageFilter, getOtherCurrencyTotals, getAvailableShelves
+  readFilterParams, writeFilterParams, getAvailableTags, parseTagFilter, formatTagFilter, withVolumeSearch, isLanguageFilter, getOtherCurrencyTotals, getAvailableShelves, getAvailablePersons
 } from '../utils/collectionHelpers';
 import { availableLanguages as collectLanguages } from '../utils/editions';
 
@@ -120,6 +120,13 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
   if (shelfPick.owner !== shelfOwner) setShelfPick({ owner: shelfOwner, value: readShelfFilter(userId) });
   const shelfFilter = shelfPick.owner === shelfOwner ? shelfPick.value : 'ALL';
   const setShelfFilter = useCallback((value) => setShelfPick((prev) => ({ ...prev, value: String(value) })), []);
+  const [personPick, setPersonPick] = useState(() => ({ owner: shelfOwner, value: readPersonFilter(userId) }));
+  if (personPick.owner !== shelfOwner) setPersonPick({ owner: shelfOwner, value: readPersonFilter(userId) });
+  const personFilter = personPick.owner === shelfOwner ? personPick.value : 'ALL';
+  const setPersonFilter = useCallback((value) => {
+    const next = String(value ?? 'ALL');
+    setPersonPick((prev) => ({ ...prev, value: next }));
+  }, []);
   const [sortBy, setSortBy] = useState(() => fromUrl.sort ?? readStored('localStorage', 'mangashelf_sort_by', 'title_asc', isSortOption));
   const [groupBy, setGroupBy] = useState(() => fromUrl.group ?? readStored('localStorage', 'mangashelf_group_by', 'none', isGroupOption));
   const [viewMode, setViewMode] = useState(() => readStored('localStorage', 'mangashelf_view_mode', 'grid', (v) => v === 'grid' || v === 'list'));
@@ -153,6 +160,12 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
     shelfWrittenRef.current = shelfPick;
     if (shelfPick.owner === shelfOwner) writeShelfFilter(userId, shelfPick.value);
   }, [shelfPick, shelfOwner, userId]);
+  const personWrittenRef = useRef(personPick);
+  useEffect(() => {
+    if (personWrittenRef.current === personPick) return;
+    personWrittenRef.current = personPick;
+    if (personPick.owner === shelfOwner) writePersonFilter(userId, personPick.value);
+  }, [personPick, shelfOwner, userId]);
   useEffect(() => { writeStored('localStorage', 'mangashelf_sort_by', sortBy); }, [sortBy]);
   useEffect(() => { writeStored('localStorage', 'mangashelf_group_by', groupBy); }, [groupBy]);
   useEffect(() => { writeStored('localStorage', 'mangashelf_view_mode', viewMode); }, [viewMode]);
@@ -230,15 +243,22 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
     if (!shelfCounts.some((s) => String(s.id) === shelfFilter)) setShelfFilter('ALL');
   }, [loading, mangas.length, shelfCounts, shelfFilter, setShelfFilter]);
 
+  const availablePersons = useMemo(() => getAvailablePersons(mangas), [mangas]);
+  // a remembered person who owns nothing here any more would hide the whole shelf
+  useEffect(() => {
+    if (loading || mangas.length === 0 || personFilter === 'ALL') return;
+    if (!availablePersons.some((p) => String(p.id) === personFilter)) setPersonFilter('ALL');
+  }, [loading, mangas.length, availablePersons, personFilter, setPersonFilter]);
+
   const filterCounts = useMemo(() => getFilterCounts(mangas), [mangas]);
   const collectCounts = useMemo(() => getCollectCounts(mangas), [mangas]);
   const statusTabs = useMemo(() => getStatusTabs(filterCounts, statusFilter), [filterCounts, statusFilter]);
   const { filtered, groups } = useMemo(() => {
-    const list = filterAndSortMangas(searchable, { search: deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagFilter: tagKey, languageFilter, shelfFilter });
+    const list = filterAndSortMangas(searchable, { search: deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagFilter: tagKey, languageFilter, shelfFilter, personFilter });
     const sections = groupMangas(list, groupBy);
     return { filtered: sections.length > 1 ? sections.flatMap(s => s.items) : list, groups: sections };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- publisherNames as above
-  }, [searchable, deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagKey, languageFilter, shelfFilter, groupBy, publisherNames]);
+  }, [searchable, deferredSearch, statusFilter, publisherFilter, sortBy, collectFilter, authorFilter, tagKey, languageFilter, shelfFilter, personFilter, groupBy, publisherNames]);
   const totalSeries = mangas.length;
   const { totalOwnedVolumes, totalCollectionValue, completedSeries } = useMemo(() => getCollectionTotals(mangas), [mangas]);
   const otherCurrencyTotals = useMemo(() => getOtherCurrencyTotals(mangas), [mangas]);
@@ -246,7 +266,7 @@ export default function useCollectionFilters(mangas, { loading = false, userId =
   return {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy, viewMode, setViewMode,
     collectFilter, setCollectFilter, authorFilter, setAuthorFilter, tagFilter, setTagFilter, availableTags, groupBy, setGroupBy,
-    languageFilter, setLanguageFilter, availableLanguages, shelfFilter, setShelfFilter, availableShelves, shelves, otherCurrencyTotals,
+    languageFilter, setLanguageFilter, availableLanguages, shelfFilter, setShelfFilter, availableShelves, shelves, otherCurrencyTotals, personFilter, setPersonFilter, availablePersons,
     collectCounts, groups, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes, totalCollectionValue, completedSeries
   };
 }

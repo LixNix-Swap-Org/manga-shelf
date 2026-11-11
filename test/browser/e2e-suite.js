@@ -182,6 +182,8 @@ async function runTestSuite() {
     const testMangaTitle = '__TEST_AUTOMATION_SERIES__';
     await clickSelector(page, '#btn-open-add-manga');
     await typeInto(page, 'input[placeholder*="z.B. One Piece"]', testMangaTitle);
+    // "Neuer Manga" in three steps: Finden, Edition & Regal, Bände
+    await clickSelector(page, '#btn-add-step-next');
     await typeInto(page, 'input[placeholder*="z.B. Eiichiro Oda"]', 'Automated Test Author');
     await typeInto(page, 'input[placeholder*="z.B. Carlsen"]', 'Test Verlag');
     await typeInto(page, 'input[placeholder*="z.B. 108"]', '10');
@@ -354,6 +356,7 @@ async function runTestSuite() {
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await clickSelector(page, '#btn-open-add-manga');
     await typeInto(page, 'input[placeholder*="z.B. One Piece"]', wishTitle);
+    await clickSelector(page, '#btn-add-step-3');
     await clickText(page, 'Auf die Wunschliste', { selector: 'label' });
     await page.waitForFunction(() => Array.from(document.querySelectorAll('label')).some(l => l.innerText.includes('Priorität') && l.querySelector('select')),
       { timeout: 10000 });

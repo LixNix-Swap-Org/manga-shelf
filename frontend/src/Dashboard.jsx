@@ -5,8 +5,10 @@ import MangaCollectionGrid, { SHELF_SCROLL_KEY } from './components/dashboard/Ma
 import CollectionToolbar from './components/dashboard/CollectionToolbar';
 import DashboardHeader, { opensCollection } from './components/dashboard/DashboardHeader';
 import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
+import { STATS_PATH, statsPath, statsTabFromPath } from './utils/statsRoute';
 import CollectionStats from './components/dashboard/CollectionStats';
 import ContinueReading from './components/dashboard/ContinueReading';
+import TodoList from './components/dashboard/TodoList';
 import AnimeSearchHits, { animeSearchHits, ANIME_SEARCH_MIN_CHARS } from './components/dashboard/AnimeSearchHits';
 import DashboardFooter from './components/dashboard/DashboardFooter';
 import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
@@ -43,6 +45,7 @@ import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { invalidateShelves } from './utils/shelfScope';
 import { notify } from './utils/notify';
 import { takeReopenAccount } from './i18n/preference.js';
+import useAccountDefaults from './hooks/useAccountDefaults';
 import { t } from './i18n/index.js';
 
 // dialogs are loaded on first use and mounted only while open
@@ -52,7 +55,7 @@ const AddAnimeModal = lazy(() => import('./components/modals/AddAnimeModal'));
 const AnimeDetailModal = lazy(() => import('./components/modals/AnimeDetailModal'));
 const EpisodeLinkDialog = lazy(() => import('./components/modals/EpisodeLinkDialog'));
 const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
-const StatsModal = lazy(() => import('./components/modals/StatsModal'));
+const StatsPage = lazy(() => import('./components/modals/StatsPage'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
 const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeModal'));
 const AnimeRadarView = lazy(() => import('./components/dashboard/AnimeRadarView'));
@@ -97,14 +100,16 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const canQuickBuy = Boolean(user) && !['visitor', 'guest'].includes(user.realRole || user.role);
 
   const navigate = useNavigate();
+  const [todoCount, setTodoCount] = useState(0);
   const location = useLocation();
   const searchInputRef = useRef(null);
 
   // 'shelf' | 'shopping' | 'radar' from ?view= (each change is a history entry, so Back returns to the previous view);
-  // ?view=stats (app shortcut) opens the statistics over the shelf
+  // ?view=stats (app shortcut) leads to the statistics page; /statistik/<tab> shows it in place of the main views
   const [initialView] = useState(() => parseInitialView(location.search));
   const activeMainView = parseInitialView(location.search).mainView;
-  useDocumentTitle(t(VIEW_TITLES[activeMainView] || VIEW_TITLES.shelf));
+  const statsRoute = statsTabFromPath(location.pathname);
+  useDocumentTitle(t(statsRoute ? 'Statistiken' : (VIEW_TITLES[activeMainView] || VIEW_TITLES.shelf)));
   const headingRef = usePageHeading();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -115,7 +120,6 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const scanToastRef = useRef(null);
 
   // Modal visibility states
-  const [showStatsModal, setShowStatsModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [accountTab, setAccountTab] = useState('password');
@@ -132,6 +136,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const {
     networkOffline, setNetworkOffline, isOfflineMode, offlineCopyAt, refreshingCopy, refreshError, handleRefreshOfflineCopy
   } = useOfflineStatus({ user, onOnlineRef });
+  // "Zu erledigen" can be switched off per account (Konto & Sprache); unknown counts as on
+  const accountDefaults = useAccountDefaults({ enabled: !isOfflineMode && Boolean(user) });
+  const showTodo = accountDefaults.showTodo !== false;
 
   // the badges of the other views follow a delete and a restore from the trash toast
   const afterDeleteRef = useRef(null);
@@ -149,7 +156,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
     totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
-    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter, shelfFilter, setShelfFilter, availableShelves,
+    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter, shelfFilter, setShelfFilter, availableShelves, personFilter, setPersonFilter, availablePersons,
     shelves, otherCurrencyTotals
   } = useCollectionFilters(mangas, {
     loading: loading || refreshing, userId: user?.id, url: filterUrl, shelvesEnabled: !isOfflineMode, loadShelfRoles: canEdit && !isOfflineMode
@@ -171,6 +178,22 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   }, [setShelfFilter]);
 
   const lookupAvailable = Boolean(user) && !user.offline && !isOfflineMode;
+  // the statistics page needs the server: offline, /statistik shows the shelf
+  const statsTab = isOfflineMode ? null : statsRoute;
+  const shownView = statsTab ? null : activeMainView;
+  const leaveStats = useCallback(() => {
+    // back where the page was opened from; a page opened from outside (a link, the app shortcut) leads to the shelf
+    if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
+    else navigate('/', { replace: true });
+  }, [navigate]);
+  useEffect(() => {
+    if (statsRoute && isOfflineMode) navigate('/', { replace: true });
+  }, [statsRoute, isOfflineMode, navigate]);
+  const statsShown = Boolean(statsTab);
+  useEffect(() => {
+    if (!statsShown) return;
+    try { window.scrollTo(0, 0); } catch (_) { /* jsdom */ }
+  }, [statsShown]);
   const searchScope = useSearchScope({ enabled: lookupAvailable });
   const { onlineQuery, onlineSeq, pending: onlinePending, submitOnline, clearOnline } = searchScope;
   const searchCleared = search.trim() === '';
@@ -264,11 +287,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to the URL
   }, [location.search]);
 
-  // the start URL was read once; strip ?view=stats so a reload does not reopen the dialog
+  // the start URL was read once; ?view=stats becomes the statistics page
   useEffect(() => {
     if (!initialView.openStats) return;
-    if (!isOfflineMode) setShowStatsModal(true);
-    navigate({ search: viewSearch(location.search, 'shelf') }, { replace: true });
+    navigate({ pathname: isOfflineMode ? '/' : STATS_PATH, search: viewSearch(location.search, 'shelf') }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
   }, []);
 
@@ -313,6 +335,11 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   /** The one way to change the main view: a ?view= history entry; choosing the open view again reloads its data. */
   const setView = (next) => {
     const nextSearch = viewSearch(location.search, next);
+    if (statsRoute) {
+      // a view chosen on the statistics page leaves it
+      navigate({ pathname: '/', search: nextSearch });
+      return;
+    }
     if (nextSearch === location.search) {
       loadViewData(next);
       return;
@@ -328,7 +355,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   }, []);
 
   useDashboardKeyboard({
-    showAddModal, setShowAddModal, closeAddModal, showStatsModal, setShowStatsModal, showUsersModal, setShowUsersModal,
+    showAddModal, setShowAddModal, closeAddModal, showUsersModal, setShowUsersModal,
     showRestoreModal, setShowRestoreModal, showPasswordModal, setShowPasswordModal,
     activeToolModal, closeToolModal: () => setActiveToolModal(null),
     mobileMenuOpen, setMobileMenuOpen, search, setSearch, searchInputRef
@@ -487,8 +514,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
 
   const handleOpenStats = useCallback(() => {
     if (isOfflineMode) return;
-    setShowStatsModal(true);
-  }, [isOfflineMode]);
+    navigate(STATS_PATH);
+  }, [isOfflineMode, navigate]);
 
   const handleOpenModal = useCallback(() => {
     if (!canEdit) return;
@@ -588,7 +615,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     <div className="min-h-screen pb-16 overflow-x-clip">
       <SkipLink />
       <DashboardHeader
-        activeMainView={activeMainView}
+        activeMainView={statsTab ? 'stats' : activeMainView}
         canEdit={canEdit}
         handleBarcodeDetected={handleBarcodeDetected}
         handleInstallClick={handleInstallClick}
@@ -604,6 +631,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         isInstalledApp={isInstalledApp}
         isOfflineMode={isOfflineMode}
         isVisitor={isVisitor}
+        mangas={mangas}
+        todoCount={todoCount}
+        onOpenSeries={(id) => navigate(`/manga/${id}`)}
         mobileMenuOpen={mobileMenuOpen}
         onLogout={onLogout}
         onLocalReplaced={handleLocalReplaced}
@@ -631,17 +661,40 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
 
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10">
 
-        <MainViewSwitcher
+        {statsTab && (
+          <Suspense fallback={<p role="status" className="py-16 text-center text-sm text-slate-400">{t('Lädt...')}</p>}>
+            <StatsPage
+              user={user}
+              tab={statsTab}
+              onTab={(tab) => navigate(statsPath(tab), { replace: true })}
+              onBack={leaveStats}
+              onDataChanged={() => {
+                loadPublisherNames({ force: true });
+                fetchMangas();
+                fetchShoppingList();
+                fetchReleaseRadar();
+              }}
+              shelfId={scopedShelfId}
+              shelfName={scopedShelfName}
+              shelves={availableShelves}
+              setShelfFilter={setShelfFilter}
+              onClearShelf={clearShelfScope}
+              onShelfMissing={onShelfMissing}
+            />
+          </Suspense>
+        )}
+
+        {!statsTab && <MainViewSwitcher
           activeMainView={activeMainView}
           onSelectView={setView}
           mangaCount={mangas.length}
           animeCount={anime.list.length}
           shoppingData={shoppingData}
           radarData={radarData}
-        />
+        />}
 
         {/* SHELF VIEW */}
-        {activeMainView === 'shelf' && (
+        {shownView === 'shelf' && (
           <>
             <h2 className="sr-only">{t('Sammlung')}</h2>
             <CollectionStats
@@ -653,7 +706,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               handleOpenStats={handleOpenStats}
               isOfflineMode={isOfflineMode}
             />
-            <ContinueReading userId={user?.id} enabled={!isOfflineMode} />
+            <ContinueReading userId={user?.id} enabled={!isOfflineMode} canMark={canEdit} onChanged={fetchMangas} />
+            <TodoList enabled={showTodo && !isOfflineMode && Boolean(user)} shelfId={scopedShelfId} reloadKey={dataAt} onCount={setTodoCount} />
 
         {/* Filter & Sort Toolbar */}
         <CollectionToolbar
@@ -687,6 +741,31 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           availableShelves={availableShelves}
           shelfFilter={shelfFilter}
           setShelfFilter={setShelfFilter}
+          availablePersons={availablePersons}
+          personFilter={personFilter}
+          setPersonFilter={setPersonFilter}
+          userId={user?.id}
+          saved={{
+            userId: user?.id,
+            offline: isOfflineMode,
+            shelves: availableShelves,
+            persons: availablePersons,
+            current: { status: statusFilter, publisher: publisherFilter, collect: collectFilter, author: authorFilter, tags: tagFilter, lang: languageFilter, shelf: shelfFilter, person: personFilter, sort: sortBy, group: groupBy },
+            filtersActive: statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter)
+              || (Array.isArray(tagFilter) && tagFilter.length > 0) || languageFilter !== 'ALL' || shelfFilter !== 'ALL' || personFilter !== 'ALL',
+            apply: (f) => {
+              setStatusFilter(f.status);
+              setPublisherFilter(f.publisher);
+              setCollectFilter(f.collect);
+              setAuthorFilter(f.author);
+              setTagFilter(f.tags);
+              setLanguageFilter(f.lang);
+              setShelfFilter(f.shelf);
+              setPersonFilter(f.person || 'ALL');
+              setSortBy(f.sort);
+              setGroupBy(f.group);
+            }
+          }}
         />
         <AnimeSearchHits hits={animeHits} onOpen={handleOpenAnime} onShowAll={() => setView(ANIME_VIEW)} />
         {/* Grid or Empty State */}
@@ -730,7 +809,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     )}
 
     {/* SHOPPING LIST VIEW */}
-    {activeMainView === 'shopping' && (
+    {shownView === 'shopping' && (
       <ShoppingListView
         shoppingData={shoppingData}
         loadingShopping={loadingShopping}
@@ -760,7 +839,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       />
     )}
 
-    {activeMainView === ANIME_VIEW && (
+    {shownView === ANIME_VIEW && (
       <AnimeView
         list={anime.list}
         loaded={anime.loaded}
@@ -785,7 +864,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
       />
     )}
 
-    {activeMainView === 'episodes' && (
+    {shownView === 'episodes' && (
       <Suspense fallback={null}>
         <AnimeRadarView
           list={anime.list}
@@ -807,7 +886,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     )}
 
     {/* RELEASE RADAR / ERSCHEINUNGSKALENDER VIEW */}
-    {activeMainView === 'radar' && (
+    {shownView === 'radar' && (
       <ReleaseRadarView
         isOffline={Boolean(user?.offline)}
         foreignEditions={availableLanguages.some((l) => l.code !== 'de')}
@@ -850,6 +929,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         GERMAN_MONTHS={monthNames('long')}
         shelfName={scopedShelfName}
         onClearShelf={clearShelfScope}
+        shelves={availableShelves}
+        shelfFilter={shelfFilter}
+        setShelfFilter={setShelfFilter}
+        userId={user?.id}
       />
     )}
     </main>
@@ -963,24 +1046,6 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               fetchShoppingList();
               fetchReleaseRadar();
             }}
-          />
-        )}
-
-        {showStatsModal && (
-          <StatsModal
-            isOpen
-            onClose={() => setShowStatsModal(false)}
-            user={user}
-            onDataChanged={() => {
-              loadPublisherNames({ force: true });
-              fetchMangas();
-              fetchShoppingList();
-              fetchReleaseRadar();
-            }}
-            shelfId={scopedShelfId}
-            shelfName={scopedShelfName}
-            onClearShelf={clearShelfScope}
-            onShelfMissing={onShelfMissing}
           />
         )}
 

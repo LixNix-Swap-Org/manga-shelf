@@ -48,6 +48,10 @@ function listMangas(ctx, userId, { volumeSearch = false, shelfIds = access.acces
                    COUNT(DISTINCT CASE WHEN v.status = 'Vorhanden' AND ${REGULAR} THEN v.number_sort END) as regular_owned, -- distinct numbers: a duplicate entry does not raise progress
                    MAX(CASE WHEN ${REGULAR} THEN v.number_sort END) as max_regular_number, -- highest existing regular number, any status: a missing volume 4 keeps 3 of 3 from being complete
                    COUNT(CASE WHEN v.status = 'Vorhanden' AND NOT ${REGULAR} THEN v.id END) as extras_owned,
+                   (SELECT GROUP_CONCAT(o.person, char(10)) FROM (
+                        SELECT DISTINCT vo.user_id || char(9) || u.username AS person
+                        FROM volume_owners vo JOIN volumes ov ON ov.id = vo.volume_id JOIN users u ON u.id = vo.user_id
+                        WHERE ov.manga_id = m.id ORDER BY vo.user_id) o) as owners, -- "id<TAB>name" per line: the person filter of the shelf
                    COUNT(CASE WHEN v.status = 'Vorhanden' THEN vr.catalog_volume_id END) as read_volume_count${volumeSearch ? `,
                    ${VOLUME_SEARCH_SQL} as volume_search` : ''}
             FROM mangas m

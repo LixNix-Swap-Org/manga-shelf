@@ -70,7 +70,7 @@ async function heroProblems(page) {
   }, HERO_ACTIONS);
 }
 
-// a dialog on a landscape phone: header and close button reachable at the scroll top, the overlay itself scrolls
+// a dialog on a landscape phone: header and close button reachable at the scroll top, the overlay itself scrolls when the box is taller
 async function dialogProblems(page, dialogSelector, heading) {
   return page.evaluate((sel, title) => {
     const overlay = document.querySelector(sel);
@@ -84,7 +84,9 @@ async function dialogProblems(page, dialogSelector, heading) {
       const r = el.getBoundingClientRect();
       if (r.top < 0 || r.bottom > innerHeight) problems.push(`${name} outside the viewport (${Math.round(r.top)}-${Math.round(r.bottom)} of ${innerHeight})`);
     }
-    if (!(overlay.scrollHeight > overlay.clientHeight)) problems.push('the overlay does not scroll');
+    // a box taller than the screen must scroll inside the overlay (a short step of "Neuer Manga" simply fits)
+    const box = overlay.firstElementChild;
+    if (box && box.getBoundingClientRect().height > overlay.clientHeight && !(overlay.scrollHeight > overlay.clientHeight)) problems.push('the overlay does not scroll');
     return problems;
   }, dialogSelector, heading);
 }
@@ -363,14 +365,20 @@ async function runDeepTestSuite() {
     await editionTour(page, frierenId, snap);
 
     // STEP 4: Statistics
-    console.log('\n--- Step 4: Statistics Modal & Tabs ---');
+    console.log('\n--- Step 4: Statistics page & tabs ---');
     await clickSelector(page, '#btn-open-stats');
+    await page.waitForFunction(() => location.pathname === '/statistik', { timeout: 10000 });
+    await page.waitForSelector('#btn-stats-tab-finanzen', { visible: true, timeout: 10000 });
     await snap('05_stats_overview');
-    await clickText(page, 'Verlagsdiagramm');
+    await clickSelector(page, '#btn-stats-tab-finanzen');
+    await snap('05a_stats_finances');
+    await clickSelector(page, '#btn-stats-tab-verlage');
+    await page.waitForFunction(() => location.pathname === '/statistik/verlage', { timeout: 10000 });
     await snap('05b_stats_publishers');
-    await clickText(page, 'Lese-Tracking');
+    await clickSelector(page, '#btn-stats-tab-lesen');
     await snap('05c_stats_reading');
-    await clickSelector(page, '#btn-close-stats-modal');
+    await clickSelector(page, '#btn-stats-back');
+    await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
 
     // STEP 5: Shopping list
     console.log('\n--- Step 5: Shopping List / Buchladen-Modus ---');
@@ -422,11 +430,12 @@ async function runDeepTestSuite() {
     await clickText(page, 'Abbrechen', { within: readDialog });
     await page.waitForFunction(sel => !document.querySelector(sel), { timeout: 5000 }, readDialog);
 
-    await clickText(page, 'Bearbeiten');
-    await page.waitForFunction(() => document.body.innerText.includes('Manga bearbeiten'), { timeout: 5000 });
+    const seriesEdit = '#series-edit-panel';
+    await clickSelector(page, '#btn-edit-manga');
+    await page.waitForSelector(seriesEdit, { visible: true, timeout: 5000 });
     await snap('13_manga_edit_modal');
-    await clickText(page, 'Abbrechen');
-    await page.waitForFunction(() => !document.body.innerText.includes('Manga bearbeiten'), { timeout: 5000 });
+    await clickText(page, 'Abbrechen', { within: seriesEdit });
+    await page.waitForFunction(sel => !document.querySelector(sel), { timeout: 5000 }, seriesEdit);
 
     await clickSelector(page, 'a[href="/"]');
     await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 });

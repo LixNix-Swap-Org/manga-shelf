@@ -1061,7 +1061,7 @@ test('migrations 49 to 52: personal anime tags and notes, the feed table, editio
     conn.exec(`
         DROP TABLE anime_tags; DROP TABLE calendar_feeds;
         DROP TRIGGER trg_check_users_role_ins; DROP TRIGGER trg_check_users_role_upd;
-        DELETE FROM schema_migrations WHERE version >= 49;
+        DELETE FROM schema_migrations WHERE version BETWEEN 49 AND 52;
     `);
     const user = (name) => Number(conn.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, 'x', 'editor')").run(name).lastInsertRowid);
     const [anna, ben, gone] = [user('anna'), user('ben'), user('gone')];
@@ -1108,7 +1108,7 @@ test('migrations 49 to 52: personal anime tags and notes, the feed table, editio
     assert.throws(() => conn.prepare("UPDATE users SET role = 'root' WHERE id = ?").run(anna), /invalid users.role/);
     conn.prepare("UPDATE users SET role = 'guest' WHERE id = ?").run(anna);
 
-    conn.prepare('DELETE FROM schema_migrations WHERE version >= 49').run();
+    conn.prepare('DELETE FROM schema_migrations WHERE version BETWEEN 49 AND 52').run();
     assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [49, 50, 51, 52], 'a second run is harmless');
     assert.equal(conn.prepare('SELECT count(*) AS n FROM anime_tags').get().n, 2);
 });

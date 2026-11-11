@@ -116,7 +116,7 @@ test('a seeded collection reads the same through Express and the in-memory core'
 
     const reads = [
         '/anime', `/anime/${anime}`, `/anime/${film}`, '/anime/sync', '/export/anime.csv', '/mangas', '/mangas/volume-search', `/mangas/${naruto}`, `/mangas/${webtoon}`, `/mangas/${narutoEn}`, `/mangas/${onePiece}`, `/mangas/${wish}`, '/offline-snapshot', '/stats', '/shopping-list',
-        '/shopping-list?include_others=1', '/release-radar', '/dashboard-summary', '/users/1/stats', '/users/2/stats',
+        '/shopping-list?include_others=1', '/release-radar', '/dashboard-summary', '/todo', '/users/1/stats', '/users/2/stats',
         '/lookup/isbn?isbn=9783551023452', '/export/csv', '/tags', '/trash', '/publishers', '/stats/reading', '/stats/reading?user_id=1',
         '/maintenance/quality'
     ];

@@ -28,6 +28,25 @@ export function writeShelfFilter(userId, value) {
   } catch (_) { /* storage unavailable */ }
 }
 
+// The person chosen in the shelf/person chip (series where that person owns a volume), per server and account
+const PERSON_KEY = 'mangashelf_person_filter';
+
+export function readPersonFilter(userId) {
+  try {
+    const value = window.localStorage.getItem(`${PERSON_KEY}:${shelvesScope(userId)}`);
+    return isShelfId(value) ? value : 'ALL';
+  } catch (_) {
+    return 'ALL';
+  }
+}
+
+export function writePersonFilter(userId, value) {
+  try {
+    if (isShelfId(String(value))) window.localStorage.setItem(`${PERSON_KEY}:${shelvesScope(userId)}`, String(value));
+    else window.localStorage.removeItem(`${PERSON_KEY}:${shelvesScope(userId)}`);
+  } catch (_) { /* storage unavailable */ }
+}
+
 /** '?shelf_id=3' (with prefix '&': '&shelf_id=3') for a chosen shelf, '' for every shelf. */
 export function shelfQuery(shelfId, prefix = '?') {
   const id = String(shelfId ?? '');

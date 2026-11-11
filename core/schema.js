@@ -1422,6 +1422,32 @@ function migrationList(log = silentLog) {
                     END;
                 `);
             }
+        },
+        {
+            version: 53,
+            name: 'add_saved_filters',
+            up: (d) => {
+                // "Gemerkte Filter" of a person: until now only in the browser's storage, now with the account on every device
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS saved_filters (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        label TEXT NOT NULL,
+                        filters TEXT NOT NULL,
+                        created_at TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_saved_filters_user ON saved_filters (user_id, id);
+                `);
+            }
+        },
+        {
+            version: 54,
+            name: 'add_show_todo',
+            up: (d) => {
+                // whether the shelf shows the list "Zu erledigen" to this account; 1 = shown (each person decides)
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!cols.has('show_todo')) d.exec('ALTER TABLE users ADD COLUMN show_todo INTEGER NOT NULL DEFAULT 1;');
+            }
         }
     ];
 }
