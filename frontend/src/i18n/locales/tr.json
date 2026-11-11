@@ -1662,7 +1662,6 @@
   "Manga Shelf als native App auf deinem Gerät installieren": "Manga Shelf'i cihazına yerel uygulama olarak yükle",
   "Manga Shelf wird geladen...": "Manga Shelf yükleniyor...",
   "Manga anlegen": "Manga ekle",
-  "Manga bearbeiten": "Mangayı düzenle",
   "Manga löschen": "Mangayı sil",
   "Manga nicht gefunden": "Manga bulunamadı",
   "Manga-Passion Edition nicht gefunden oder nicht verfügbar.": "Manga Passion baskısı bulunamadı veya kullanılamıyor.",
@@ -3552,5 +3551,9 @@
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Bu rafın tek yöneticisi sensin. Rolünü değiştirmeden veya raftan ayrılmadan önce “{role}” rolünü başka birine ver.",
   "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "“{username}” kullanıcısını gerçekten silmek ister misin? Okuma durumu silinir; yalnızca bu kullanıcının sahip olduğu ciltler, bulundukları rafın yöneticisine veya başka bir üyesine geçer. Orada kimse kalmadıysa “Eksik” sayılır.",
   "Mehr unter „Infos“": "Devamı “Bilgiler” altında",
-  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Webtoon’lar için Manga Passion eşleştirmesi yok."
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Webtoon’lar için Manga Passion eşleştirmesi yok.",
+  "Basis": "Temel",
+  "Edition": "Baskı",
+  "Reihe bearbeiten": "Seriyi düzenle",
+  "Abschnitte": "Bölümler"
 }

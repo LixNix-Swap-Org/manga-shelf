@@ -428,11 +428,12 @@ async function runDeepTestSuite() {
     await clickText(page, 'Abbrechen', { within: readDialog });
     await page.waitForFunction(sel => !document.querySelector(sel), { timeout: 5000 }, readDialog);
 
-    await clickText(page, 'Bearbeiten');
-    await page.waitForFunction(() => document.body.innerText.includes('Manga bearbeiten'), { timeout: 5000 });
+    const seriesEdit = '#series-edit-panel';
+    await clickSelector(page, '#btn-edit-manga');
+    await page.waitForSelector(seriesEdit, { visible: true, timeout: 5000 });
     await snap('13_manga_edit_modal');
-    await clickText(page, 'Abbrechen');
-    await page.waitForFunction(() => !document.body.innerText.includes('Manga bearbeiten'), { timeout: 5000 });
+    await clickText(page, 'Abbrechen', { within: seriesEdit });
+    await page.waitForFunction(sel => !document.querySelector(sel), { timeout: 5000 }, seriesEdit);
 
     await clickSelector(page, 'a[href="/"]');
     await page.waitForFunction(() => location.pathname === '/', { timeout: 10000 });

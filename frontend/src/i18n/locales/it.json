@@ -1692,7 +1692,6 @@
   "Manga Shelf als native App auf deinem Gerät installieren": "Installa Manga Shelf come app nativa sul tuo dispositivo",
   "Manga Shelf wird geladen...": "Caricamento di Manga Shelf...",
   "Manga anlegen": "Crea manga",
-  "Manga bearbeiten": "Modifica manga",
   "Manga löschen": "Elimina manga",
   "Manga nicht gefunden": "Manga non trovato",
   "Manga-Passion Edition nicht gefunden oder nicht verfügbar.": "Edizione di Manga Passion non trovata o non disponibile.",
@@ -3656,5 +3655,9 @@
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Sei l’unico gestore di questo scaffale. Prima di cambiare il tuo ruolo o lasciare lo scaffale, assegna a qualcun altro il ruolo «{role}».",
   "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Vuoi davvero eliminare l’utente “{username}”? Il suo stato di lettura viene eliminato; i volumi posseduti solo da questo utente passano a un gestore o a un altro membro del loro scaffale. Se lì non rimane nessuno, saranno considerati “Mancante”.",
   "Mehr unter „Infos“": "Altro in «Info»",
-  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Per i webtoon non c’è il confronto con Manga Passion."
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Per i webtoon non c’è il confronto con Manga Passion.",
+  "Basis": "Base",
+  "Edition": "Edizione",
+  "Reihe bearbeiten": "Modifica serie",
+  "Abschnitte": "Sezioni"
 }

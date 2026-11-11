@@ -1632,7 +1632,6 @@
   "Manga Shelf als native App auf deinem Gerät installieren": "将 Manga Shelf 作为原生应用安装到你的设备上",
   "Manga Shelf wird geladen...": "正在加载 Manga Shelf...",
   "Manga anlegen": "创建漫画",
-  "Manga bearbeiten": "编辑漫画",
   "Manga löschen": "删除漫画",
   "Manga nicht gefunden": "未找到漫画",
   "Manga-Passion Edition nicht gefunden oder nicht verfügbar.": "未找到 Manga Passion 版本，或该版本不可用。",
@@ -3448,5 +3447,9 @@
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "你是此书架唯一的管理者。在更改自己的角色或退出书架之前，请先把“{role}”角色交给其他人。",
   "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "确定要删除用户“{username}”吗？其阅读状态将被删除；仅由该用户拥有的卷会转给其所在书架的管理者或其他成员。若那里已无人，这些卷会算作“缺失”。",
   "Mehr unter „Infos“": "更多见“信息”",
-  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "网漫没有 Manga Passion 比对。"
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "网漫没有 Manga Passion 比对。",
+  "Basis": "基本",
+  "Edition": "版本",
+  "Reihe bearbeiten": "编辑系列",
+  "Abschnitte": "分区"
 }

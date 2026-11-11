@@ -1,6 +1,6 @@
 // Detail page layout: shelf row splitting and measuring, undo toasts and BulkActionBar on phones.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, act, renderHook, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, act, renderHook, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import useShelfLayout, { splitShelfRows, fitsOneFitRow } from '../hooks/useShelfLayout';
 import VolumeShelfView from '../components/detail/VolumeShelfView';
@@ -219,17 +219,40 @@ describe('BulkActionBar on phones', () => {
 });
 
 describe('series edit header and gap dialog on narrow phones', () => {
-  it('the edit header wraps and keeps "Speichern" inside the card', () => {
+  it('editing opens a panel beside the page: the hero stays, header and Speichern fit on a phone', () => {
     render(<MemoryRouter><MangaHeroCard canEdit completionPct={0} editing formData={{ title: 'T', status: 'Laufend', cover_image: '' }}
       handleCoverUpload={vi.fn()} handleDeleteManga={vi.fn()} handleEditLookup={vi.fn()} handleUpdate={vi.fn((e) => e.preventDefault())}
       manga={{ id: 7, title: 'T' }} ownedCount={0} saving={false} setEditLookupResults={vi.fn()} setEditing={vi.fn()}
       startEditing={vi.fn()} cancelEditing={vi.fn()} setFormData={vi.fn()} totalOwnedValue={0} totalTarget={0} uploadingCover={false} /></MemoryRouter>);
-    const heading = screen.getByRole('heading', { name: 'Manga bearbeiten' });
-    const row = heading.parentElement;
-    expect(classesOf(row)).toEqual(expect.arrayContaining(['flex', 'flex-wrap', 'gap-2']));
+    const panel = screen.getByRole('dialog', { name: 'Reihe bearbeiten' });
+    expect(classesOf(panel)).toContain('dialog-sheet');
+    // the series page stays behind the panel
+    expect(screen.getByRole('heading', { level: 1, hidden: true }).textContent).toBe('T');
+    const heading = within(panel).getByRole('heading', { name: 'Reihe bearbeiten' });
     expect(classesOf(heading)).toContain('min-w-0');
-    const save = screen.getByRole('button', { name: /Speichern/ });
-    expect(classesOf(save.parentElement)).toContain('ml-auto');
+    for (const name of ['Basis', 'Edition', 'Format', 'Bilder', 'Tags']) {
+      expect(within(panel).getByRole('button', { name })).toBeTruthy();
+      expect(within(panel).getByRole('region', { name })).toBeTruthy();
+    }
+    const save = within(panel).getByRole('button', { name: /Speichern/ });
+    expect(save.getAttribute('type')).toBe('submit');
+    expect(classesOf(save.parentElement)).toContain('flex-wrap');
+  });
+
+  it('the section buttons mark the chosen section and Abbrechen and the close button end editing', () => {
+    const cancelEditing = vi.fn();
+    render(<MemoryRouter><MangaHeroCard canEdit completionPct={0} editing formData={{ title: 'T', status: 'Laufend', cover_image: '' }}
+      handleCoverUpload={vi.fn()} handleDeleteManga={vi.fn()} handleEditLookup={vi.fn()} handleUpdate={vi.fn((e) => e.preventDefault())}
+      manga={{ id: 7, title: 'T' }} ownedCount={0} saving={false} setEditLookupResults={vi.fn()} setEditing={vi.fn()}
+      startEditing={vi.fn()} cancelEditing={cancelEditing} setFormData={vi.fn()} totalOwnedValue={0} totalTarget={0} uploadingCover={false} /></MemoryRouter>);
+    const panel = screen.getByRole('dialog', { name: 'Reihe bearbeiten' });
+    expect(within(panel).getByRole('button', { name: 'Basis' }).getAttribute('aria-current')).toBe('true');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Bilder' }));
+    expect(within(panel).getByRole('button', { name: 'Bilder' }).getAttribute('aria-current')).toBe('true');
+    expect(within(panel).getByRole('button', { name: 'Basis' }).getAttribute('aria-current')).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Abbrechen' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Schließen' }));
+    expect(cancelEditing).toHaveBeenCalledTimes(2);
   });
 
   it('a long title breaks inside the gap dialog and the close button keeps its place', () => {
