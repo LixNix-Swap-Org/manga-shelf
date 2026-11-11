@@ -50,7 +50,7 @@ const UserManagementModal = lazy(() => import('./components/modals/UserManagemen
 const AccountModal = lazy(() => import('./components/modals/AccountModal'));
 const AddAnimeModal = lazy(() => import('./components/modals/AddAnimeModal'));
 const AnimeDetailModal = lazy(() => import('./components/modals/AnimeDetailModal'));
-const ShareLinkDialog = lazy(() => import('./components/modals/ShareLinkDialog'));
+const EpisodeLinkDialog = lazy(() => import('./components/modals/EpisodeLinkDialog'));
 const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
 const StatsModal = lazy(() => import('./components/modals/StatsModal'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
@@ -891,7 +891,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         {/* own boundaries: a dialog whose chunk is still loading must not hide the open share dialog (focus would leave it) */}
         <Suspense fallback={null}>
           {share.state && (
-            <ShareLinkDialog
+            <EpisodeLinkDialog
               state={share.state}
               list={anime.list}
               listLoaded={anime.loaded}

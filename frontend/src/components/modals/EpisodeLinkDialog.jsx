@@ -236,7 +236,7 @@ function ConfirmStep({ state, list, listLoaded, canAdd, onChoose, onAddToList, o
  * The share flow of hooks/useShareIntake.js: paste field, "Link wird gelesen…", an error with retry, and the
  * confirmation "Frieren, Folge 7 gesehen?" with the entry picker. Lazy; mounted only while a share is open.
  */
-export default function ShareLinkDialog({
+export default function EpisodeLinkDialog({
   state, list = [], listLoaded = true, canAdd = false, rootRef, onClose, onSubmitPaste, onRetry, onChoose, onAddToList, onConfirm, onCreate
 }) {
   const ids = useId();
