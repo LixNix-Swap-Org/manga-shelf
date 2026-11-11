@@ -60,6 +60,8 @@ const routes = [
     { method: 'POST', path: '/shelves/:id/members', role: 'editor', handler: shelves.addMember },
     { method: 'PUT', path: '/shelves/:id/members/:userId', role: 'editor', handler: shelves.setMemberRole },
     { method: 'DELETE', path: '/shelves/:id/members/:userId', role: 'auth', handler: shelves.removeMember },
+    // takes back a removal from a shelf (or leaving it) or a move of a series, with the copies that went
+    { method: 'POST', path: '/shelves/undo', role: 'auth', handler: shelves.undo },
     { method: 'GET', path: '/mangas/:id/gaps', role: 'auth', handler: mangaPassion.gaps },
     { method: 'POST', path: '/mangas/:id/sync-edition', role: 'editor', handler: mangaPassion.syncEdition },
     { method: 'POST', path: '/mangas/:id/batch-import-gaps', role: 'editor', handler: mangaPassion.batchImportGaps },

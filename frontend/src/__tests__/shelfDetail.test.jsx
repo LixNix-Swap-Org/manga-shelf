@@ -59,7 +59,7 @@ describe('shelfMoveConfirmText', () => {
     expect(named).toContain('„Naruto“ nach „Zweites“ verschieben?');
     expect(named).toContain('erika (3 Bände im Besitz)');
     expect(named).toContain('Lesemarkierungen bleiben erhalten.');
-    expect(named).toContain('Das lässt sich nicht rückgängig machen.');
+    expect(named).toContain('Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.');
     const general = shelfMoveConfirmText({ title: 'Naruto', shelf: 'Zweites', affected: null });
     expect(general).toContain('Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe;');
   });
@@ -159,6 +159,25 @@ describe('MangaDetail: moving a series', () => {
     await waitFor(() => expect(screen.getByLabelText('Regal').value).toBe('3'));
     fireEvent.click(screen.getByRole('button', { name: /Speichern/ }));
     await waitFor(() => expect(sent('PUT', '/api/mangas/5/shelf')).toEqual([['/api/mangas/5/shelf', { shelf_id: 3 }]]));
+  });
+
+  it('names whose copies went with the move and takes it back from the toast', async () => {
+    routes['PUT /api/mangas/5/shelf'] = () => fakeResponse(200, { success: true, id: 5, shelf_id: 3, removed_owners: ['erika'], undo_token: 'mv-1' });
+    routes['POST /api/shelves/undo'] = () => fakeResponse(200, { success: true, id: 5, shelf_id: 1, restored_copies: 1 });
+    renderPage(owner);
+    fireEvent.click(await screen.findByRole('button', { name: /Bearbeiten/ }));
+    fireEvent.change(await screen.findByLabelText('Regal'), { target: { value: '3' } });
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Reihe verschieben' })).getByRole('button', { name: 'Verschieben' }));
+    await waitFor(() => expect(screen.getByLabelText('Regal').value).toBe('3'));
+    fireEvent.click(screen.getByRole('button', { name: /Speichern/ }));
+    await waitFor(() => expect(toasts.messages('info')).toContain('Im neuen Regal sind erika kein Mitglied, ihre Exemplare dieser Reihe sind entfernt.'));
+    const toast = toasts.list.find((x) => x.kind === 'info');
+    expect(toast.action.label).toBe('Rückgängig');
+    const loads = sent('GET', '/api/mangas/5').filter(([url]) => url === '/api/mangas/5').length;
+    await toast.action.onClick();
+    expect(sent('POST', '/api/shelves/undo')).toEqual([['/api/shelves/undo', { undo_token: 'mv-1' }]]);
+    expect(toasts.messages('success')).toContain('Rückgängig gemacht');
+    expect(sent('GET', '/api/mangas/5').filter(([url]) => url === '/api/mangas/5').length).toBeGreaterThan(loads);
   });
 });
 
