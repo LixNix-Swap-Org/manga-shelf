@@ -3798,5 +3798,8 @@
   "+ Band {volume} gelesen": "+ Tom {volume} przeczytany",
   "Doppelte Einträge": "Zduplikowane wpisy",
   "Bandzahl anpassen": "Dostosuj liczbę tomów",
-  "Hinweise ({count})": "Wskazówki ({count})"
+  "Hinweise ({count})": "Wskazówki ({count})",
+  "Ungültige Filter": "Nieprawidłowe filtry",
+  "Bitte einen Namen für den Filter angeben": "Podaj nazwę filtra",
+  "Gemerkter Filter nicht gefunden": "Nie znaleziono zapisanego filtra"
 }

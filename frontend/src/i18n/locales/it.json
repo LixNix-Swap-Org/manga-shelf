@@ -3692,5 +3692,8 @@
   "+ Band {volume} gelesen": "+ Volume {volume} letto",
   "Doppelte Einträge": "Voci doppie",
   "Bandzahl anpassen": "Adatta numero di volumi",
-  "Hinweise ({count})": "Avvisi ({count})"
+  "Hinweise ({count})": "Avvisi ({count})",
+  "Ungültige Filter": "Filtri non validi",
+  "Bitte einen Namen für den Filter angeben": "Dai un nome al filtro",
+  "Gemerkter Filter nicht gefunden": "Filtro salvato non trovato"
 }

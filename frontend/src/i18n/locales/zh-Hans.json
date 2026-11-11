@@ -3480,5 +3480,8 @@
   "+ Band {volume} gelesen": "+ 第 {volume} 卷已读",
   "Doppelte Einträge": "重复条目",
   "Bandzahl anpassen": "调整卷数",
-  "Hinweise ({count})": "提示（{count}）"
+  "Hinweise ({count})": "提示（{count}）",
+  "Ungültige Filter": "无效的筛选条件",
+  "Bitte einen Namen für den Filter angeben": "请为筛选条件命名",
+  "Gemerkter Filter nicht gefunden": "未找到已保存的筛选条件"
 }

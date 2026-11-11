@@ -3480,5 +3480,8 @@
   "+ Band {volume} gelesen": "+ {volume}권 읽음",
   "Doppelte Einträge": "중복 항목",
   "Bandzahl anpassen": "권 수 조정",
-  "Hinweise ({count})": "안내 ({count})"
+  "Hinweise ({count})": "안내 ({count})",
+  "Ungültige Filter": "잘못된 필터",
+  "Bitte einen Namen für den Filter angeben": "필터 이름을 입력하세요",
+  "Gemerkter Filter nicht gefunden": "저장된 필터를 찾을 수 없습니다"
 }

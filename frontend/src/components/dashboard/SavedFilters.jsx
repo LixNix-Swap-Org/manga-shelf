@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bookmark, BookmarkPlus, X } from 'lucide-react';
 import { COLLECT_FILTERS, STATUS_TABS } from '../../utils/collectionHelpers';
+import { del, get, post } from '../../utils/api';
 import { t } from '../../i18n/index.js';
 
-// Saved filter sets of the collection ("Gemerkte Filter"): per account on this device, at most SAVED_FILTER_LIMIT.
+// Saved filter sets of the collection ("Gemerkte Filter"): per account on the server (GET/POST/DELETE
+// /api/saved-filters), at most SAVED_FILTER_LIMIT. The browser list under KEY_PREFIX is what older versions kept on
+// this device, and what is saved while the server cannot be reached: it is handed to the server on the next load and
+// then cleared.
 const KEY_PREFIX = 'mangashelf_saved_filters';
 export const SAVED_FILTER_LIMIT = 8;
 const FIELDS = ['status', 'publisher', 'collect', 'author', 'tags', 'lang', 'shelf', 'person', 'sort', 'group'];
@@ -20,7 +24,29 @@ export function readSavedFilters(userId) {
 }
 
 function writeSavedFilters(userId, list) {
-  try { globalThis.localStorage?.setItem(keyOf(userId), JSON.stringify(list)); } catch (_) { /* storage blocked: only this visit */ }
+  try {
+    if (list.length) globalThis.localStorage?.setItem(keyOf(userId), JSON.stringify(list));
+    else globalThis.localStorage?.removeItem(keyOf(userId));
+  } catch (_) { /* storage blocked: only this visit */ }
+}
+
+const API = '/api/saved-filters';
+const serverList = (body) => (Array.isArray(body?.items) ? body.items : [])
+  .filter((f) => f && typeof f.label === 'string' && f.filters && typeof f.filters === 'object')
+  .map((f) => ({ id: f.id, label: f.label, filters: filterSnapshot(f.filters) }));
+
+/**
+ * The server's list; entries kept in this browser go to the server first (oldest first, the server skips a set it
+ * has already) and leave the browser once it took them.
+ */
+export async function loadSavedFilters(userId, { signal } = {}) {
+  const local = readSavedFilters(userId);
+  let body = await get(API, { signal });
+  for (const entry of local) {
+    body = await post(API, { label: entry.label, filters: filterSnapshot(entry.filters) }, { signal });
+  }
+  if (local.length) writeSavedFilters(userId, []);
+  return serverList(body);
 }
 
 /** The filter set as stored: tags sorted case-insensitively, so the same choice compares equal. */
@@ -72,25 +98,60 @@ export function filterLabel(filters, { shelves = [], persons = [], userId = null
  * collecting state, author, tags, language, sort, grouping) at once, plus "Aktuelle Auswahl merken". Hidden while
  * nothing is saved and no filter is set.
  */
-export default function SavedFilters({ userId, current, apply, shelves = [], persons = [], filtersActive, embedded = false }) {
-  const [saved, setSaved] = useState(() => readSavedFilters(userId));
+export default function SavedFilters({ userId, offline = false, current, apply, shelves = [], persons = [], filtersActive, embedded = false }) {
+  // the server's entries, plus the ones only kept in this browser while the server was out of reach
+  const [server, setServer] = useState([]);
+  const [local, setLocal] = useState(() => readSavedFilters(userId));
   const [owner, setOwner] = useState(userId);
   if (owner !== userId) {
     setOwner(userId);
-    setSaved(readSavedFilters(userId));
+    setServer([]);
+    setLocal(readSavedFilters(userId));
   }
+  useEffect(() => {
+    // offline copy: the server is out of reach, the browser's entries are all there is until it is back
+    if (offline) return undefined;
+    const controller = new AbortController();
+    loadSavedFilters(userId, { signal: controller.signal })
+      .then((list) => {
+        if (controller.signal.aborted) return;
+        setServer(list);
+        setLocal(readSavedFilters(userId));
+      })
+      .catch(() => { /* not reachable: the browser's entries stay in view and go to the server next time */ });
+    return () => controller.abort();
+  }, [userId, offline]);
+
+  const saved = [...server, ...local.filter((l) => !server.some((f) => sameFilters(f.filters, l.filters)))];
   const now = filterSnapshot(current);
   const alreadySaved = saved.some((f) => sameFilters(f.filters, now));
   if (!saved.length && !filtersActive && !embedded) return null;
 
-  const update = (list) => {
-    setSaved(list);
+  const keepLocal = (list) => {
+    setLocal(list);
     writeSavedFilters(userId, list);
   };
   const save = () => {
     if (alreadySaved) return;
-    const entry = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, label: filterLabel(now, { shelves, persons, userId }), filters: now };
-    update([...saved, entry].slice(-SAVED_FILTER_LIMIT));
+    const label = filterLabel(now, { shelves, persons, userId });
+    const entry = { id: `local-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, label, filters: now };
+    // shown at once; the server's answer replaces it
+    keepLocal([...local, entry].slice(-SAVED_FILTER_LIMIT));
+    if (offline) return;
+    post(API, { label, filters: now })
+      .then((body) => {
+        setServer(serverList(body));
+        keepLocal(readSavedFilters(userId).filter((x) => x.id !== entry.id));
+      })
+      .catch(() => { /* kept in this browser until the server can take it */ });
+  };
+  const remove = (f) => {
+    if (local.some((x) => x.id === f.id)) keepLocal(local.filter((x) => x.id !== f.id));
+    if (typeof f.id !== 'number' || offline) return;
+    setServer((list) => list.filter((x) => x.id !== f.id));
+    del(`${API}/${f.id}`)
+      .then((body) => setServer(serverList(body)))
+      .catch(() => setServer((list) => (list.some((x) => x.id === f.id) ? list : [...list, f].sort((a, b) => a.id - b.id))));
   };
 
   return (
@@ -107,9 +168,10 @@ export default function SavedFilters({ userId, current, apply, shelves = [], per
             </button>
             <button
               type="button"
-              onClick={() => update(saved.filter((x) => x.id !== f.id))}
+              onClick={() => remove(f)}
+              disabled={offline && typeof f.id === 'number'}
               aria-label={t('Gemerkten Filter „{label}“ löschen', { label: f.label })}
-              className="pr-2 pl-0.5 py-1.5 text-slate-400 hover:text-white"
+              className="pr-2 pl-0.5 py-1.5 text-slate-400 hover:text-white disabled:opacity-40 disabled:hover:text-slate-400"
             >
               <X className="w-3 h-3" aria-hidden="true" />
             </button>

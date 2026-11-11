@@ -1422,6 +1422,23 @@ function migrationList(log = silentLog) {
                     END;
                 `);
             }
+        },
+        {
+            version: 53,
+            name: 'add_saved_filters',
+            up: (d) => {
+                // "Gemerkte Filter" of a person: until now only in the browser's storage, now with the account on every device
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS saved_filters (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        label TEXT NOT NULL,
+                        filters TEXT NOT NULL,
+                        created_at TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_saved_filters_user ON saved_filters (user_id, id);
+                `);
+            }
         }
     ];
 }

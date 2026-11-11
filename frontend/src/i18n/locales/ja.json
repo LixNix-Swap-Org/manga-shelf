@@ -3480,5 +3480,8 @@
   "+ Band {volume} gelesen": "+ {volume}巻を既読",
   "Doppelte Einträge": "重複エントリ",
   "Bandzahl anpassen": "巻数を調整",
-  "Hinweise ({count})": "お知らせ ({count})"
+  "Hinweise ({count})": "お知らせ ({count})",
+  "Ungültige Filter": "無効なフィルター",
+  "Bitte einen Namen für den Filter angeben": "フィルターの名前を入力してください",
+  "Gemerkter Filter nicht gefunden": "保存したフィルターが見つかりません"
 }

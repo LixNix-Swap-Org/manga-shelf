@@ -3586,5 +3586,8 @@
   "+ Band {volume} gelesen": "+ Volume {volume} read",
   "Doppelte Einträge": "Duplicate entries",
   "Bandzahl anpassen": "Adjust volume count",
-  "Hinweise ({count})": "Notices ({count})"
+  "Hinweise ({count})": "Notices ({count})",
+  "Ungültige Filter": "Invalid filters",
+  "Bitte einen Namen für den Filter angeben": "Please give the filter a name",
+  "Gemerkter Filter nicht gefunden": "Saved filter not found"
 }

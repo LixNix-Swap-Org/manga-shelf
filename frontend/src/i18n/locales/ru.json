@@ -3798,5 +3798,8 @@
   "+ Band {volume} gelesen": "+ Том {volume} прочитан",
   "Doppelte Einträge": "Повторяющиеся записи",
   "Bandzahl anpassen": "Изменить число томов",
-  "Hinweise ({count})": "Подсказки ({count})"
+  "Hinweise ({count})": "Подсказки ({count})",
+  "Ungültige Filter": "Недопустимые фильтры",
+  "Bitte einen Namen für den Filter angeben": "Укажите название фильтра",
+  "Gemerkter Filter nicht gefunden": "Сохранённый фильтр не найден"
 }

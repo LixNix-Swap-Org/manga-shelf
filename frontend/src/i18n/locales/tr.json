@@ -3586,5 +3586,8 @@
   "+ Band {volume} gelesen": "+ Cilt {volume} okundu",
   "Doppelte Einträge": "Yinelenen girişler",
   "Bandzahl anpassen": "Cilt sayısını ayarla",
-  "Hinweise ({count})": "Notlar ({count})"
+  "Hinweise ({count})": "Notlar ({count})",
+  "Ungültige Filter": "Geçersiz filtreler",
+  "Bitte einen Namen für den Filter angeben": "Lütfen filtreye bir ad verin",
+  "Gemerkter Filter nicht gefunden": "Kaydedilen filtre bulunamadı"
 }

@@ -1198,6 +1198,36 @@ const scenarios = [
         }
     },
     {
+        name: 'saved filters: own list, the same filters once, the newest 8, only own entries deleted',
+        async run({ admin, ed }) {
+            const f = (publisher, extra = {}) => ({ status: 'ALL', publisher, collect: 'ALL', author: '', tags: [], lang: 'ALL', shelf: 'ALL', person: 'ALL', sort: 'title_asc', group: 'none', ...extra });
+            const first = await ed('POST', '/saved-filters', { label: 'Carlsen', filters: f('Carlsen', { tags: ['Action'] }) });
+            assert.equal(first.status, 201, JSON.stringify(first.body));
+            assert.deepEqual(first.body.items.map(i => i.label), ['Carlsen']);
+            assert.deepEqual(first.body.items[0].filters.tags, ['Action']);
+            assert.equal(first.body.limit, 8);
+            // the same choice in another key order keeps the one entry
+            const again = await ed('POST', '/saved-filters', { label: 'Anders', filters: { ...f('Carlsen', { tags: ['Action'] }), group: 'none', status: 'ALL' } });
+            assert.equal(again.status, 200);
+            assert.deepEqual(again.body.items.map(i => i.label), ['Carlsen']);
+            // other accounts see nothing of it and cannot delete it
+            assert.deepEqual((await admin('GET', '/saved-filters')).body.items, []);
+            assert.equal((await admin('DELETE', `/saved-filters/${first.body.items[0].id}`)).status, 404);
+            for (let i = 1; i <= 8; i++) await ed('POST', '/saved-filters', { label: `P${i}`, filters: f(`P${i}`) });
+            const list = (await ed('GET', '/saved-filters')).body.items;
+            assert.deepEqual(list.map(i => i.label), ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8']);
+            const gone = await ed('DELETE', `/saved-filters/${list[0].id}`);
+            assert.equal(gone.status, 200);
+            assert.equal(gone.body.items.length, 7);
+            assert.equal((await ed('DELETE', `/saved-filters/${list[0].id}`)).status, 404);
+            assert.equal((await ed('DELETE', '/saved-filters/abc')).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: '  ', filters: f('X') })).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: 'X', filters: [] })).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: 'X', filters: f('X', { tags: 'Action' }) })).status, 400);
+            assert.equal((await ed('POST', '/saved-filters', { label: 'X', filters: f('X', { status: { a: 1 } }) })).status, 400);
+        }
+    },
+    {
         name: 'roles: unknown paths, signed-out callers',
         async run({ anonymous }) {
             const res = await anonymous('GET', '/mangas');

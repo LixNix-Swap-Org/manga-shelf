@@ -3692,5 +3692,8 @@
   "+ Band {volume} gelesen": "+ Tome {volume} lu",
   "Doppelte Einträge": "Entrées en double",
   "Bandzahl anpassen": "Ajuster le nombre de tomes",
-  "Hinweise ({count})": "Remarques ({count})"
+  "Hinweise ({count})": "Remarques ({count})",
+  "Ungültige Filter": "Filtres non valides",
+  "Bitte einen Namen für den Filter angeben": "Veuillez donner un nom au filtre",
+  "Gemerkter Filter nicht gefunden": "Filtre enregistré introuvable"
 }

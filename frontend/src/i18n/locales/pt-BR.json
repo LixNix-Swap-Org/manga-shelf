@@ -3692,5 +3692,8 @@
   "+ Band {volume} gelesen": "+ Volume {volume} lido",
   "Doppelte Einträge": "Entradas duplicadas",
   "Bandzahl anpassen": "Ajustar número de volumes",
-  "Hinweise ({count})": "Avisos ({count})"
+  "Hinweise ({count})": "Avisos ({count})",
+  "Ungültige Filter": "Filtros inválidos",
+  "Bitte einen Namen für den Filter angeben": "Dê um nome ao filtro",
+  "Gemerkter Filter nicht gefunden": "Filtro salvo não encontrado"
 }

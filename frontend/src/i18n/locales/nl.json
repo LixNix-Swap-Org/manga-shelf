@@ -3586,5 +3586,8 @@
   "+ Band {volume} gelesen": "+ Deel {volume} gelezen",
   "Doppelte Einträge": "Dubbele items",
   "Bandzahl anpassen": "Aantal delen aanpassen",
-  "Hinweise ({count})": "Meldingen ({count})"
+  "Hinweise ({count})": "Meldingen ({count})",
+  "Ungültige Filter": "Ongeldige filters",
+  "Bitte einen Namen für den Filter angeben": "Geef het filter een naam",
+  "Gemerkter Filter nicht gefunden": "Opgeslagen filter niet gevonden"
 }

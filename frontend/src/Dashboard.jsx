@@ -743,6 +743,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           userId={user?.id}
           saved={{
             userId: user?.id,
+            offline: isOfflineMode,
             shelves: availableShelves,
             persons: availablePersons,
             current: { status: statusFilter, publisher: publisherFilter, collect: collectFilter, author: authorFilter, tags: tagFilter, lang: languageFilter, shelf: shelfFilter, person: personFilter, sort: sortBy, group: groupBy },
