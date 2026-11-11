@@ -25,6 +25,7 @@
 - The cleanup of unused uploads keeps the covers the catalog still names.
 
 ### Copies
+- **"Für wen?" when adding several volumes:** "Bände hinzufügen" asks whose the owned volumes become: yours (as before), nobody yet (a household copy that goes to whoever ticks it first as "Im Besitz") or, for an admin, any other person of the shelf. `POST /api/volumes/batch` takes `owner_user_id`.
 - **Price, date and condition per copy:** the volume editor lists every copy of a volume (yours, those of others, a household copy) with its purchase price, date and condition. Your own copy, a household copy and, for an admin, every copy can be changed there (`PUT /api/volumes/:id/copies/:copyId`). The price of the volume stays what the statistics count.
 - **Lending:** a copy can be lent to an account or to a person without one ("Ausgeliehen an Felix seit 02.01.2026"). The volume shows "Verliehen" in the grid and list views; the statistics card "Verliehen & ausgeliehen" lists what is lent out from your shelves and what others lent to you (`GET /api/copies/lent`). Migration 47 adds the lending columns; a trash entry and a bulk undo keep the lending of personal copies.
 - **Claiming a household copy keeps its details:** marking yourself as owner of a volume the household owns takes over that copy with its price, condition and lending instead of replacing it; undoing the change brings condition and lending back too.

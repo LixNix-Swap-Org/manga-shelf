@@ -3505,5 +3505,10 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "要将“{name}”从此书架移除吗？{name} 在此书架中的拥有标记将被删除。之后无人拥有的卷会算作“缺失”。已读标记会保留。完成后 10 秒内可以撤销。",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "要将“{title}”移到“{shelf}”吗？看不到该书架的人会失去他们在此系列上的拥有标记：{people}。之后无人拥有的卷会算作“缺失”。已读标记会保留。完成后 15 秒内可以撤销。",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "要将“{title}”移到“{shelf}”吗？看不到该书架的人会失去他们在此系列上的拥有标记；之后无人拥有的卷会算作“缺失”。已读标记会保留。完成后 15 秒内可以撤销。",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} 没有其他书架，现在各自有了一个空的专属书架。"
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} 没有其他书架，现在各自有了一个空的专属书架。",
+  "Für wen?": "给谁？",
+  "Für mich": "给我",
+  "Für {name}": "给 {name}",
+  "Noch für niemanden (Haushalt)": "暂不归任何人（家庭）",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "这些卷归谁所有。“暂不归任何人”：第一个将该卷勾选为“已拥有”的人获得它。"
 }

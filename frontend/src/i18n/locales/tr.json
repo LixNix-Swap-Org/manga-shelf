@@ -3612,5 +3612,10 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "“{name}” bu raftan kaldırılsın mı? {name} kullanıcısının bu raftaki sahiplik işaretleri silinecek. Bundan sonra kimsenin sahip olmadığı ciltler “Eksik” sayılır. Okuma işaretleri korunur. Hemen ardından 10 saniye boyunca geri alınabilir.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "“{title}”, “{shelf}” rafına taşınsın mı? O rafı görmeyenler, serideki sahiplik işaretlerini kaybeder: {people}. Bundan sonra kimsenin sahip olmadığı ciltler “Eksik” sayılır. Okuma işaretleri korunur. Hemen ardından 15 saniye boyunca geri alınabilir.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "“{title}”, “{shelf}” rafına taşınsın mı? O rafı görmeyenler, serideki sahiplik işaretlerini kaybeder; bundan sonra kimsenin sahip olmadığı ciltler “Eksik” sayılır. Okuma işaretleri korunur. Hemen ardından 15 saniye boyunca geri alınabilir.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} başka bir rafa sahip değildi ve artık kendilerine ait boş bir rafları var."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} başka bir rafa sahip değildi ve artık kendilerine ait boş bir rafları var.",
+  "Für wen?": "Kimin için?",
+  "Für mich": "Benim için",
+  "Für {name}": "{name} için",
+  "Noch für niemanden (Haushalt)": "Henüz kimse için değil (ev)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Ciltlerin sahibi. “Henüz kimse için değil”: bir cildi ilk “Sahip” olarak işaretleyen onu alır."
 }

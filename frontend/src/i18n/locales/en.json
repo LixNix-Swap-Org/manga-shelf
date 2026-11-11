@@ -3612,5 +3612,10 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "Remove “{name}” from this shelf? The ownership marks of {name} in this shelf will be deleted. Volumes that nobody owns afterwards count as “Missing”. The reading marks are kept. Right afterwards it can be undone for 10 seconds.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Move “{title}” to “{shelf}”? Anyone who cannot see that shelf loses their ownership marks on the series: {people}. Volumes that nobody owns afterwards count as “Missing”. Reading marks are kept. Right afterwards it can be undone for 15 seconds.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Move “{title}” to “{shelf}”? Anyone who cannot see that shelf loses their ownership marks on the series; volumes that nobody owns afterwards count as “Missing”. Reading marks are kept. Right afterwards it can be undone for 15 seconds.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} had no other shelf and now have an empty one of their own."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} had no other shelf and now have an empty one of their own.",
+  "Für wen?": "For whom?",
+  "Für mich": "For me",
+  "Für {name}": "For {name}",
+  "Noch für niemanden (Haushalt)": "Nobody yet (household)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Who owns the volumes. “Nobody yet”: whoever first ticks a volume as “Owned” gets it."
 }

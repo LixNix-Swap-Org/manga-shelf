@@ -3826,5 +3826,10 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "Usunąć „{name}” z tej półki? Oznaczenia posiadania użytkownika {name} na tej półce zostaną usunięte. Tomy, których potem nikt nie posiada, będą miały status „Brakuje”. Oznaczenia przeczytania zostają. Zaraz potem można to cofnąć przez 10 sekund.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Przenieść „{title}” do „{shelf}”? Kto nie widzi tej półki, traci swoje oznaczenia posiadania w tej serii: {people}. Tomy, których potem nikt nie posiada, będą miały status „Brakuje”. Oznaczenia przeczytania zostają. Zaraz potem można to cofnąć przez 15 sekund.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Przenieść „{title}” do „{shelf}”? Kto nie widzi tej półki, traci swoje oznaczenia posiadania w tej serii; tomy, których potem nikt nie posiada, będą miały status „Brakuje”. Oznaczenia przeczytania zostają. Zaraz potem można to cofnąć przez 15 sekund.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} nie mieli innej półki i mają teraz własną, pustą."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} nie mieli innej półki i mają teraz własną, pustą.",
+  "Für wen?": "Dla kogo?",
+  "Für mich": "Dla mnie",
+  "Für {name}": "Dla {name}",
+  "Noch für niemanden (Haushalt)": "Jeszcze dla nikogo (dom)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Do kogo należą tomy. „Jeszcze dla nikogo”: kto pierwszy zaznaczy tom jako „Posiadany”, ten go dostaje."
 }

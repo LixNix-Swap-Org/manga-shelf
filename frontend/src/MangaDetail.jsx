@@ -960,6 +960,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
             mangaId={id}
             volumes={manga?.volumes}
             officialTotal={mpGapData?.total_official_volumes}
+            people={readers}
+            user={user}
             onSuccess={fetchManga}
           />
         )}

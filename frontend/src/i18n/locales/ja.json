@@ -3505,5 +3505,10 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "「{name}」をこの本棚から削除しますか？この本棚にある{name}の所持の印が削除されます。その後だれも所持していない巻は「未所持」になります。既読の印は残ります。直後の10秒間は元に戻せます。",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "「{title}」を「{shelf}」に移動しますか？その本棚を見られない人は、このシリーズの所持の印を失います: {people}。その後だれも所持していない巻は「未所持」になります。既読の印は残ります。直後の15秒間は元に戻せます。",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "「{title}」を「{shelf}」に移動しますか？その本棚を見られない人は、このシリーズの所持の印を失います。その後だれも所持していない巻は「未所持」になります。既読の印は残ります。直後の15秒間は元に戻せます。",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} にはほかの本棚がなかったため、空の専用本棚ができました。"
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} にはほかの本棚がなかったため、空の専用本棚ができました。",
+  "Für wen?": "誰の分？",
+  "Für mich": "自分用",
+  "Für {name}": "{name}用",
+  "Noch für niemanden (Haushalt)": "まだ誰のものでもない（家庭）",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "巻の持ち主。「まだ誰のものでもない」：最初に「所持」にチェックした人のものになります。"
 }
