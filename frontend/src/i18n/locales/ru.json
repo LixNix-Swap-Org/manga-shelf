@@ -3758,5 +3758,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "Если на другой твоей полке есть тома этого издания, которых здесь нет, их можно перенять сюда.",
   "Verwalter": "Управляющий",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Вы единственный управляющий этой полки. Прежде чем менять свою роль или покидать полку, передайте роль «{role}» кому-то другому.",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Удалить пользователя «{username}»? Его статус чтения будет удалён; тома, которыми владеет только этот пользователь, перейдут к управляющему или другому участнику их полки. Если там никого не осталось, они получат статус «Нет в наличии»."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Удалить пользователя «{username}»? Его статус чтения будет удалён; тома, которыми владеет только этот пользователь, перейдут к управляющему или другому участнику их полки. Если там никого не осталось, они получат статус «Нет в наличии».",
+  "Mehr unter „Infos“": "Подробнее в «Сведения»",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Для вебтунов сверки с Manga Passion нет."
 }

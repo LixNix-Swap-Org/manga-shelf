@@ -3446,5 +3446,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "別の棚にこの版の巻があり、ここに無い場合はここで取り込めます。",
   "Verwalter": "管理者",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "あなたはこの本棚の唯一の管理者です。自分のロールを変更したり本棚から退出したりする前に、先に他のユーザーへ「{role}」のロールを渡してください。",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "ユーザー「{username}」を本当に削除しますか？ そのユーザーの既読状況は削除され、そのユーザーだけが所持している巻は、その巻がある本棚の管理者または別のメンバーに引き継がれます。そこにだれもいない場合は「未所持」になります。"
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "ユーザー「{username}」を本当に削除しますか？ そのユーザーの既読状況は削除され、そのユーザーだけが所持している巻は、その巻がある本棚の管理者または別のメンバーに引き継がれます。そこにだれもいない場合は「未所持」になります。",
+  "Mehr unter „Infos“": "続きは「情報」で",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Webtoon には Manga Passion との照合はありません。"
 }

@@ -3758,5 +3758,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "Jeśli inna twoja półka ma tomy tego wydania, których tu brakuje, możesz je tu przejąć.",
   "Verwalter": "Zarządca",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Jesteś jedynym zarządcą tej półki. Zanim zmienisz swoją rolę lub opuścisz półkę, nadaj komuś innemu rolę „{role}”.",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Czy na pewno chcesz usunąć użytkownika „{username}”? Jego status czytania zostanie usunięty; tomy, które posiada tylko ten użytkownik, przechodzą na zarządcę lub innego członka ich półki. Jeśli nikogo tam nie ma, będą miały status „Brakuje”."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Czy na pewno chcesz usunąć użytkownika „{username}”? Jego status czytania zostanie usunięty; tomy, które posiada tylko ten użytkownik, przechodzą na zarządcę lub innego członka ich półki. Jeśli nikogo tam nie ma, będą miały status „Brakuje”.",
+  "Mehr unter „Infos“": "Więcej w „Informacje”",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Dla webtoonów nie ma porównania z Manga Passion."
 }

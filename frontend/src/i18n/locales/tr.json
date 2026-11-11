@@ -3550,5 +3550,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "Başka bir rafında burada eksik olan bu baskının ciltleri varsa, onları buraya alabilirsin.",
   "Verwalter": "Yönetici",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Bu rafın tek yöneticisi sensin. Rolünü değiştirmeden veya raftan ayrılmadan önce “{role}” rolünü başka birine ver.",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "“{username}” kullanıcısını gerçekten silmek ister misin? Okuma durumu silinir; yalnızca bu kullanıcının sahip olduğu ciltler, bulundukları rafın yöneticisine veya başka bir üyesine geçer. Orada kimse kalmadıysa “Eksik” sayılır."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "“{username}” kullanıcısını gerçekten silmek ister misin? Okuma durumu silinir; yalnızca bu kullanıcının sahip olduğu ciltler, bulundukları rafın yöneticisine veya başka bir üyesine geçer. Orada kimse kalmadıysa “Eksik” sayılır.",
+  "Mehr unter „Infos“": "Devamı “Bilgiler” altında",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Webtoon’lar için Manga Passion eşleştirmesi yok."
 }

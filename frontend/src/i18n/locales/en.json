@@ -3550,5 +3550,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "If another of your shelves has volumes of this edition that are missing here, you can take them over here.",
   "Verwalter": "Manager",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "You are the only manager of this shelf. Give someone else the role “{role}” before you change your role or leave the shelf.",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Do you really want to delete the user \"{username}\"? Their reading status is deleted; volumes only this user owns pass to a manager or another member of their shelf. If nobody is left there, they count as “Missing”."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Do you really want to delete the user \"{username}\"? Their reading status is deleted; volumes only this user owns pass to a manager or another member of their shelf. If nobody is left there, they count as “Missing”.",
+  "Mehr unter „Infos“": "More under “Info”",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "There is no Manga Passion check for webtoons."
 }

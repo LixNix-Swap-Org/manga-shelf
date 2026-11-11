@@ -3654,5 +3654,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "Si otra de tus estanterías tiene tomos de esta edición que faltan aquí, puedes traerlos aquí.",
   "Verwalter": "Gestor",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Eres el único gestor de esta estantería. Antes de cambiar tu rol o salir de la estantería, da a otra persona el rol «{role}».",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "¿Seguro que quieres eliminar al usuario «{username}»? Se borra su estado de lectura; los tomos que solo tiene este usuario pasan a un gestor o a otro miembro de su estantería. Si allí no queda nadie, cuentan como «Falta»."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "¿Seguro que quieres eliminar al usuario «{username}»? Se borra su estado de lectura; los tomos que solo tiene este usuario pasan a un gestor o a otro miembro de su estantería. Si allí no queda nadie, cuentan como «Falta».",
+  "Mehr unter „Infos“": "Más en «Información»",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "No hay comparación con Manga Passion para webtoons."
 }

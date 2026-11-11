@@ -3654,5 +3654,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "Si une autre de tes étagères a des tomes de cette édition qui manquent ici, tu peux les reprendre ici.",
   "Verwalter": "Gestionnaire",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Tu es le seul gestionnaire de cette étagère. Avant de changer ton rôle ou de quitter l’étagère, donne d’abord le rôle « {role} » à quelqu’un d’autre.",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Vraiment supprimer l'utilisateur « {username} » ? Son état de lecture sera supprimé ; les tomes que seul cet utilisateur possède reviennent à un gestionnaire ou à un autre membre de leur étagère. S’il n’y reste personne, ils passent au statut « Manquant »."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Vraiment supprimer l'utilisateur « {username} » ? Son état de lecture sera supprimé ; les tomes que seul cet utilisateur possède reviennent à un gestionnaire ou à un autre membre de leur étagère. S’il n’y reste personne, ils passent au statut « Manquant ».",
+  "Mehr unter „Infos“": "Plus dans « Infos »",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Il n’y a pas de comparaison Manga Passion pour les webtoons."
 }

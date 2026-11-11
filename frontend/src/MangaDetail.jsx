@@ -576,6 +576,14 @@ export default function MangaDetail({ user, onUnauthorized }) {
           uploadingCover={uploadingCover}
           onCollectingSaved={(collecting) => patchManga((m) => ({ ...m, collecting }))}
           onEditionsChanged={fetchManga}
+          onShowInfo={() => {
+            setDetailTab('infos');
+            setTimeout(() => {
+              const tab = document.getElementById('detail-tab-infos');
+              tab?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+              tab?.focus({ preventScroll: true });
+            }, 0);
+          }}
         />
 
         {manga.format === 'webtoon' && (

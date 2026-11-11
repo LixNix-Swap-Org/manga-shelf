@@ -3550,5 +3550,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "Heeft een andere kast van jou delen van deze editie die hier ontbreken, dan kun je ze hier overnemen.",
   "Verwalter": "Beheerder",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "Je bent de enige beheerder van deze plank. Geef eerst iemand anders de rol ‘{role}’ voordat je je rol wijzigt of de plank verlaat.",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Wil je de gebruiker “{username}” echt verwijderen? Diens leesstatus wordt verwijderd; delen die alleen deze gebruiker bezit, gaan over naar een beheerder of een ander lid van hun plank. Is daar niemand meer, dan gelden ze als “Ontbreekt”."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "Wil je de gebruiker “{username}” echt verwijderen? Diens leesstatus wordt verwijderd; delen die alleen deze gebruiker bezit, gaan over naar een beheerder of een ander lid van hun plank. Is daar niemand meer, dan gelden ze als “Ontbreekt”.",
+  "Mehr unter „Infos“": "Meer onder ‘Info’",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "Voor webtoons is er geen vergelijking met Manga Passion."
 }

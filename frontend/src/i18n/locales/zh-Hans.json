@@ -3446,5 +3446,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "如果你的其他书架有此版本而这里缺少的分册，可以在这里导入。",
   "Verwalter": "管理者",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "你是此书架唯一的管理者。在更改自己的角色或退出书架之前，请先把“{role}”角色交给其他人。",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "确定要删除用户“{username}”吗？其阅读状态将被删除；仅由该用户拥有的卷会转给其所在书架的管理者或其他成员。若那里已无人，这些卷会算作“缺失”。"
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "确定要删除用户“{username}”吗？其阅读状态将被删除；仅由该用户拥有的卷会转给其所在书架的管理者或其他成员。若那里已无人，这些卷会算作“缺失”。",
+  "Mehr unter „Infos“": "更多见“信息”",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "网漫没有 Manga Passion 比对。"
 }

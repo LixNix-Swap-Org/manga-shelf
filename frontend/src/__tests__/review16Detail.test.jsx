@@ -312,10 +312,12 @@ describe('MangaDetail tabs (Bände, Edition & Abgleich, Infos)', () => {
     expect(volumesTab.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(volumesTab.id);
     expect(document.getElementById('volumes-heading')).toBeTruthy();
-    expect(screen.queryByText('Klappentext')).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Infos' }));
+    // the head shows a short excerpt; the whole description is in "Infos"
+    expect(document.getElementById('detail-description-excerpt').textContent).toContain('Klappentext');
+    expect(document.getElementById('detail-info')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Mehr unter „Infos“' }));
     expect(screen.getByTestId('where').textContent).toBe('/manga/5?tab=infos');
-    expect(screen.getByText('Klappentext')).toBeTruthy();
+    expect(document.getElementById('detail-info').textContent).toContain('Klappentext');
     expect(document.getElementById('volumes-heading')).toBeNull();
     fireEvent.keyDown(screen.getByRole('tab', { name: 'Infos' }), { key: 'ArrowLeft' });
     expect(screen.getByTestId('where').textContent).toBe('/manga/5?tab=edition');

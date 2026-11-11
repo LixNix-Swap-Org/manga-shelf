@@ -3446,5 +3446,7 @@
   "Hat ein anderes deiner Regale Bände dieser Ausgabe, die hier fehlen, kannst du sie hier übernehmen.": "다른 책장에 이 판본의 권이 있고 여기에 없으면 여기에서 가져올 수 있습니다.",
   "Verwalter": "관리자",
   "Du bist der einzige Verwalter dieses Regals. Gib zuerst jemand anderem die Rolle „{role}“, bevor du deine Rolle änderst oder das Regal verlässt.": "이 책장의 관리자는 나뿐이에요. 내 역할을 바꾸거나 책장을 나가기 전에 먼저 다른 사람에게 “{role}” 역할을 넘겨 주세요.",
-  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "사용자 “{username}”을(를) 정말 삭제할까요? 읽음 상태는 삭제되고, 이 사용자만 보유한 권은 그 책장의 관리자나 다른 멤버에게 넘어가요. 그곳에 아무도 없으면 “미보유”로 처리돼요."
+  "Möchtest du den Benutzer \"{username}\" wirklich löschen? Sein Lesestatus wird gelöscht; Bände, die nur dieser Benutzer besitzt, gehen an einen Verwalter oder ein anderes Mitglied ihres Regals über. Ist dort niemand mehr, gelten sie als „Fehlt“.": "사용자 “{username}”을(를) 정말 삭제할까요? 읽음 상태는 삭제되고, 이 사용자만 보유한 권은 그 책장의 관리자나 다른 멤버에게 넘어가요. 그곳에 아무도 없으면 “미보유”로 처리돼요.",
+  "Mehr unter „Infos“": "더 보기: ‘정보’",
+  "Für Webtoons gibt es keinen Manga-Passion-Abgleich.": "웹툰에는 Manga Passion 대조가 없습니다."
 }

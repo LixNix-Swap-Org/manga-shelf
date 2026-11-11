@@ -190,6 +190,7 @@ export default function MangaHeroCard({
   onCollectingSaved,
   tagSuggestions = null,
   onEditionsChanged,
+  onShowInfo
 }) {
   const [failedCoverUrl, setFailedCoverUrl] = useState(null);
   const inRouter = useInRouterContext();
@@ -759,6 +760,17 @@ export default function MangaHeroCard({
                 )}
               </div>
 
+              {/* a short excerpt; the whole description, genres and tags are in the tab "Infos" */}
+              {manga.description && (
+                <div id="detail-description-excerpt" className="max-w-2xl mb-6">
+                  <p className="text-sm text-slate-300 leading-relaxed line-clamp-3 break-words" lang={langFor(manga.description) || undefined}>{manga.description}</p>
+                  {onShowInfo && (
+                    <button type="button" id="btn-show-info" onClick={onShowInfo} className="mt-1.5 text-xs font-semibold text-brand-300 hover:text-brand-200">
+                      {tr('Mehr unter „Infos“')}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Progress bar (a webtoon only shows it once it has print volumes) */}

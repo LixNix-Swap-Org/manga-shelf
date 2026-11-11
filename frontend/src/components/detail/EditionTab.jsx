@@ -66,7 +66,7 @@ export default function EditionTab({
         title={t('Manga-Passion-Abgleich')}
         text={online && mpEnabled
           ? t('Ausgabe mit Manga Passion abgleichen, Bände und Erscheinungstermine übernehmen. Stand: {state}', { state: mpPillText({ mpGapData, mpGapLoading, mpGapError }) })
-          : (isOffline ? t('Der Abgleich braucht eine Verbindung zum Server.') : t('Den Abgleich gibt es nur für deutsche Ausgaben.'))}
+          : (isOffline ? t('Der Abgleich braucht eine Verbindung zum Server.') : (manga.format === 'webtoon' ? t('Für Webtoons gibt es keinen Manga-Passion-Abgleich.') : t('Den Abgleich gibt es nur für deutsche Ausgaben.')))}
       >
         {online && mpEnabled && (
           <button type="button" id="btn-edition-mp" onClick={onOpenMp} className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5">
