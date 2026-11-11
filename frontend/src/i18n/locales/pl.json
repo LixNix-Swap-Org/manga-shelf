@@ -3860,5 +3860,8 @@
   "Auf meiner Wunschliste": "Na mojej liście życzeń",
   "Außerdem gewünscht von {names}": "Chcą też: {names}",
   "Priorität fehlt": "Brak priorytetu",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Nieprawidłowy priorytet życzenia (puste lub od 0 do 3)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Nieprawidłowy priorytet życzenia (puste lub od 0 do 3)",
+  "Haushalts-Wunsch für {title} entfernen": "Usuń życzenie domowe dla {title}",
+  "Haushalts-Wunsch entfernen": "Usuń życzenie domowe",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Usunięto życzenie domowe dla „{title}”; inni nadal tego chcą"
 }

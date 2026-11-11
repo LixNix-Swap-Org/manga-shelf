@@ -3646,5 +3646,8 @@
   "Auf meiner Wunschliste": "İstek listemde",
   "Außerdem gewünscht von {names}": "Ayrıca isteyenler: {names}",
   "Priorität fehlt": "Öncelik eksik",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Geçersiz istek önceliği (boş veya 0 ile 3 arası)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Geçersiz istek önceliği (boş veya 0 ile 3 arası)",
+  "Haushalts-Wunsch für {title} entfernen": "{title} için hane isteğini kaldır",
+  "Haushalts-Wunsch entfernen": "Hane isteğini kaldır",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "„{title}“ için hane isteği kaldırıldı; başkaları hâlâ istiyor"
 }

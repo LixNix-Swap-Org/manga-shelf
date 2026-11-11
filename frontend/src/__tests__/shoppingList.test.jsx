@@ -770,6 +770,18 @@ describe('ShoppingListView wished series', () => {
     expect(screen.getByText('Meins')).toBeTruthy();
   });
 
+  it('a household wish nobody holds as their own gets "Haushalts-Wunsch entfernen"', async () => {
+    const fetchMock = vi.fn(async () => response(200, { success: true, my_wish: null, wish_priority: null, wishes: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const old = wished({ id: 43, title: 'Alt', my_wish: null, wishes: [{ user_id: null, username: null, priority: 2, mine: false }] });
+    renderView(props({ shoppingData: withWished([old]) }));
+    expect(document.querySelector('[data-wishers]').textContent).toBe('Gewünscht von Haushalt (mittel)');
+    fireEvent.click(screen.getByRole('button', { name: 'Haushalts-Wunsch für Alt entfernen' }));
+    await flush();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ priority: null, household: true });
+    vi.unstubAllGlobals();
+  });
+
   it('visitors and offline mode get no remove button', () => {
     const view = renderView(props({ shoppingData: withWished([wished()]), canEdit: false }));
     expect(screen.queryByRole('button', { name: /von meiner Wunschliste nehmen/ })).toBeNull();

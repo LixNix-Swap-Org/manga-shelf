@@ -3860,5 +3860,8 @@
   "Auf meiner Wunschliste": "В моём списке желаний",
   "Außerdem gewünscht von {names}": "Также хотят: {names}",
   "Priorität fehlt": "Не указан приоритет",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Недопустимый приоритет желания (пусто или от 0 до 3)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Недопустимый приоритет желания (пусто или от 0 до 3)",
+  "Haushalts-Wunsch für {title} entfernen": "Убрать желание семьи для {title}",
+  "Haushalts-Wunsch entfernen": "Убрать желание семьи",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Желание семьи для «{title}» убрано; другие ещё хотят"
 }

@@ -107,10 +107,15 @@ export function wishersText(wishes) {
     .join(', ');
 }
 
-/** Whether the caller can take a series off the wishlist: their own wish, or the household wish nobody claimed yet. */
-export const canDropWish = (s) => !Array.isArray(s?.wishes) // a server from before migration 57: the one shared wish
-  || (s.my_wish !== null && s.my_wish !== undefined)
-  || s.wishes.some((w) => w.user_id === null);
+/**
+ * Which wish the shopping list's button takes off a series: 'mine' (the caller's own), 'household' (the household wish of
+ * migration 57, when the caller has none) or null. A server from before migration 57 has one shared wish: 'mine'.
+ */
+export const droppableWish = (s) => {
+  if (!Array.isArray(s?.wishes)) return 'mine';
+  if (s.my_wish !== null && s.my_wish !== undefined) return 'mine';
+  return s.wishes.some((w) => w.user_id === null) ? 'household' : null;
+};
 
 /** The other people who wish a series (not the caller, not the household), as wishersText; '' when nobody else does. */
 export const othersWishing = (manga) => wishersText((manga?.wishes || []).filter((w) => !w.mine && w.user_id !== null));

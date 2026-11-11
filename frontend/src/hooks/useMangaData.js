@@ -27,9 +27,9 @@ export function normalizeLookupStatus(status, previous) {
   return MANGA_STATUSES.includes(status) ? status : previous;
 }
 
-/** The wish the series form starts from: the caller's own, else the household's; a detail without `wishes` (older
- * server, offline snapshot from before) keeps the shared value. */
-const ownWish = (data) => (Array.isArray(data?.wishes) ? (data.my_wish ?? data.household_wish ?? null) : data?.wish_priority);
+/** The wish the series form starts from: the caller's own (migration 57); a detail without `wishes` (older server,
+ * offline snapshot from before) keeps the shared value. */
+const ownWish = (data) => (Array.isArray(data?.wishes) ? (data.my_wish ?? null) : data?.wish_priority);
 
 export function buildFormData(data) {
   return {
@@ -52,7 +52,7 @@ export function buildFormData(data) {
     cover_image: data.cover_image || '',
     manga_passion_id: data.manga_passion_id || null,
     shelf_id: data.shelf_id ? String(data.shelf_id) : '',
-    // the form edits the own wish (migration 57); the household wish nobody claimed yet stands in for it
+    // the form edits the own wish (migration 57)
     wish: normalizeWishPriority(ownWish(data)) !== null,
     wish_priority: String(normalizeWishPriority(ownWish(data)) ?? DEFAULT_WISH_PRIORITY)
   };

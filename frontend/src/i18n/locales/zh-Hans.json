@@ -3539,5 +3539,8 @@
   "Auf meiner Wunschliste": "在我的心愿单上",
   "Außerdem gewünscht von {names}": "也想要的人：{names}",
   "Priorität fehlt": "缺少优先级",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "心愿优先级无效（留空或 0 到 3）"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "心愿优先级无效（留空或 0 到 3）",
+  "Haushalts-Wunsch für {title} entfernen": "移除 {title} 的家庭心愿",
+  "Haushalts-Wunsch entfernen": "移除家庭心愿",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "已移除“{title}”的家庭心愿，其他人仍想要"
 }

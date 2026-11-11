@@ -1,7 +1,7 @@
 // Wishes per person (migration 57): series_wishes holds who wishes a series and how much (priority 0 to 3, like the old
 // shared field). A row without user_id is the household wish that migration 57 made from the shared mangas.wish_priority
-// (who set it is unknown); the first person who sets or clears their own wish on that series replaces it, like a
-// household copy. Everybody in the shelf sees every wish with its name. mangas.wish_priority stays as the highest wish
+// (who set it is unknown); it stays next to the wishes of the people until an editor takes it off. Everybody in the
+// shelf sees every wish with its name. mangas.wish_priority stays as the highest wish
 // of the series, kept by triggers, so every reader of the old field (chip, filters, shopping list, radar, CSV) still
 // works: a series counts as wished while anybody wishes it.
 
@@ -50,16 +50,17 @@ function syncUserWishes(db, userId, shelfId) {
 const hasWishTable = (db) => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'series_wishes'").get());
 
 /**
- * Sets the wish of `userId` on the series (`priority` 0 to 3) or removes it (null). The household wish goes in both
- * cases: the person decides now. Returns the series' highest wish afterwards (null: nobody wishes it).
+ * Sets the wish of `userId` on the series (`priority` 0 to 3) or removes it (null); `userId` null is the household wish.
+ * Every other wish stays. Returns the series' highest wish afterwards (null: nobody wishes it).
  */
 function setWish(db, mangaId, userId, priority) {
-    db.prepare('DELETE FROM series_wishes WHERE manga_id = ? AND user_id IS NULL').run(mangaId);
+    const who = userId === null || userId === undefined ? 'user_id IS NULL' : 'user_id = ?';
+    const whoParams = userId === null || userId === undefined ? [] : [userId];
     if (priority === null || priority === undefined) {
-        db.prepare('DELETE FROM series_wishes WHERE manga_id = ? AND user_id = ?').run(mangaId, userId);
+        db.prepare(`DELETE FROM series_wishes WHERE manga_id = ? AND ${who}`).run(mangaId, ...whoParams);
     } else {
-        const changed = db.prepare('UPDATE series_wishes SET priority = ? WHERE manga_id = ? AND user_id = ?').run(priority, mangaId, userId).changes;
-        if (!changed) db.prepare('INSERT INTO series_wishes (manga_id, user_id, priority) VALUES (?, ?, ?)').run(mangaId, userId, priority);
+        const changed = db.prepare(`UPDATE series_wishes SET priority = ? WHERE manga_id = ? AND ${who}`).run(priority, mangaId, ...whoParams).changes;
+        if (!changed) db.prepare('INSERT INTO series_wishes (manga_id, user_id, priority) VALUES (?, ?, ?)').run(mangaId, userId ?? null, priority);
     }
     // the series' value follows even when no row changed (a caller may have written the column itself before)
     syncSeriesWish(db, mangaId);

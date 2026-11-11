@@ -396,18 +396,20 @@ export default function ShoppingListView({
     return [...filtered].sort(prioritySort ? (a, b) => (b.wish_priority || 0) - (a.wish_priority || 0) || byTitle(a, b) : byTitle);
   }, [wishedSeries, removedWish, searchTerm, activePublisher, normalizePubName, prioritySort]);
 
-  const removeWish = async (series) => {
+  const removeWish = async (series, { household = false } = {}) => {
     if (removingWish.has(series.id) || isOfflineMode) return;
     setRemovingWish((prev) => new Set(prev).add(series.id));
     try {
       // only the own wish goes (migration 57); the series stays while somebody else still wishes it
-      const res = await apiFetch(`/api/mangas/${series.id}/wish`, { method: 'PUT', body: { priority: null } });
+      const res = await apiFetch(`/api/mangas/${series.id}/wish`, { method: 'PUT', body: household ? { priority: null, household: true } : { priority: null } });
       if (res.ok) {
         const data = (await readJson(res)) ?? {};
         const stillWished = data.wish_priority !== null && data.wish_priority !== undefined;
         if (!stillWished) setRemovedWish((prev) => new Set(prev).add(series.id));
         notify.success(stillWished
-          ? t('„{title}“ ist nicht mehr auf deiner Wunschliste, andere wünschen sie sich noch', { title: series.title })
+          ? (household
+            ? t('Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch', { title: series.title })
+            : t('„{title}“ ist nicht mehr auf deiner Wunschliste, andere wünschen sie sich noch', { title: series.title }))
           : t('„{title}“ ist nicht mehr auf der Wunschliste', { title: series.title }));
         fetchShoppingList();
         if (fetchMangas) fetchMangas();

@@ -3646,5 +3646,8 @@
   "Auf meiner Wunschliste": "Op mijn verlanglijst",
   "Außerdem gewünscht von {names}": "Ook gewenst door {names}",
   "Priorität fehlt": "Prioriteit ontbreekt",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Ongeldige wensprioriteit (leeg of 0 tot 3)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Ongeldige wensprioriteit (leeg of 0 tot 3)",
+  "Haushalts-Wunsch für {title} entfernen": "Huishoudwens voor {title} verwijderen",
+  "Haushalts-Wunsch entfernen": "Huishoudwens verwijderen",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Huishoudwens voor „{title}” verwijderd; anderen wensen het nog"
 }

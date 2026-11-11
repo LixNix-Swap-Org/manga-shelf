@@ -3753,5 +3753,8 @@
   "Auf meiner Wunschliste": "Sur ma liste d’envies",
   "Außerdem gewünscht von {names}": "Aussi souhaité par {names}",
   "Priorität fehlt": "Priorité manquante",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Priorité de souhait invalide (vide ou de 0 à 3)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Priorité de souhait invalide (vide ou de 0 à 3)",
+  "Haushalts-Wunsch für {title} entfernen": "Retirer le souhait du foyer pour {title}",
+  "Haushalts-Wunsch entfernen": "Retirer le souhait du foyer",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Souhait du foyer pour « {title} » retiré ; d’autres le souhaitent encore"
 }

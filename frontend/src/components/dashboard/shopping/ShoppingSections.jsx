@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { formatCount, formatMoney, formatNumber } from '../../../utils/format';
 import { editionCurrency } from '../../../utils/editions';
 import { groupByPublisher, itemText, publisherLabel } from '../../../utils/shareList';
-import { PRIORITY_LABELS, priorityBadgeClass, wishersText, canDropWish } from '../../../utils/priority';
+import { PRIORITY_LABELS, priorityBadgeClass, wishersText, droppableWish } from '../../../utils/priority';
 import CoverImage from '../../common/CoverImage';
 import { BookOpen, BuildingComplex, Heart } from 'lucide-react';
 import { t } from '../../../i18n/index.js';
@@ -140,16 +140,18 @@ export function WishedSeriesSection({ series: allSeries, canRemove, removing, on
                 >
                   {t('Zur Reihe')}
                 </Link>
-                {canRemove && canDropWish(s) && (
+                {canRemove && droppableWish(s) && (
                   <button
                     type="button"
-                    onClick={() => onRemove(s)}
+                    onClick={() => onRemove(s, { household: droppableWish(s) === 'household' })}
                     disabled={removing.has(s.id)}
                     aria-busy={removing.has(s.id) || undefined}
-                    aria-label={t('{title} von meiner Wunschliste nehmen', { title: s.title })}
+                    aria-label={droppableWish(s) === 'household'
+                      ? t('Haushalts-Wunsch für {title} entfernen', { title: s.title })
+                      : t('{title} von meiner Wunschliste nehmen', { title: s.title })}
                     className="px-2.5 py-1.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500/50 text-xs font-semibold disabled:opacity-50"
                   >
-                    {t('Von meiner Wunschliste')}
+                    {droppableWish(s) === 'household' ? t('Haushalts-Wunsch entfernen') : t('Von meiner Wunschliste')}
                   </button>
                 )}
               </div>

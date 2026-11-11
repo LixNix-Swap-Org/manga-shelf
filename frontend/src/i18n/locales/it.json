@@ -3753,5 +3753,8 @@
   "Auf meiner Wunschliste": "Nella mia lista dei desideri",
   "Außerdem gewünscht von {names}": "Desiderato anche da {names}",
   "Priorität fehlt": "Priorità mancante",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Priorità del desiderio non valida (vuota o da 0 a 3)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Priorità del desiderio non valida (vuota o da 0 a 3)",
+  "Haushalts-Wunsch für {title} entfernen": "Rimuovi il desiderio della casa per {title}",
+  "Haushalts-Wunsch entfernen": "Rimuovi desiderio della casa",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Desiderio della casa per «{title}» rimosso; altri lo desiderano ancora"
 }

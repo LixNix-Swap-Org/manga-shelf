@@ -47,19 +47,21 @@ const wishedSummary = (ctx, shelfIds = access.accessibleShelfIds(ctx)) => {
     return ctx.db.prepare(q.sql).get(...q.params);
 };
 
-// PUT /mangas/:id/wish { priority }: the caller's own wish on the series (0 to 3; null or '' removes it). Any member of
-// the shelf may keep a wishlist, a viewer too; the household wish of migration 57 gives way to it.
+// PUT /mangas/:id/wish { priority, household? }: the caller's own wish on the series (0 to 3; null or '' removes it). Any
+// member of the shelf may keep a wishlist, a viewer too. `household: true` changes the household wish of migration 57
+// instead (editors of the shelf).
 function setOwnWish(ctx, { params, body }) {
     const mangaId = access.parseId(params.id);
     if (!mangaId) throw notFound('Manga');
-    access.mangaAccess(ctx, mangaId, 'viewer');
+    const household = body?.household === true;
+    access.mangaAccess(ctx, mangaId, household ? 'editor' : 'viewer');
     if (!Object.prototype.hasOwnProperty.call(body || {}, 'priority')) throw badRequest('Priorität fehlt');
     const r = parseWishPriority(body.priority);
     if (r.error) throw badRequest('Ungültige Wunsch-Priorität (leer oder 0 bis 3)');
     let highest = null;
-    ctx.db.transaction(() => { highest = setWish(ctx.db, mangaId, ctx.user.id, r.value); });
+    ctx.db.transaction(() => { highest = setWish(ctx.db, mangaId, household ? null : ctx.user.id, r.value); });
     const wishes = (wishesBySeries(ctx.db, mangaId).get(mangaId) || []).map(w => ({ ...w, mine: w.user_id === ctx.user.id }));
-    return { body: { success: true, my_wish: r.value, wish_priority: highest, wishes } };
+    return { body: { success: true, my_wish: wishes.find(w => w.mine)?.priority ?? null, wish_priority: highest, wishes } };
 }
 
 module.exports = { wishedSeries, wishedSummary, setOwnWish };

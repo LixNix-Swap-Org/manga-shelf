@@ -167,7 +167,8 @@ export function fillFromSnapshot(conn, snapshot) {
   const volumeCols = columnsOf(conn, 'volumes');
   for (const manga of Object.values(snapshot.details || {})) {
     insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
-    // the device knows only this user: their own wish stays theirs, anybody else's becomes the household's (migration 57)
+    // the device knows only this user (migration 57): their own wish stays theirs; a series only others wish keeps
+    // that wish as the household's
     if (manga.my_wish !== null && manga.my_wish !== undefined) wishes.setWish(conn, manga.id, me.id, manga.my_wish);
     else wishes.adoptColumnWish(conn, manga.id, null);
     if (manga.chapters_read > 0) marks.setChapterProgress(conn, manga.id, me.id, manga.chapters_read);

@@ -3539,5 +3539,8 @@
   "Auf meiner Wunschliste": "自分のウィッシュリストに入れる",
   "Außerdem gewünscht von {names}": "ほかに欲しい人: {names}",
   "Priorität fehlt": "優先度がありません",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "希望の優先度が不正です（空または0〜3）"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "希望の優先度が不正です（空または0〜3）",
+  "Haushalts-Wunsch für {title} entfernen": "{title}の家庭の希望を外す",
+  "Haushalts-Wunsch entfernen": "家庭の希望を外す",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "「{title}」の家庭の希望を外しました（他の人はまだ希望しています）"
 }

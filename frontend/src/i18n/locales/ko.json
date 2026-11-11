@@ -3539,5 +3539,8 @@
   "Auf meiner Wunschliste": "내 위시리스트에 있음",
   "Außerdem gewünscht von {names}": "그 밖에 원하는 사람: {names}",
   "Priorität fehlt": "우선순위가 없습니다",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "잘못된 위시 우선순위입니다 (비우거나 0~3)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "잘못된 위시 우선순위입니다 (비우거나 0~3)",
+  "Haushalts-Wunsch für {title} entfernen": "{title}의 가정 위시 제거",
+  "Haushalts-Wunsch entfernen": "가정 위시 제거",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "„{title}“의 가정 위시를 제거했습니다. 다른 사람은 아직 원합니다"
 }

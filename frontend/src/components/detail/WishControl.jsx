@@ -16,13 +16,12 @@ export default function WishControl({ manga, canWish = false, onSaved }) {
   if (!manga) return null;
   const wished = isWishedSeries(manga);
   const mine = manga.my_wish !== null && manga.my_wish !== undefined;
-  const unclaimed = !mine && (manga.wishes || []).some((w) => w.user_id === null);
   const names = wishersText(manga.wishes);
   const offer = Boolean(canWish && manga.id) && !(Number(manga.owned_volumes) > 0);
 
   const toggle = async () => {
     if (saving) return;
-    const priority = mine || unclaimed ? null : DEFAULT_WISH_PRIORITY;
+    const priority = mine ? null : DEFAULT_WISH_PRIORITY;
     setSaving(true);
     try {
       const data = await request('PUT', `/api/mangas/${manga.id}/wish`, { priority }, { fallback: t('Wunschliste konnte nicht geändert werden') });
@@ -61,7 +60,7 @@ export default function WishControl({ manga, canWish = false, onSaved }) {
           }`}
         >
           <Heart className={`w-3.5 h-3.5 ${mine ? 'fill-current' : ''}`} aria-hidden="true" />
-          {mine || unclaimed ? t('Von meiner Wunschliste') : t('Auf meine Wunschliste')}
+          {mine ? t('Von meiner Wunschliste') : t('Auf meine Wunschliste')}
         </button>
       )}
     </>

@@ -3753,5 +3753,8 @@
   "Auf meiner Wunschliste": "En mi lista de deseos",
   "Außerdem gewünscht von {names}": "También lo desean: {names}",
   "Priorität fehlt": "Falta la prioridad",
-  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Prioridad de deseo no válida (vacía o de 0 a 3)"
+  "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Prioridad de deseo no válida (vacía o de 0 a 3)",
+  "Haushalts-Wunsch für {title} entfernen": "Quitar el deseo del hogar para {title}",
+  "Haushalts-Wunsch entfernen": "Quitar deseo del hogar",
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Deseo del hogar para «{title}» quitado; otros aún lo desean"
 }

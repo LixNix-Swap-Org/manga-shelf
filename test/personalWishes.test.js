@@ -50,7 +50,7 @@ test('each person wishes on their own; everybody sees who wishes what', async ()
     assert.ok(!(await wishedOf(editor)).some((s) => s.id === id));
 });
 
-test('an old shared wish is the household wish until somebody decides', async () => {
+test('an old shared wish stays as the household wish next to the people\'s, until an editor takes it off', async () => {
     const { id } = (await admin('POST', '/mangas', { title: 'Alter Wunsch' })).body;
     // as migration 57 leaves it: a household row for the old shared value
     require('../db').db.prepare('INSERT INTO series_wishes (manga_id, user_id, priority) VALUES (?, NULL, 2)').run(id);
@@ -59,7 +59,12 @@ test('an old shared wish is the household wish until somebody decides', async ()
     assert.deepEqual(d.wishes.map((w) => [w.user_id, w.priority]), [[null, 2]]);
     assert.equal((await editor('PUT', `/mangas/${id}/wish`, { priority: 1 })).status, 200);
     d = await detailOf(editor, id);
-    assert.deepEqual(d.wishes.map((w) => [w.username, w.priority]), [['ed', 1]], 'the household wish gave way');
+    assert.deepEqual(d.wishes.map((w) => [w.username, w.priority]), [[null, 2], ['ed', 1]], 'both wishes stand');
+    assert.deepEqual([d.wish_priority, d.my_wish], [2, 1]);
+    const off = await editor('PUT', `/mangas/${id}/wish`, { priority: null, household: true });
+    assert.deepEqual([off.status, off.body.wish_priority, off.body.my_wish], [200, 1, 1]);
+    d = await detailOf(editor, id);
+    assert.deepEqual(d.wishes.map((w) => [w.username, w.priority]), [['ed', 1]]);
 });
 
 test('wishes go to the trash with the series and come back', async () => {
