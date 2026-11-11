@@ -3415,5 +3415,14 @@
   "{title}: {n} Band fehlt ({volumes})|{title}: {n} Bände fehlen ({volumes})": {
     "other": "{title}: {n}권이 없습니다 ({volumes})"
   },
-  "„{title}“ öffnen": "「{title}」 열기"
+  "„{title}“ öffnen": "「{title}」 열기",
+  "Ich": "나",
+  "Person": "사람",
+  "Setze Filter und merke sie dir hier für später.": "필터를 설정하고 나중을 위해 여기에 저장하세요.",
+  "Alle Personen": "모든 사람",
+  "Meine Sammlung": "내 컬렉션",
+  "Regal und Person: {label}": "책장과 사람: {label}",
+  "Person filtern": "사람으로 필터",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "이 사람이 권을 가진 시리즈를 표시합니다.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "책장도 사람도 하나뿐이라 바꿀 것이 없습니다. 저장한 필터는 아래에 있습니다."
 }

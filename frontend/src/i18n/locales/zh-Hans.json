@@ -3415,5 +3415,14 @@
   "{title}: {n} Band fehlt ({volumes})|{title}: {n} Bände fehlen ({volumes})": {
     "other": "{title}：缺少 {n} 卷（{volumes}）"
   },
-  "„{title}“ öffnen": "打开《{title}》"
+  "„{title}“ öffnen": "打开《{title}》",
+  "Ich": "我",
+  "Person": "人员",
+  "Setze Filter und merke sie dir hier für später.": "设置筛选后可在此保存以便以后使用。",
+  "Alle Personen": "所有人",
+  "Meine Sammlung": "我的收藏",
+  "Regal und Person: {label}": "书架和人员：{label}",
+  "Person filtern": "按人员筛选",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "显示此人拥有其中一卷的系列。",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "只有一个书架和一个人，这里无需切换。已保存的筛选在下方。"
 }

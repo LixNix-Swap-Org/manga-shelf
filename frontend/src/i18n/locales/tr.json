@@ -3519,5 +3519,14 @@
     "one": "{title}: {n} cilt eksik ({volumes})",
     "other": "{title}: {n} cilt eksik ({volumes})"
   },
-  "„{title}“ öffnen": "“{title}” aç"
+  "„{title}“ öffnen": "“{title}” aç",
+  "Ich": "Ben",
+  "Person": "Kişi",
+  "Setze Filter und merke sie dir hier für später.": "Filtreleri ayarla ve sonrası için burada kaydet.",
+  "Alle Personen": "Herkes",
+  "Meine Sammlung": "Koleksiyonum",
+  "Regal und Person: {label}": "Raf ve kişi: {label}",
+  "Person filtern": "Kişiye göre filtrele",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Bu kişinin cildine sahip olduğu serileri gösterir.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Tek raf, tek kişi: burada değiştirilecek bir şey yok. Kayıtlı filtrelerin aşağıda."
 }

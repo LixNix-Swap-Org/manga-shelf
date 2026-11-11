@@ -3519,5 +3519,14 @@
     "one": "{title}: {n} deel ontbreekt ({volumes})",
     "other": "{title}: {n} delen ontbreken ({volumes})"
   },
-  "„{title}“ öffnen": "‘{title}’ openen"
+  "„{title}“ öffnen": "‘{title}’ openen",
+  "Ich": "Ik",
+  "Person": "Persoon",
+  "Setze Filter und merke sie dir hier für später.": "Stel filters in en bewaar ze hier voor later.",
+  "Alle Personen": "Alle personen",
+  "Meine Sammlung": "Mijn collectie",
+  "Regal und Person: {label}": "Plank en persoon: {label}",
+  "Person filtern": "Filteren op persoon",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Toont de reeksen waarvan deze persoon een deel bezit.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Eén plank, één persoon: hier valt niets te wisselen. Je bewaarde filters staan hieronder."
 }

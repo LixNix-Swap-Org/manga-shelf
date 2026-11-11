@@ -3415,5 +3415,14 @@
   "{title}: {n} Band fehlt ({volumes})|{title}: {n} Bände fehlen ({volumes})": {
     "other": "{title}：{n}巻がありません（{volumes}）"
   },
-  "„{title}“ öffnen": "「{title}」を開く"
+  "„{title}“ öffnen": "「{title}」を開く",
+  "Ich": "自分",
+  "Person": "人",
+  "Setze Filter und merke sie dir hier für später.": "フィルターを設定して、ここに保存できます。",
+  "Alle Personen": "全員",
+  "Meine Sammlung": "マイコレクション",
+  "Regal und Person: {label}": "本棚と人：{label}",
+  "Person filtern": "人で絞り込む",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "この人が巻を持っているシリーズを表示します。",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "本棚も人も1つだけなので切り替えるものはありません。保存したフィルターは下にあります。"
 }

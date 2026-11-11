@@ -136,6 +136,9 @@ const scenarios = [
             assert.equal((await vis('POST', `/volumes/${vid}/owners`, { owned: true })).status, 403);
             const forVis = await admin('POST', `/volumes/${vid}/owners`, { owned: true, user_id: users.find(u => u.username === 'vis').id, purchase_date: '2025-05-05' });
             assert.deepEqual(forVis.body.owners.map(o => o.username), ['ed', 'vis']);
+            const listed = (await ed('GET', '/mangas')).body.find(m => m.id === id);
+            const ids = ['ed', 'vis'].map(n => users.find(u => u.username === n).id).sort((a, b) => a - b);
+            assert.deepEqual(listed.owners.split('\n').map(p => Number(p.split('\t')[0])), ids, 'the list names who owns a volume');
             const leave = await ed('POST', `/volumes/${vid}/owners`, { owned: false });
             assert.deepEqual([leave.body.status, leave.body.purchase_date, leave.body.removed_owner.purchase_date], ['Vorhanden', '2025-05-05', '2025-03-04']);
             assert.equal((await ed('POST', '/volumes/999999/owners', {})).status, 404);

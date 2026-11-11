@@ -3727,5 +3727,14 @@
     "many": "{title}: не хватает {n} томов ({volumes})",
     "other": "{title}: не хватает {n} тома ({volumes})"
   },
-  "„{title}“ öffnen": "Открыть «{title}»"
+  "„{title}“ öffnen": "Открыть «{title}»",
+  "Ich": "Я",
+  "Person": "Человек",
+  "Setze Filter und merke sie dir hier für später.": "Задайте фильтры и сохраните их здесь на потом.",
+  "Alle Personen": "Все",
+  "Meine Sammlung": "Моя коллекция",
+  "Regal und Person: {label}": "Полка и человек: {label}",
+  "Person filtern": "Фильтр по человеку",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Показывает серии, в которых у этого человека есть том.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Одна полка, один человек: переключать нечего. Сохранённые фильтры ниже."
 }

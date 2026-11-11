@@ -3727,5 +3727,14 @@
     "many": "{title}: brakuje {n} tomów ({volumes})",
     "other": "{title}: brakuje {n} tomu ({volumes})"
   },
-  "„{title}“ öffnen": "Otwórz „{title}”"
+  "„{title}“ öffnen": "Otwórz „{title}”",
+  "Ich": "Ja",
+  "Person": "Osoba",
+  "Setze Filter und merke sie dir hier für später.": "Ustaw filtry i zapisz je tutaj na później.",
+  "Alle Personen": "Wszystkie osoby",
+  "Meine Sammlung": "Moja kolekcja",
+  "Regal und Person: {label}": "Półka i osoba: {label}",
+  "Person filtern": "Filtruj według osoby",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Pokazuje serie, z których ta osoba ma tom.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Jedna półka, jedna osoba: nie ma tu nic do przełączania. Zapisane filtry są poniżej."
 }

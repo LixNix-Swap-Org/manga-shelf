@@ -6,7 +6,7 @@ import { t } from '../../i18n/index.js';
 // Saved filter sets of the collection ("Gemerkte Filter"): per account on this device, at most SAVED_FILTER_LIMIT.
 const KEY_PREFIX = 'mangashelf_saved_filters';
 export const SAVED_FILTER_LIMIT = 8;
-const FIELDS = ['status', 'publisher', 'collect', 'author', 'tags', 'lang', 'shelf', 'sort', 'group'];
+const FIELDS = ['status', 'publisher', 'collect', 'author', 'tags', 'lang', 'shelf', 'person', 'sort', 'group'];
 
 const keyOf = (userId) => `${KEY_PREFIX}:${userId ?? 'local'}`;
 
@@ -34,6 +34,7 @@ export function filterSnapshot(state) {
     tags,
     lang: state.lang || 'ALL',
     shelf: String(state.shelf ?? 'ALL'),
+    person: String(state.person ?? 'ALL'),
     sort: state.sort || 'title_asc',
     group: state.group || 'none'
   };
@@ -45,9 +46,12 @@ const savedName = (f) => f.label;
 export const sameFilters = (a, b) => FIELDS.every((f) => JSON.stringify(a[f]) === JSON.stringify(b[f]));
 
 /** A short name for a filter set from its parts: shelf, status, publisher, collecting state, author, tags, language. */
-export function filterLabel(filters, { shelves = [] } = {}) {
+export function filterLabel(filters, { shelves = [], persons = [], userId = null } = {}) {
   const parts = [];
   if (filters.shelf !== 'ALL') parts.push(shelves.find((s) => String(s.id) === filters.shelf)?.name || t('Regal'));
+  if (filters.person && filters.person !== 'ALL') {
+    parts.push(String(filters.person) === String(userId) ? t('Ich') : (persons.find((p) => String(p.id) === filters.person)?.name || t('Person')));
+  }
   if (filters.status !== 'ALL') {
     const tab = STATUS_TABS.find((x) => x.id === filters.status);
     if (tab) parts.push(t(tab.label));
@@ -68,7 +72,7 @@ export function filterLabel(filters, { shelves = [] } = {}) {
  * collecting state, author, tags, language, sort, grouping) at once, plus "Aktuelle Auswahl merken". Hidden while
  * nothing is saved and no filter is set.
  */
-export default function SavedFilters({ userId, current, apply, shelves = [], filtersActive }) {
+export default function SavedFilters({ userId, current, apply, shelves = [], persons = [], filtersActive, embedded = false }) {
   const [saved, setSaved] = useState(() => readSavedFilters(userId));
   const [owner, setOwner] = useState(userId);
   if (owner !== userId) {
@@ -77,7 +81,7 @@ export default function SavedFilters({ userId, current, apply, shelves = [], fil
   }
   const now = filterSnapshot(current);
   const alreadySaved = saved.some((f) => sameFilters(f.filters, now));
-  if (!saved.length && !filtersActive) return null;
+  if (!saved.length && !filtersActive && !embedded) return null;
 
   const update = (list) => {
     setSaved(list);
@@ -85,12 +89,12 @@ export default function SavedFilters({ userId, current, apply, shelves = [], fil
   };
   const save = () => {
     if (alreadySaved) return;
-    const entry = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, label: filterLabel(now, { shelves }), filters: now };
+    const entry = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, label: filterLabel(now, { shelves, persons, userId }), filters: now };
     update([...saved, entry].slice(-SAVED_FILTER_LIMIT));
   };
 
   return (
-    <div role="group" aria-label={t('Gemerkte Filter')} id="saved-filters" className="-mt-3 mb-6 flex flex-wrap items-center gap-2 text-xs">
+    <div role="group" aria-label={t('Gemerkte Filter')} id="saved-filters" className={`${embedded ? 'border-t border-slate-800 pt-3' : '-mt-3 mb-6'} flex flex-wrap items-center gap-2 text-xs`}>
       <span className="flex items-center gap-1 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
         <Bookmark className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> {t('Gemerkt')}
       </span>
@@ -112,6 +116,9 @@ export default function SavedFilters({ userId, current, apply, shelves = [], fil
           </span>
         );
       })}
+      {embedded && !saved.length && !filtersActive && (
+        <span className="text-slate-400">{t('Setze Filter und merke sie dir hier für später.')}</span>
+      )}
       {filtersActive && !alreadySaved && (
         <button
           type="button"

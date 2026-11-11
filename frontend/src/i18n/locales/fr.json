@@ -3623,5 +3623,14 @@
     "many": "{title} : {n} tomes manquants ({volumes})",
     "other": "{title} : {n} tomes manquants ({volumes})"
   },
-  "„{title}“ öffnen": "Ouvrir « {title} »"
+  "„{title}“ öffnen": "Ouvrir « {title} »",
+  "Ich": "Moi",
+  "Person": "Personne",
+  "Setze Filter und merke sie dir hier für später.": "Définis des filtres et enregistre-les ici pour plus tard.",
+  "Alle Personen": "Toutes les personnes",
+  "Meine Sammlung": "Ma collection",
+  "Regal und Person: {label}": "Étagère et personne : {label}",
+  "Person filtern": "Filtrer par personne",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Affiche les séries dont cette personne possède un tome.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Une étagère, une personne : rien à changer ici. Tes filtres enregistrés sont en dessous."
 }

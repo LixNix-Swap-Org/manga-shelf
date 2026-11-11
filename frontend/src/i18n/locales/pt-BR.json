@@ -3623,5 +3623,14 @@
     "many": "{title}: faltam {n} volumes ({volumes})",
     "other": "{title}: faltam {n} volumes ({volumes})"
   },
-  "„{title}“ öffnen": "Abrir “{title}”"
+  "„{title}“ öffnen": "Abrir “{title}”",
+  "Ich": "Eu",
+  "Person": "Pessoa",
+  "Setze Filter und merke sie dir hier für später.": "Defina filtros e salve-os aqui para depois.",
+  "Alle Personen": "Todas as pessoas",
+  "Meine Sammlung": "Minha coleção",
+  "Regal und Person: {label}": "Estante e pessoa: {label}",
+  "Person filtern": "Filtrar por pessoa",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Mostra as séries em que esta pessoa possui algum volume.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Uma estante, uma pessoa: nada para alternar aqui. Seus filtros salvos estão abaixo."
 }

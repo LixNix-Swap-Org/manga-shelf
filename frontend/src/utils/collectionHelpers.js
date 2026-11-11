@@ -254,7 +254,29 @@ export const formatTagFilter = (tags) => parseTagFilter(tags).join(',');
 
 // Search, filters and sort of the series list (tags: AND). A search ranks title-prefix, title, other-field and typo
 // hits in that order; the chosen sort orders each group.
-export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [], languageFilter = 'ALL', shelfFilter = 'ALL' }) => {
+/** The people who own a volume of the series: [{ id, name }] from the list row's `owners` ("id<TAB>name" per line). */
+export const seriesOwners = (m) => String(m?.owners || '').split('\n').map((line) => {
+  const tab = line.indexOf('\t');
+  const id = Number(tab > 0 ? line.slice(0, tab) : NaN);
+  return Number.isSafeInteger(id) && id > 0 ? { id, name: line.slice(tab + 1) } : null;
+}).filter(Boolean);
+
+/** Everybody who owns something in the list, plus `me` ({ id, name }) first: [{ id, name, count }] by name. */
+export const getAvailablePersons = (mangas, me = null) => {
+  const people = new Map();
+  if (me && me.id != null) people.set(Number(me.id), { id: Number(me.id), name: me.name, count: 0 });
+  for (const m of mangas) {
+    for (const o of seriesOwners(m)) {
+      const entry = people.get(o.id) || { id: o.id, name: o.name, count: 0 };
+      entry.count += 1;
+      people.set(o.id, entry);
+    }
+  }
+  const first = me && me.id != null ? Number(me.id) : null;
+  return [...people.values()].sort((a, b) => (a.id === first ? -1 : b.id === first ? 1 : naturalCollator.compare(a.name, b.name)));
+};
+
+export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFilter, sortBy, collectFilter = 'ALL', authorFilter = '', tagFilter = [], languageFilter = 'ALL', shelfFilter = 'ALL', personFilter = 'ALL' }) => {
   const query = prepareQuery(search);
   const tags = parseTagFilter(tagFilter);
   const publisherKey = publisherFilter && publisherFilter !== 'ALL' ? normalizePubName(publisherFilter).toLowerCase() : null;
@@ -284,6 +306,7 @@ export const filterAndSortMangas = (mangas, { search, statusFilter, publisherFil
       if (tags.length && !hasAllTags(m, tags)) return false;
       if (languageFilter && languageFilter !== 'ALL' && editionLanguage(m) !== languageFilter) return false;
       if (shelfFilter && shelfFilter !== 'ALL' && String(m.shelf_id) !== String(shelfFilter)) return false;
+      if (personFilter && personFilter !== 'ALL' && !seriesOwners(m).some((o) => String(o.id) === String(personFilter))) return false;
       return true;
     })
     .sort(query ? (a, b) => ranks.get(a) - ranks.get(b) || compare(a, b) : compare);

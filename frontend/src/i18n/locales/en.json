@@ -3519,5 +3519,14 @@
     "one": "{title}: {n} volume missing ({volumes})",
     "other": "{title}: {n} volumes missing ({volumes})"
   },
-  "„{title}“ öffnen": "Open “{title}”"
+  "„{title}“ öffnen": "Open “{title}”",
+  "Ich": "Me",
+  "Person": "Person",
+  "Setze Filter und merke sie dir hier für später.": "Set filters and save them here for later.",
+  "Alle Personen": "All people",
+  "Meine Sammlung": "My collection",
+  "Regal und Person: {label}": "Shelf and person: {label}",
+  "Person filtern": "Filter by person",
+  "Zeigt die Reihen, von denen diese Person einen Band besitzt.": "Shows the series in which this person owns a volume.",
+  "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "One shelf, one person: nothing to switch here. Your saved filters are below."
 }

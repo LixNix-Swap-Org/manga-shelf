@@ -7,7 +7,6 @@ import DashboardHeader, { opensCollection } from './components/dashboard/Dashboa
 import MainViewSwitcher from './components/dashboard/MainViewSwitcher';
 import CollectionStats from './components/dashboard/CollectionStats';
 import ContinueReading from './components/dashboard/ContinueReading';
-import SavedFilters from './components/dashboard/SavedFilters';
 import TodoList from './components/dashboard/TodoList';
 import AnimeSearchHits, { animeSearchHits, ANIME_SEARCH_MIN_CHARS } from './components/dashboard/AnimeSearchHits';
 import DashboardFooter from './components/dashboard/DashboardFooter';
@@ -152,7 +151,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     search, setSearch, deferredSearch, statusFilter, setStatusFilter, publisherFilter, setPublisherFilter, sortBy, setSortBy,
     viewMode, setViewMode, availablePublishers, filterCounts, statusTabs, filtered, totalSeries, totalOwnedVolumes,
     totalCollectionValue, completedSeries, collectFilter, setCollectFilter, collectCounts, authorFilter, setAuthorFilter,
-    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter, shelfFilter, setShelfFilter, availableShelves,
+    groupBy, setGroupBy, groups, availableTags, tagFilter, setTagFilter, availableLanguages, languageFilter, setLanguageFilter, shelfFilter, setShelfFilter, availableShelves, personFilter, setPersonFilter, availablePersons,
     shelves, otherCurrencyTotals
   } = useCollectionFilters(mangas, {
     loading: loading || refreshing, userId: user?.id, url: filterUrl, shelvesEnabled: !isOfflineMode, loadShelfRoles: canEdit && !isOfflineMode
@@ -694,23 +693,29 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           availableShelves={availableShelves}
           shelfFilter={shelfFilter}
           setShelfFilter={setShelfFilter}
-        />
-        <SavedFilters
+          availablePersons={availablePersons}
+          personFilter={personFilter}
+          setPersonFilter={setPersonFilter}
           userId={user?.id}
-          shelves={availableShelves}
-          current={{ status: statusFilter, publisher: publisherFilter, collect: collectFilter, author: authorFilter, tags: tagFilter, lang: languageFilter, shelf: shelfFilter, sort: sortBy, group: groupBy }}
-          filtersActive={statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter)
-            || (Array.isArray(tagFilter) && tagFilter.length > 0) || languageFilter !== 'ALL' || shelfFilter !== 'ALL'}
-          apply={(f) => {
-            setStatusFilter(f.status);
-            setPublisherFilter(f.publisher);
-            setCollectFilter(f.collect);
-            setAuthorFilter(f.author);
-            setTagFilter(f.tags);
-            setLanguageFilter(f.lang);
-            setShelfFilter(f.shelf);
-            setSortBy(f.sort);
-            setGroupBy(f.group);
+          saved={{
+            userId: user?.id,
+            shelves: availableShelves,
+            persons: availablePersons,
+            current: { status: statusFilter, publisher: publisherFilter, collect: collectFilter, author: authorFilter, tags: tagFilter, lang: languageFilter, shelf: shelfFilter, person: personFilter, sort: sortBy, group: groupBy },
+            filtersActive: statusFilter !== 'ALL' || publisherFilter !== 'ALL' || collectFilter !== 'ALL' || Boolean(authorFilter)
+              || (Array.isArray(tagFilter) && tagFilter.length > 0) || languageFilter !== 'ALL' || shelfFilter !== 'ALL' || personFilter !== 'ALL',
+            apply: (f) => {
+              setStatusFilter(f.status);
+              setPublisherFilter(f.publisher);
+              setCollectFilter(f.collect);
+              setAuthorFilter(f.author);
+              setTagFilter(f.tags);
+              setLanguageFilter(f.lang);
+              setShelfFilter(f.shelf);
+              setPersonFilter(f.person || 'ALL');
+              setSortBy(f.sort);
+              setGroupBy(f.group);
+            }
           }}
         />
         <AnimeSearchHits hits={animeHits} onOpen={handleOpenAnime} onShowAll={() => setView(ANIME_VIEW)} />
