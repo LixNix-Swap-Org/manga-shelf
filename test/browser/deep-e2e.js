@@ -211,7 +211,7 @@ async function shelfProblems(page, minEntries = 26) {
  */
 async function languageSwitch(page, snap = async () => {}) {
     await clickAccountEntry(page, '#btn-change-password');
-    await clickSelector(page, '#account-tab-language');
+    await clickSelector(page, '#account-tab-general');
     const languageSelect = '[role="dialog"] [role="tabpanel"] select';
     await page.waitForSelector(languageSelect, { visible: true, timeout: 5000 });
     const toEnglish = waitForApi(page, 'PUT', '/api/auth/profile');
@@ -228,7 +228,7 @@ async function languageSwitch(page, snap = async () => {}) {
     await page.reload({ waitUntil: 'networkidle0' });
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'en', 'the choice survives a reload');
     await clickAccountEntry(page, '#btn-change-password');
-    await clickSelector(page, '#account-tab-language');
+    await clickSelector(page, '#account-tab-general');
     await page.waitForSelector(languageSelect, { visible: true, timeout: 5000 });
     const toDevice = waitForApi(page, 'PUT', '/api/auth/profile');
     await page.select(languageSelect, '');

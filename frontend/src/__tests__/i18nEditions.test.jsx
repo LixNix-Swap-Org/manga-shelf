@@ -384,7 +384,7 @@ describe('account default language', () => {
     const fetchFn = mockFetch({
       'PUT /api/auth/profile': () => json(200, { user: { id: 1, username: 'anna', locale: null, default_language: 'en' } })
     });
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'editor' }} initialTab="language" />);
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'editor' }} initialTab="general" />);
     const select = screen.getByLabelText('Standardsprache deiner Ausgaben');
     expect(select.value).toBe('de');
     fireEvent.change(select, { target: { value: 'en' } });
@@ -395,7 +395,7 @@ describe('account default language', () => {
 
   it('a refused change keeps the old language and shows the server message', async () => {
     mockFetch({ 'PUT /api/auth/profile': () => json(400, { error: 'Ungültiger Sprachcode (zwei Buchstaben, z. B. de)', code: 'LANGUAGE_INVALID' }) });
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'editor' }} initialTab="language" />);
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'editor' }} initialTab="general" />);
     fireEvent.change(screen.getByLabelText('Standardsprache deiner Ausgaben'), { target: { value: 'ja' } });
     expect((await screen.findByRole('alert')).textContent).toContain('Ungültiger Sprachcode');
     expect(getDefaultLanguage()).toBe('de');

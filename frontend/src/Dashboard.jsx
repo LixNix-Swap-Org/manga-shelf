@@ -121,7 +121,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const {
     networkOffline, setNetworkOffline, isOfflineMode, offlineCopyAt, refreshingCopy, refreshError, handleRefreshOfflineCopy
   } = useOfflineStatus({ user, onOnlineRef });
-  // "Zu erledigen" can be switched off per account (Konto & Sprache); unknown counts as on
+  // "Zu erledigen" can be switched off per account (Einstellungen, Allgemein); unknown counts as on
   const accountDefaults = useAccountDefaults({ enabled: !isOfflineMode && Boolean(user) });
   const showTodo = accountDefaults.showTodo !== false;
 

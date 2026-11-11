@@ -15,7 +15,7 @@ export function adminSections({
       id: 'account',
       title: t('Konto'),
       entries: [
-        !offline && { id: 'btn-admin-account', Icon: Settings, label: t('Konto & Sprache'), hint: local ? t('API-Schlüssel, Sprache und Privatsphäre') : t('Passwort, API-Schlüssel, Sprache und Privatsphäre'), run: onAccount },
+        !offline && { id: 'btn-admin-account', Icon: Settings, label: t('Einstellungen'), hint: local ? t('Sprache, Privatsphäre und Dienste') : t('Sprache, Privatsphäre, Dienste und Konto'), run: onAccount },
         onInstall && { id: 'btn-admin-install', Icon: Download, label: t('App installieren'), hint: t('MangaShelf als App installieren'), run: onInstall }
       ]
     },

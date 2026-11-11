@@ -209,6 +209,18 @@ router.put('/auth/password', requireAuth, passwordChangeLimiter, async (req, res
     res.json({ success: true, ...issueSession(req, res, { ...user, password_changed_at: outcome.version }) });
 });
 
+// "Auf anderen Geräten abmelden": a new session version ends every session of the caller, this one continues with a
+// fresh token. The password and the calendar feed addresses stay (a calendar is no signed-in device).
+router.post('/auth/logout-others', requireAuth, passwordChangeLimiter, (req, res) => {
+    const row = runTransaction(() => {
+        if (bumpSessionVersion(req.user.id) === null) return null;
+        return db.prepare('SELECT id, username, role, password_changed_at FROM users WHERE id = ?').get(req.user.id);
+    });
+    if (!row) return authGone(res);
+    log.info('Andere Sitzungen beendet', { user: row.username, auth_scheme: req.authScheme, ip: clientIp(req) });
+    res.json({ success: true, ...issueSession(req, res, row) });
+});
+
 // Ends this session for good (also copies of the token); works without a valid token and always clears the cookie
 router.post('/auth/logout', (req, res) => {
     clearAuthCookie(res);

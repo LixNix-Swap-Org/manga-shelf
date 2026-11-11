@@ -202,9 +202,9 @@ const renderHeader = (overrides) => {
 };
 
 describe('DashboardHeader', () => {
-  it('the menu entry of the account dialog names the language too (id unchanged)', () => {
+  it('the menu entry of the account dialog is called "Einstellungen" (id unchanged)', () => {
     renderHeader({ mobileMenuOpen: true });
-    expect(document.getElementById('btn-mobile-menu-password').textContent).toBe(' Konto & Sprache');
+    expect(document.getElementById('btn-mobile-menu-password').textContent).toBe(' Einstellungen');
   });
 
   it('Verwaltung offers CSV to editors and visitors, backups stay admin-only', () => {
@@ -266,7 +266,7 @@ describe('DashboardHeader', () => {
     expect(screen.queryByRole('dialog', { name: 'Sicherung' })).toBeNull();
     fireEvent.click(document.getElementById('btn-account-menu'));
     expect(document.getElementById('btn-logout').textContent).toContain('Sammlung schließen');
-    expect(document.getElementById('btn-change-password').getAttribute('title')).toBe('Konto: API-Schlüssel');
+    expect(document.getElementById('btn-change-password').getAttribute('title')).toBe('Sprache, Privatsphäre und Dienste');
 
     await openAdmin();
     fireEvent.click(document.getElementById('btn-admin-backups'));
@@ -898,7 +898,7 @@ describe('Dashboard: desktop menu "Quellen & Schlüssel…" while the shelf is m
     expect(screen.queryByRole('dialog', { name: 'Konto' })).toBeNull();
 
     expect(fire('keys')).toBe(false);
-    expect((await screen.findByRole('dialog', { name: 'Konto' })).textContent).toBe('Konto-Tab keys');
+    expect((await screen.findByRole('dialog', { name: 'Konto' })).textContent).toBe('Konto-Tab services');
     expect(screen.getByTestId('location').textContent).toBe(before);
 
     view.unmount();

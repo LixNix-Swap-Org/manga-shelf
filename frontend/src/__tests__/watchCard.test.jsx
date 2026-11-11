@@ -320,7 +320,7 @@ describe('where the card shows up', () => {
   }));
   const openKeys = async (user) => {
     serve();
-    render(<AccountModal isOpen onClose={vi.fn()} user={user} initialTab="keys" />);
+    render(<AccountModal isOpen onClose={vi.fn()} user={user} initialTab="services" />);
     await waitFor(() => expect(screen.queryByText('Wird geladen…')).toBeNull());
   };
 

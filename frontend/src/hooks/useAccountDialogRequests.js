@@ -8,14 +8,14 @@ export const OPEN_ACCOUNT_EVENT = 'mangashelf:open-account';
 
 export default function useAccountDialogRequests({ location, navigate }) {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [accountTab, setAccountTab] = useState('password');
+  const [accountTab, setAccountTab] = useState('general');
   const handleOpenPasswordModal = () => {
-    setAccountTab('password');
+    setAccountTab('general');
     setShowPasswordModal(true);
   };
 
   const openApiKeys = () => {
-    setAccountTab('keys');
+    setAccountTab('services');
     setShowPasswordModal(true);
   };
   // App sends the desktop menu "Quellen & Schlüssel…" here: as an in-page event while the shelf is mounted (no history
@@ -24,7 +24,7 @@ export default function useAccountDialogRequests({ location, navigate }) {
     const onOpenAccount = (event) => {
       if (event.detail !== 'keys') return;
       event.preventDefault();
-      setAccountTab('keys');
+      setAccountTab('services');
       setShowPasswordModal(true);
     };
     window.addEventListener(OPEN_ACCOUNT_EVENT, onOpenAccount);

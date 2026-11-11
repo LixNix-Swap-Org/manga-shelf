@@ -159,8 +159,8 @@ describe('preference', () => {
   });
 
   it('the account dialog reopen mark is taken once', () => {
-    sessionStorage.setItem('mangashelf_reopen_account', 'language');
-    expect(takeReopenAccount()).toBe('language');
+    sessionStorage.setItem('mangashelf_reopen_account', 'general');
+    expect(takeReopenAccount()).toBe('general');
     expect(takeReopenAccount()).toBe(null);
   });
 });
@@ -181,14 +181,14 @@ describe('switch UI', () => {
     expect(localStorage.getItem(LOCALE_KEY)).toBe('en');
   });
 
-  it('the account dialog has a third tab "Sprache" that marks itself for reopening before the switch', async () => {
+  it('the settings dialog has the language on its tab "Allgemein", which marks itself for reopening before the switch', async () => {
     vi.stubGlobal('fetch', routes({ 'PUT /api/auth/profile': json(200, { user: {} }) }));
-    render(<><AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="language" /><Toaster /></>);
-    expect(screen.getByRole('dialog', { name: 'Sprache' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Sprache' }).getAttribute('aria-selected')).toBe('true');
+    render(<><AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="general" /><Toaster /></>);
+    expect(screen.getByRole('dialog', { name: 'Einstellungen' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Allgemein' }).getAttribute('aria-selected')).toBe('true');
     await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Sprache' }), { target: { value: 'en' } }); });
     await waitFor(() => expect(getLanguage()).toBe('en'));
-    expect(sessionStorage.getItem('mangashelf_reopen_account')).toBe('language');
+    expect(sessionStorage.getItem('mangashelf_reopen_account')).toBe('general');
   });
 });
 
@@ -256,7 +256,7 @@ describe('LanguageSelect switching', () => {
     const fetchMock = routes({ 'PUT /api/auth/profile': json(200, { user: {} }) });
     vi.stubGlobal('fetch', fetchMock);
     setLanguageTarget({ id: 2, username: 'ben' });
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="language" />);
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="general" />);
     await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Sprache' }), { target: { value: 'de' } }); });
     await waitFor(() => expect(putCalls(fetchMock)).toEqual([{ locale: 'de' }]));
     expect(getLanguage()).toBe('de');
@@ -270,7 +270,7 @@ describe('LanguageSelect switching', () => {
     await act(async () => { fireEvent.change(screen.getByLabelText('Sprache'), { target: { value: 'en' } }); });
     await waitFor(() => expect(getLanguage()).toBe('en'));
     first.unmount();
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="language" />);
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="general" />);
     // the tab also holds the default edition language select (wave I18N-D)
     expect(document.activeElement).toBe(screen.getAllByRole('combobox')[0]);
     expect(takeFocusLanguage()).toBe(false);

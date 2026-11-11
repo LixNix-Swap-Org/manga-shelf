@@ -58,7 +58,7 @@ describe('token rotation keeps the trusted addresses of the session (app build)'
       'GET /api/sources/guides': () => json(200, []),
       'GET /api/auth/api-keys': () => json(200, [])
     });
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="password" />);
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="account" />);
     fireEvent.change(screen.getByLabelText('Aktuelles Passwort'), { target: { value: 'altes-passwort' } });
     fireEvent.change(screen.getByLabelText('Neues Passwort (mind. 8 Zeichen)'), { target: { value: 'neues-passwort' } });
     fireEvent.change(screen.getByLabelText('Neues Passwort wiederholen'), { target: { value: 'neues-passwort' } });
