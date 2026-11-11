@@ -189,7 +189,7 @@ export function writeSetting(key, value) {
 
 const searchIndex = createSearch((anime) => ({
   primary: [anime.title, anime.title_de, anime.title_english, anime.title_romaji, anime.title_native],
-  secondary: [...(anime.studios || []), ...(anime.genres || []), anime.notes]
+  secondary: [...(anime.studios || []), ...(anime.genres || []), anime.notes, anime.my_progress?.notes]
 }));
 
 /** Entries of one kind and one watched language ('all' for each lets everything through). */

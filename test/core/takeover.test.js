@@ -120,6 +120,7 @@ test('a server backup restores in the app, covers included', opts, async () => {
     assert.equal(result.kind, 'backup');
     const count = (sql) => rt.getContext().db.prepare(sql).get().n;
     assert.equal(count("SELECT count(*) AS n FROM app_settings WHERE key LIKE 'calendar_feed:%'"), 0, 'no feed token on the device');
+    assert.equal(count('SELECT count(*) AS n FROM calendar_feeds'), 0, 'no feed token on the device (migration 50)');
     assert.equal(count('SELECT count(*) AS n FROM user_api_credentials'), 0);
     assert.equal(count("SELECT count(*) AS n FROM users WHERE password_hash <> '!local-profile'"), 0, 'no password hash on the device');
     assert.equal(result.profile.username, 'admin');

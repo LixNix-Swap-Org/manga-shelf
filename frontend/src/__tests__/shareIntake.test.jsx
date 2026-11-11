@@ -7,7 +7,7 @@ import { recordToasts } from './toastLog';
 import { writeAnimeCache } from '../utils/animeHelpers';
 import useAnimeList from '../hooks/useAnimeList';
 import useShareIntake from '../hooks/useShareIntake';
-import ShareLinkDialog from '../components/modals/ShareLinkDialog';
+import EpisodeLinkDialog from '../components/modals/EpisodeLinkDialog';
 import { findStreamingLink, readClipboardText, SHARE_TEXTS, displaySeriesTitle } from '../utils/shareIntake';
 import {
   buildShareLink, parseShareLink, receiveDeepLink, takePendingDeepLink, takePendingShare, hasPendingShare, DEEP_LINK_EVENT,
@@ -80,7 +80,7 @@ function Harness({ user = { id: 1, username: 'anna', role: 'editor' }, canEdit =
     <>
       <button type="button" onClick={() => share.paste()}>Link einfügen</button>
       {share.state && (
-        <ShareLinkDialog
+        <EpisodeLinkDialog
           state={share.state}
           list={anime.list}
           listLoaded={anime.loaded}
@@ -197,7 +197,7 @@ describe('deep links', () => {
   });
 });
 
-describe('ShareLinkDialog', () => {
+describe('EpisodeLinkDialog', () => {
   it('"Ja, gesehen" saves the episode with the link and the series, and "Rückgängig" restores the old counter', async () => {
     const api = stubApi();
     await loadHarness();

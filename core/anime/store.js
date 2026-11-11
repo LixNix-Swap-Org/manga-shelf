@@ -187,8 +187,10 @@ function entryOf(row, nowMs) {
         spoken_languages: parseJson(row.spoken_languages, []),
         seasons: parseJson(row.seasons, []),
         custom_seasons: episodeMarks.parseSeasons(row.custom_seasons),
-        tags: parseJson(row.tags, []),
+        // tags (anime_tags, migration 49) are added by the handlers: core/anime/tags.js
         urls: { ...urls, tmdb: urls.tmdb ?? null, imdb: urls.imdb ?? null },
+        // the note of an entry from before migration 49 that nobody had on their list yet (writeProgress hands it to the
+        // first person who adds it); own notes are in my_progress
         notes: row.notes,
         manual: !row.anilist_id && !row.mal_id && !row.tmdb_id,
         meta_source: row.meta_source,

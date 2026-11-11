@@ -60,7 +60,7 @@ function watchedAfter(current, change, total, monotonic) {
 // `rating_visibility` is the change's; without one the user's default (users.default_anime_visibility) applies to a new row
 // and to a row that gets its first score or episode score with this change, any other row keeps its visibility.
 function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
-    const anime = ctx.db.prepare('SELECT id, episodes FROM animes WHERE id = ?').get(animeId);
+    const anime = ctx.db.prepare('SELECT id, episodes, notes FROM animes WHERE id = ?').get(animeId);
     if (!anime) return null;
     const stored = readProgress(ctx, animeId, userId);
     const current = stored
@@ -111,6 +111,10 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
         visibility = (u && u.v) || 'public';
     }
     const comment = change.public_comment === undefined ? current.public_comment ?? null : change.public_comment;
+    // the note of an entry from before migration 49 that nobody had on their list goes to the first person who adds it
+    const legacyNote = !stored && anime.notes && anime.notes.trim() ? anime.notes : null;
+    let notes = change.notes === undefined ? current.notes : change.notes;
+    if (legacyNote) notes = notes && notes.trim() ? (notes.includes(legacyNote) ? notes : `${legacyNote}\n${notes}`) : legacyNote;
     ctx.db.prepare(`
         INSERT INTO anime_progress (anime_id, user_id, status, episodes_watched, score, notes, started_at, finished_at, updated_at, resume_url, resume_episode,
             audio_language, subtitle_language, watched_episodes, episode_scores, rating_visibility, public_comment)
@@ -121,8 +125,8 @@ function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {})
             audio_language = excluded.audio_language, subtitle_language = excluded.subtitle_language,
             watched_episodes = excluded.watched_episodes, episode_scores = excluded.episode_scores,
             rating_visibility = excluded.rating_visibility, public_comment = excluded.public_comment
-    `).run(animeId, userId, status, episodes, score,
-        change.notes === undefined ? current.notes : change.notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle, marksColumn, scoresColumn, visibility, comment);
+    `).run(animeId, userId, status, episodes, score, notes, startedAt, finishedAt, sqlNow(ctx), resumeUrl, resumeEpisode, audio, subtitle, marksColumn, scoresColumn, visibility, comment);
+    if (legacyNote) ctx.db.prepare('UPDATE animes SET notes = NULL WHERE id = ?').run(animeId);
     return readProgress(ctx, animeId, userId);
 }
 
