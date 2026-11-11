@@ -3735,5 +3735,12 @@
   "ohne Verwalter": "sin gestor",
   "Zuletzt geändert von {name} am {date}": "Último cambio por {name} el {date}",
   "Zuletzt geändert von {name}": "Último cambio por {name}",
-  "Zuletzt geändert am {date}": "Último cambio el {date}"
+  "Zuletzt geändert am {date}": "Último cambio el {date}",
+  "{name} · Exemplar {n}": "{name} · ejemplar {n}",
+  "Entfernen – Exemplar von {owner}": "Quitar – ejemplar de {owner}",
+  "Exemplar entfernen": "Quitar ejemplar",
+  "Weiteres Exemplar": "Otro ejemplar",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Márcalo primero como tuyo y luego añade otro ejemplar",
+  "Höchstens {max} Exemplare pro Person": "Como máximo {max} ejemplares por persona",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "El último ejemplar se quita en «Propietarios»"
 }

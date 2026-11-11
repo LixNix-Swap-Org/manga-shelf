@@ -3521,5 +3521,12 @@
   "ohne Verwalter": "관리자 없음",
   "Zuletzt geändert von {name} am {date}": "마지막 수정: {name} ({date})",
   "Zuletzt geändert von {name}": "마지막 수정: {name}",
-  "Zuletzt geändert am {date}": "마지막 수정: {date}"
+  "Zuletzt geändert am {date}": "마지막 수정: {date}",
+  "{name} · Exemplar {n}": "{name} · {n}번째 권",
+  "Entfernen – Exemplar von {owner}": "삭제 – {owner}의 권",
+  "Exemplar entfernen": "이 권 삭제",
+  "Weiteres Exemplar": "한 권 더",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "먼저 소유로 표시한 뒤 한 권 더 추가하세요",
+  "Höchstens {max} Exemplare pro Person": "1인당 최대 {max}권",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "마지막 권은 „소유자“에서 제거합니다"
 }

@@ -6,7 +6,7 @@ const { TRASH_RETENTION_DAYS, sqlTimestamp } = require('../lib/trash');
 const { findDuplicate, duplicateError } = require('./volumes');
 const { OWNED_STATUS, addOwner, syncStatusWithOwners } = require('../lib/owners');
 const { addRead, setChapterProgress } = require('../lib/marks');
-const { addCopy, hasOwner, dropHouseholdCopies } = require('../lib/copies');
+const { addCopy, hasOwner, dropHouseholdCopies, restoreExtraCopies } = require('../lib/copies');
 const access = require('../lib/access');
 const animeLinks = require('../lib/animeLinks');
 const { qstr } = require('../lib/query');
@@ -130,7 +130,7 @@ function insertRow(ctx, table, columns, row, overrides = {}) {
 
 // Re-inserts volumes with their owners and reads, keeping only columns the current schema still has. Marks come back
 // for members of `shelfId` only: a user deleted meanwhile or no longer in the shelf takes their ownership and reads along.
-function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
+function restoreVolumeRows(ctx, volumes, owners, reads, shelfId, extraCopies = []) {
     const volumeCols = columnsOf(ctx, 'volumes');
     volumeCols.delete('number_sort');
     const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
@@ -151,6 +151,8 @@ function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
     }
     // the catalog usually still holds these marks (they stay there, see core/lib/trash.js); an entry trashed before
     // migration 43 brings them back. A mark the catalog has kept its date.
+    // further copies of a person (migration 56) come back with their first one
+    restoreExtraCopies(ctx.db, (Array.isArray(extraCopies) ? extraCopies : []).filter(c => restoredIds.has(c.volume_id)));
     for (const r of reads) if (restoredIds.has(r.volume_id) && isMember(r.user_id)) addRead(ctx.db, r.volume_id, r.user_id, r.read_at ?? null);
     // an owned volume left without owners goes to the restoring admin (a member: restoring needs editor rights there);
     // otherwise one whose owners could not come back is missing, and one that had none keeps its household copy
@@ -203,7 +205,7 @@ function restoreManga(ctx, entry, payload) {
             OR EXISTS (SELECT 1 FROM anime_work_links l WHERE l.work_id = w.id AND l.origin = 'manual' AND l.hidden = 0))`).get(manga.work_key)) ? manga.work_key : null;
     edition.shelf_id = restoreShelf(ctx, entry, manga);
     insertRow(ctx, 'mangas', columnsOf(ctx, 'mangas'), manga, { owned_volumes: 0, updated_by: updatedBy, ...edition });
-    restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || [], edition.shelf_id);
+    restoreVolumeRows(ctx, free, payload.owners || [], payload.reads || [], edition.shelf_id, payload.extra_copies);
     // chapter progress comes back for members of the shelf only, like reads; a chapter the catalog kept stays
     const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
     for (const c of Array.isArray(payload.chapters) ? payload.chapters : []) {
@@ -247,7 +249,7 @@ function restoreVolume(ctx, entry, payload) {
     const type = volume.type || 'volume';
     const duplicate = findDuplicate(ctx, volume.manga_id, volume.volume_number, type);
     if (duplicate) throw duplicateError(type, volume.volume_number, duplicate);
-    restoreVolumeRows(ctx, [volume], payload.owners || [], payload.reads || [], shelfId);
+    restoreVolumeRows(ctx, [volume], payload.owners || [], payload.reads || [], shelfId, payload.extra_copies);
 }
 
 /** Puts a series or volume back with its original ids, owners, reads and chapter progress (only of users who are members of its shelf). */

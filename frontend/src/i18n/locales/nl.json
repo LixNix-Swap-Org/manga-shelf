@@ -3628,5 +3628,12 @@
   "ohne Verwalter": "geen beheerder",
   "Zuletzt geändert von {name} am {date}": "Laatst gewijzigd door {name} op {date}",
   "Zuletzt geändert von {name}": "Laatst gewijzigd door {name}",
-  "Zuletzt geändert am {date}": "Laatst gewijzigd op {date}"
+  "Zuletzt geändert am {date}": "Laatst gewijzigd op {date}",
+  "{name} · Exemplar {n}": "{name} · exemplaar {n}",
+  "Entfernen – Exemplar von {owner}": "Verwijderen – exemplaar van {owner}",
+  "Exemplar entfernen": "Exemplaar verwijderen",
+  "Weiteres Exemplar": "Nog een exemplaar",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Markeer het eerst als in bezit en voeg dan nog een exemplaar toe",
+  "Höchstens {max} Exemplare pro Person": "Hoogstens {max} exemplaren per persoon",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "Het laatste exemplaar verwijder je onder „Eigenaren”"
 }

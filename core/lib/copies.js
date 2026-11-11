@@ -6,7 +6,8 @@
 //   * status 'Vorhanden' without a copy adds a household copy, any other status removes the copies.
 // The legacy status 'Gelesen' is left to core/lib/owners.js (convertLegacyRead). volume_owners is a read-only view of the
 // personal copies in the old shape (volume_id, user_id, price, purchase_date, condition, created_at, rowid = copy id).
-// Until the UI knows several copies per person, ux_volume_copies_owner allows one personal copy per volume and person.
+// Since migration 56 a person may hold several copies of a volume ("Weiteres Exemplar"); volume_owners shows their
+// first one (the lowest id), the helpers that take a person change that first copy.
 
 const LEGACY_READ = "lower(trim(COALESCE({s}, ''))) = 'gelesen'";
 const legacy = (col) => LEGACY_READ.replace('{s}', col);
@@ -39,6 +40,14 @@ const OWNERS_VIEW_LENT_SQL = `
         SELECT volume_id, owner_user_id AS user_id, purchase_price AS price, purchase_date, condition, created_at, id AS rowid,
                lent_to_user_id, lent_to_name, lent_at
         FROM volume_copies WHERE owner_user_id IS NOT NULL;`;
+
+// migration 56: one row per person, their first copy (several copies per person are allowed from then on)
+const OWNERS_VIEW_FIRST_SQL = `
+    CREATE VIEW IF NOT EXISTS volume_owners AS
+        SELECT volume_id, owner_user_id AS user_id, purchase_price AS price, purchase_date, condition, created_at, id AS rowid,
+               lent_to_user_id, lent_to_name, lent_at
+        FROM volume_copies c WHERE owner_user_id IS NOT NULL
+          AND id = (SELECT MIN(f.id) FROM volume_copies f WHERE f.volume_id = c.volume_id AND f.owner_user_id = c.owner_user_id);`;
 
 // the lending columns of migration 47; a restored row names an account only while it still exists
 const LENT_COLUMNS = ['lent_to_user_id', 'lent_to_name', 'lent_at'];
@@ -97,6 +106,8 @@ const copiesInPlace = (d) => Boolean(d.prepare("SELECT 1 FROM sqlite_master WHER
  * from a trash entry or an undo (migration 47), { lent_to_user_id, lent_to_name, lent_at }. Returns true when added.
  */
 function addCopy(db, volumeId, userId, extra = {}) {
+    // INSERT OR IGNORE once leaned on the unique index (gone with migration 56); a person's first copy is added once
+    if (userId !== null && userId !== undefined && hasCopy(db, volumeId, userId)) return false;
     const base = [volumeId, userId, extra.price ?? null, extra.purchase_date ?? null, extra.condition ?? null, extra.created_at ?? null];
     if (hasLending(extra)) {
         return cached(db, `INSERT OR IGNORE INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at,
@@ -138,11 +149,14 @@ const dropHouseholdCopies = (db, volumeId) => cached(db, 'DELETE FROM volume_cop
 // the volume_owners columns a caller may change, as volume_copies columns
 const COPY_COLUMN = { price: 'purchase_price', purchase_date: 'purchase_date', condition: 'condition', created_at: 'created_at' };
 
-/** Sets fields of the personal copy of `userId` ({ price, purchase_date, condition } in the old owner names). */
+// the first copy of a person on a volume (params: volume_id, owner_user_id)
+const FIRST_COPY = 'SELECT MIN(id) FROM volume_copies WHERE volume_id = ? AND owner_user_id = ?';
+
+/** Sets fields of the (first) personal copy of `userId` ({ price, purchase_date, condition } in the old owner names). */
 function updateCopy(db, volumeId, userId, fields) {
     const keys = Object.keys(fields).filter(k => COPY_COLUMN[k]);
     if (!keys.length) return;
-    db.prepare(`UPDATE volume_copies SET ${keys.map(k => `${COPY_COLUMN[k]} = ?`).join(', ')} WHERE volume_id = ? AND owner_user_id = ?`)
+    db.prepare(`UPDATE volume_copies SET ${keys.map(k => `${COPY_COLUMN[k]} = ?`).join(', ')} WHERE id = (${FIRST_COPY})`)
         .run(...keys.map(k => fields[k] ?? null), volumeId, userId);
 }
 
@@ -160,15 +174,17 @@ function followVolumeValue(db, volumeId, column, oldValue, newValue) {
  * without owners becomes 'Fehlt'.
  */
 function setOwners(db, volumeId, owners, { household = true } = {}) {
-    const upsert = db.prepare(`INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at)
-        VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
-        ON CONFLICT (volume_id, owner_user_id) WHERE owner_user_id IS NOT NULL DO UPDATE SET purchase_price = excluded.purchase_price,
-            purchase_date = excluded.purchase_date, condition = excluded.condition, created_at = excluded.created_at`);
+    // a person's first copy takes the row; further copies of theirs stay as they are (migration 56)
+    const insert = db.prepare(`INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at)
+        VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`);
+    const update = db.prepare(`UPDATE volume_copies SET purchase_price = ?, purchase_date = ?, condition = ?, created_at = COALESCE(?, CURRENT_TIMESTAMP)
+        WHERE id = (${FIRST_COPY})`);
     for (const o of owners) {
-        upsert.run(volumeId, o.user_id, o.price ?? null, o.purchase_date ?? null, o.condition ?? null, o.created_at ?? null);
+        const row = [o.price ?? null, o.purchase_date ?? null, o.condition ?? null, o.created_at ?? null];
+        if (update.run(...row, volumeId, o.user_id).changes === 0) insert.run(volumeId, o.user_id, ...row);
         // the lending of the snapshot comes back with the copy (rows of a snapshot from before migration 47 have none)
         if (hasLending(o)) {
-            db.prepare('UPDATE volume_copies SET lent_to_user_id = ?, lent_to_name = ?, lent_at = ? WHERE volume_id = ? AND owner_user_id = ?')
+            db.prepare(`UPDATE volume_copies SET lent_to_user_id = ?, lent_to_name = ?, lent_at = ? WHERE id = (${FIRST_COPY})`)
                 .run(lentUser(db, o.lent_to_user_id), o.lent_to_name ?? null, o.lent_at ?? null, volumeId, o.user_id);
         }
     }
@@ -185,6 +201,43 @@ function setOwners(db, volumeId, owners, { household = true } = {}) {
     // NOT IN over an empty list would be NOT IN (NULL), which keeps every row
     const others = keep.length ? ` AND owner_user_id NOT IN (${keep.map(() => '?').join(',')})` : '';
     db.prepare(`DELETE FROM volume_copies WHERE volume_id = ? AND owner_user_id IS NOT NULL${others}`).run(volumeId, ...keep);
+}
+
+/**
+ * One more personal copy of `userId` (migration 56: "Weiteres Exemplar"); `extra` as for addCopy. Returns the new id,
+ * always a fresh one: it must stay above the person's first copy, which volume_owners finds by the lowest id.
+ */
+function addExtraCopy(db, volumeId, userId, extra = {}) {
+    const result = db.prepare(`INSERT INTO volume_copies (volume_id, owner_user_id, purchase_price, purchase_date, condition, created_at,
+        lent_to_user_id, lent_to_name, lent_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?)`)
+        .run(volumeId, userId, extra.price ?? extra.purchase_price ?? null, extra.purchase_date ?? null, extra.condition ?? null,
+            extra.created_at ?? null, lentUser(db, extra.lent_to_user_id), extra.lent_to_name ?? null, extra.lent_at ?? null);
+    return Number(result.lastInsertRowid);
+}
+
+/** The personal copies beyond each person's first on the given volumes (what volume_owners leaves out), oldest first. */
+function extraCopies(db, volumeIds) {
+    const ids = (Array.isArray(volumeIds) ? volumeIds : [volumeIds]).map(Number).filter(Number.isInteger);
+    if (!ids.length) return [];
+    return db.prepare(`
+        SELECT c.id, c.volume_id, c.owner_user_id, c.purchase_price, c.purchase_date, c.condition, c.created_at,
+               c.lent_to_user_id, c.lent_to_name, c.lent_at
+        FROM volume_copies c
+        WHERE c.volume_id IN (${ids.map(() => '?').join(',')}) AND c.owner_user_id IS NOT NULL
+          AND c.id <> (SELECT MIN(f.id) FROM volume_copies f WHERE f.volume_id = c.volume_id AND f.owner_user_id = c.owner_user_id)
+        ORDER BY c.volume_id, c.id`).all(...ids);
+}
+
+/**
+ * Puts snapshot rows of extraCopies back for owners who have their first copy again; a row whose copy is still there
+ * (same id, same owner) is skipped.
+ */
+function restoreExtraCopies(db, rows) {
+    for (const r of Array.isArray(rows) ? rows : []) {
+        if (r.id && db.prepare('SELECT 1 FROM volume_copies WHERE id = ? AND owner_user_id IS ?').get(r.id, r.owner_user_id)) continue;
+        if (!hasCopy(db, r.volume_id, r.owner_user_id)) continue;
+        addExtraCopy(db, r.volume_id, r.owner_user_id, r);
+    }
 }
 
 /**
@@ -230,10 +283,14 @@ module.exports = {
     COPIES_TABLE_SQL,
     OWNERS_VIEW_SQL,
     OWNERS_VIEW_LENT_SQL,
+    OWNERS_VIEW_FIRST_SQL,
     COPY_TRIGGERS,
     COPY_TRIGGERS_SQL,
     copiesInPlace,
     addCopy,
+    addExtraCopy,
+    extraCopies,
+    restoreExtraCopies,
     removeCopy,
     hasCopy,
     hasAnyCopy,

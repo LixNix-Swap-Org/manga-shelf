@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Handshake, Package, Pencil } from 'lucide-react';
+import { Handshake, Package, Pencil, Plus, Trash } from 'lucide-react';
 import { ApiError, apiFetch, readJson } from '../../../utils/api';
 import { formatDate, formatMoney, currencySymbol } from '../../../utils/format';
 import { conditionLabel } from '../../../utils/enumLabels';
@@ -15,6 +15,8 @@ const today = () => {
 };
 
 const NOT_LENT = 'none';
+// the server's limit per person and volume (core/handlers/copies.js MAX_COPIES_PER_PERSON)
+export const MAX_COPIES_PER_PERSON = 5;
 const OTHER_PERSON = 'name';
 
 /** Who may change a copy: its owner, any editor for a household copy, an admin every copy (the server checks again). */
@@ -126,6 +128,28 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
     }
   };
 
+  // "Weiteres Exemplar" (migration 56): one more copy of a volume the user owns already; a copy of several goes alone
+  const request = async (url, options) => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await apiFetch(url, options);
+      const data = (await readJson(res)) ?? {};
+      if (!res.ok) throw new ApiError(serverText(data) || t('Fehler beim Speichern'), { status: res.status, ref: data.ref ?? null });
+      setCopies(data.copies || []);
+      if (onChanged) onChanged(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addCopy = () => request(`/api/volumes/${volumeId}/copies`, { method: 'POST', body: {} });
+  const removeCopy = (copy) => request(`/api/volumes/${volumeId}/copies/${copy.id}`, { method: 'DELETE' });
+  const countOf = (ownerId) => copies.filter(c => c.owner_user_id === ownerId).length;
+  const ownCount = currentUser ? countOf(currentUser.id) : 0;
+  const canAdd = Boolean(canEdit && currentUser && ownCount > 0 && ownCount < MAX_COPIES_PER_PERSON);
+
   const symbol = currencySymbol(currency);
   const others = (accounts || []).filter(a => a.id !== (copies.find(c => c.id === editing)?.owner_user_id));
 
@@ -136,7 +160,10 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
       </span>
       <ul ref={listRef} className="space-y-2" aria-label={t('Exemplare')}>
         {copies.map(copy => {
-          const owner = copy.owner || t('Haushalt');
+          const name = copy.owner || t('Haushalt');
+          const several = copy.owner_user_id !== null && countOf(copy.owner_user_id) > 1;
+          const position = copies.filter(c => c.owner_user_id === copy.owner_user_id).findIndex(c => c.id === copy.id) + 1;
+          const owner = several ? t('{name} · Exemplar {n}', { name, n: position }) : name;
           const facts = [
             copy.price !== null && copy.price !== undefined ? formatMoney(copy.price, currency) : null,
             copy.purchase_date ? formatDate(copy.purchase_date) : null,
@@ -159,15 +186,30 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
                   )}
                 </div>
                 {changeable && editing !== copy.id && (
-                  <button
-                    type="button"
-                    onClick={() => open(copy)}
-                    data-edit
-                    className="hit-44 shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-700 text-slate-300 hover:text-white"
-                    aria-label={t('Bearbeiten – Exemplar von {owner}', { owner })}
-                  >
-                    <Pencil className="w-3 h-3" aria-hidden="true" /> {t('Bearbeiten')}
-                  </button>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {several && (
+                      <button
+                        type="button"
+                        onClick={() => removeCopy(copy)}
+                        disabled={busy}
+                        data-remove
+                        className="hit-44 inline-flex items-center px-2 py-1 rounded-lg border border-slate-700 text-slate-300 hover:text-red-300"
+                        aria-label={t('Entfernen – Exemplar von {owner}', { owner })}
+                        title={t('Exemplar entfernen')}
+                      >
+                        <Trash className="w-3 h-3" aria-hidden="true" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => open(copy)}
+                      data-edit
+                      className="hit-44 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-700 text-slate-300 hover:text-white"
+                      aria-label={t('Bearbeiten – Exemplar von {owner}', { owner })}
+                    >
+                      <Pencil className="w-3 h-3" aria-hidden="true" /> {t('Bearbeiten')}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -234,6 +276,17 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
           );
         })}
       </ul>
+      {editing === null && error && <p role="alert" className="mt-2 text-xs text-red-400">{error}</p>}
+      {canAdd && editing === null && (
+        <button
+          type="button"
+          onClick={addCopy}
+          disabled={busy}
+          className="mt-2 inline-flex items-center gap-1.5 text-xs text-brand-300 hover:text-white"
+        >
+          <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('Weiteres Exemplar')}
+        </button>
+      )}
     </div>
   );
 }

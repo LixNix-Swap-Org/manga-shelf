@@ -2,10 +2,10 @@
 // it (migration 47). PUT /volumes/:id/copies/:copyId changes one copy, GET /copies/lent lists what is lent out and what
 // the caller borrowed.
 const access = require('../lib/access');
-const { badRequest, forbidden, notFound, msg } = require('../errors');
+const { badRequest, conflict, forbidden, notFound, msg } = require('../errors');
 const { isBlank, parsePrice, parseDate, parseCondition } = require('../lib/validate');
 const { zonedToday } = require('../radar');
-const { copiesByVolume } = require('../lib/copies');
+const { copiesByVolume, hasCopy, addExtraCopy } = require('../lib/copies');
 const { touchVolumes } = require('../lib/volumeChanges');
 
 const MAX_NAME = 64;
@@ -79,6 +79,66 @@ function updateCopy(ctx, { params, body }) {
     return { body: { success: true, copy: copies.find(c => c.id === copy.id) || null, copies } };
 }
 
+const MAX_COPIES_PER_PERSON = 5;
+
+// POST /volumes/:id/copies { user_id?, price?, purchase_date?, condition? }: one more copy of a volume the person owns
+// already (migration 56, "Weiteres Exemplar"); the first copy comes from POST /volumes/:id/owners. An admin may add one for
+// a member of the shelf, like ownership.
+function addCopy(ctx, { params, body }) {
+    const volumeId = access.parseId(params.id);
+    if (!volumeId) throw notFound('Band');
+    const vol = ctx.db.prepare('SELECT id, price, condition FROM volumes WHERE id = ?').get(volumeId);
+    if (!vol) throw notFound('Band');
+    const userId = access.resolveTargetUser(ctx, body?.user_id, access.volumeAccess(ctx, volumeId, 'editor'));
+    const price = parsePrice(body?.price);
+    if (price.error) throw badRequest('Ungültiger Preis');
+    const date = parseDate(body?.purchase_date);
+    if (date.error) throw badRequest('Ungültiges Datum (erwartet: JJJJ-MM-TT)');
+    const hasCondition = Object.prototype.hasOwnProperty.call(body || {}, 'condition');
+    const condition = hasCondition ? parseCondition(body.condition) : { value: vol.condition };
+    if (condition.error) throw badRequest('Ungültiger Zustand');
+    let id;
+    ctx.db.transaction(() => {
+        if (!hasCopy(ctx.db, volumeId, userId)) {
+            throw conflict('Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen', 'COPY_NOT_OWNED');
+        }
+        const count = ctx.db.prepare('SELECT count(*) AS n FROM volume_copies WHERE volume_id = ? AND owner_user_id = ?').get(volumeId, userId).n;
+        if (count >= MAX_COPIES_PER_PERSON) {
+            throw conflict(msg('Höchstens {max} Exemplare pro Person', { max: MAX_COPIES_PER_PERSON }), 'COPY_LIMIT');
+        }
+        id = addExtraCopy(ctx.db, volumeId, userId, {
+            price: price.value ?? vol.price ?? null, purchase_date: date.value ?? null, condition: condition.value ?? null
+        });
+        touchVolumes(ctx, volumeId);
+    });
+    const copies = copiesByVolume(ctx.db, 'c.volume_id = ?', [volumeId]).get(volumeId) || [];
+    return { body: { success: true, copy: copies.find(c => c.id === id) || null, copies } };
+}
+
+// DELETE /volumes/:id/copies/:copyId: removes one of several copies of a person (who may change it, as for PUT); the
+// last copy of a person goes through POST /volumes/:id/owners, which also handles status, dates and undo
+function removeCopy(ctx, { params }) {
+    const volumeId = access.parseId(params.id);
+    const copyId = access.parseId(params.copyId);
+    if (!volumeId || !copyId) throw notFound('Exemplar');
+    access.volumeAccess(ctx, volumeId, 'editor');
+    const copy = ctx.db.prepare('SELECT id, owner_user_id FROM volume_copies WHERE id = ? AND volume_id = ?').get(copyId, volumeId);
+    if (!copy) throw notFound('Exemplar');
+    if (copy.owner_user_id !== null && copy.owner_user_id !== ctx.user.id && ctx.user.role !== 'admin') {
+        throw forbidden('Nur wer das Exemplar besitzt, kann es ändern');
+    }
+    ctx.db.transaction(() => {
+        const sameOwner = copy.owner_user_id === null
+            ? ctx.db.prepare('SELECT count(*) AS n FROM volume_copies WHERE volume_id = ? AND owner_user_id IS NULL').get(volumeId).n
+            : ctx.db.prepare('SELECT count(*) AS n FROM volume_copies WHERE volume_id = ? AND owner_user_id = ?').get(volumeId, copy.owner_user_id).n;
+        if (sameOwner < 2) throw conflict('Das letzte Exemplar wird unter „Besitzer“ entfernt', 'LAST_COPY');
+        ctx.db.prepare('DELETE FROM volume_copies WHERE id = ?').run(copy.id);
+        touchVolumes(ctx, volumeId);
+    });
+    const copies = copiesByVolume(ctx.db, 'c.volume_id = ?', [volumeId]).get(volumeId) || [];
+    return { body: { success: true, copies } };
+}
+
 // GET /copies/lent: { lent_out } = lent copies in the caller's shelves (?shelf_id narrows to one shelf), { borrowed } =
 // copies lent to the caller (also from a shelf the caller does not belong to: the owner named them; manga_id is then null,
 // so nothing links there)
@@ -115,4 +175,4 @@ function lentCopies(ctx, { query } = {}) {
     return { body: { lent_out: lentOut, borrowed } };
 }
 
-module.exports = { updateCopy, lentCopies, readLending };
+module.exports = { updateCopy, addCopy, removeCopy, lentCopies, readLending, MAX_COPIES_PER_PERSON };

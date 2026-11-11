@@ -3521,5 +3521,12 @@
   "ohne Verwalter": "无管理者",
   "Zuletzt geändert von {name} am {date}": "最后由 {name} 于 {date} 修改",
   "Zuletzt geändert von {name}": "最后由 {name} 修改",
-  "Zuletzt geändert am {date}": "最后修改于 {date}"
+  "Zuletzt geändert am {date}": "最后修改于 {date}",
+  "{name} · Exemplar {n}": "{name} · 第 {n} 本",
+  "Entfernen – Exemplar von {owner}": "移除 – {owner} 的这本",
+  "Exemplar entfernen": "移除这本",
+  "Weiteres Exemplar": "再加一本",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "请先标记为已拥有，再添加一本",
+  "Höchstens {max} Exemplare pro Person": "每人最多 {max} 本",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "最后一本请在“拥有者”中移除"
 }

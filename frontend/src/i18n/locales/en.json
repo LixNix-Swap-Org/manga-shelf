@@ -3628,5 +3628,12 @@
   "ohne Verwalter": "no manager",
   "Zuletzt geändert von {name} am {date}": "Last changed by {name} on {date}",
   "Zuletzt geändert von {name}": "Last changed by {name}",
-  "Zuletzt geändert am {date}": "Last changed on {date}"
+  "Zuletzt geändert am {date}": "Last changed on {date}",
+  "{name} · Exemplar {n}": "{name} · copy {n}",
+  "Entfernen – Exemplar von {owner}": "Remove – copy of {owner}",
+  "Exemplar entfernen": "Remove copy",
+  "Weiteres Exemplar": "Another copy",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Mark it as owned first, then add another copy",
+  "Höchstens {max} Exemplare pro Person": "At most {max} copies per person",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "The last copy is removed under “Owners”"
 }

@@ -185,6 +185,15 @@ export function fillFromSnapshot(conn, snapshot) {
           ...(ownCopy?.lent_to ? { lent_to_name: ownCopy.lent_to, lent_at: ownCopy.lent_at ?? null } : {})
         });
       }
+      // further own copies (migration 56) come along
+      if (copies.hasCopy(conn, v.id, me.id)) {
+        for (const c of (v.copies || []).filter((c) => c.owner_user_id === me.id).slice(1)) {
+          copies.addExtraCopy(conn, v.id, me.id, {
+            price: c.price, purchase_date: c.purchase_date, condition: c.condition,
+            ...(c.lent_to ? { lent_to_name: c.lent_to, lent_at: c.lent_at ?? null } : {})
+          });
+        }
+      }
       // the volume insert gave an owned volume a household copy; without an own copy it counts as missing, as before copies
       if (!copies.hasCopy(conn, v.id, me.id)) copies.dropHouseholdCopies(conn, v.id);
       if ((v.read_by || []).includes(me.id)) {

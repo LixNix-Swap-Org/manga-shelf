@@ -3628,5 +3628,12 @@
   "ohne Verwalter": "yönetici yok",
   "Zuletzt geändert von {name} am {date}": "Son değiştiren: {name}, {date}",
   "Zuletzt geändert von {name}": "Son değiştiren: {name}",
-  "Zuletzt geändert am {date}": "Son değişiklik: {date}"
+  "Zuletzt geändert am {date}": "Son değişiklik: {date}",
+  "{name} · Exemplar {n}": "{name} · {n}. kopya",
+  "Entfernen – Exemplar von {owner}": "Kaldır – {owner} kopyası",
+  "Exemplar entfernen": "Kopyayı kaldır",
+  "Weiteres Exemplar": "Bir kopya daha",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Önce sahip olarak işaretleyin, sonra bir kopya daha ekleyin",
+  "Höchstens {max} Exemplare pro Person": "Kişi başına en fazla {max} kopya",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "Son kopya „Sahipler“ bölümünden kaldırılır"
 }

@@ -3735,5 +3735,12 @@
   "ohne Verwalter": "senza gestore",
   "Zuletzt geändert von {name} am {date}": "Ultima modifica di {name} il {date}",
   "Zuletzt geändert von {name}": "Ultima modifica di {name}",
-  "Zuletzt geändert am {date}": "Ultima modifica il {date}"
+  "Zuletzt geändert am {date}": "Ultima modifica il {date}",
+  "{name} · Exemplar {n}": "{name} · copia {n}",
+  "Entfernen – Exemplar von {owner}": "Rimuovi – copia di {owner}",
+  "Exemplar entfernen": "Rimuovi copia",
+  "Weiteres Exemplar": "Un’altra copia",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Segnalo prima come posseduto, poi aggiungi un’altra copia",
+  "Höchstens {max} Exemplare pro Person": "Al massimo {max} copie per persona",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "L’ultima copia si rimuove in «Proprietari»"
 }

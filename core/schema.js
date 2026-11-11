@@ -7,7 +7,7 @@ const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
 const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL, ADOPT_SERIES_SQL, ADOPT_VOLUME_SQL } = require('./lib/catalog');
 const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
-const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, OWNERS_VIEW_LENT_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
+const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, OWNERS_VIEW_LENT_SQL, OWNERS_VIEW_FIRST_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -1458,6 +1458,21 @@ function migrationList(log = silentLog) {
                 const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
                 if (!cols.has('updated_by')) d.exec('ALTER TABLE volumes ADD COLUMN updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL;');
                 if (!cols.has('updated_at')) d.exec('ALTER TABLE volumes ADD COLUMN updated_at DATETIME;');
+            }
+        },
+        {
+            version: 56,
+            name: 'allow_more_copies',
+            up: (d) => {
+                // a person may own a second copy of the same volume ("Weiteres Exemplar"): the unique index goes, a plain one
+                // keeps the lookups fast. volume_owners stays one row per person (their first copy), so counts, the owner
+                // chips and every reader of the view see people, not copies; the copies list shows each copy.
+                d.exec(`
+                    DROP INDEX IF EXISTS ux_volume_copies_owner;
+                    CREATE INDEX IF NOT EXISTS idx_volume_copies_volume_owner ON volume_copies (volume_id, owner_user_id);
+                    DROP VIEW IF EXISTS volume_owners;
+                    ${OWNERS_VIEW_FIRST_SQL}
+                `);
             }
         }
     ];

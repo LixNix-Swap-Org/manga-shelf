@@ -3735,5 +3735,12 @@
   "ohne Verwalter": "sans gestionnaire",
   "Zuletzt geändert von {name} am {date}": "Dernière modification par {name} le {date}",
   "Zuletzt geändert von {name}": "Dernière modification par {name}",
-  "Zuletzt geändert am {date}": "Dernière modification le {date}"
+  "Zuletzt geändert am {date}": "Dernière modification le {date}",
+  "{name} · Exemplar {n}": "{name} · exemplaire {n}",
+  "Entfernen – Exemplar von {owner}": "Retirer – exemplaire de {owner}",
+  "Exemplar entfernen": "Retirer l’exemplaire",
+  "Weiteres Exemplar": "Autre exemplaire",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Marquez-le d’abord comme possédé, puis ajoutez un autre exemplaire",
+  "Höchstens {max} Exemplare pro Person": "Au plus {max} exemplaires par personne",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "Le dernier exemplaire se retire sous « Propriétaires »"
 }

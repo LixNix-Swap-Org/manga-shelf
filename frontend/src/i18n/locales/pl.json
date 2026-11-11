@@ -3842,5 +3842,12 @@
   "ohne Verwalter": "bez zarządcy",
   "Zuletzt geändert von {name} am {date}": "Ostatnio zmienione przez {name} dnia {date}",
   "Zuletzt geändert von {name}": "Ostatnio zmienione przez {name}",
-  "Zuletzt geändert am {date}": "Ostatnio zmienione dnia {date}"
+  "Zuletzt geändert am {date}": "Ostatnio zmienione dnia {date}",
+  "{name} · Exemplar {n}": "{name} · egzemplarz {n}",
+  "Entfernen – Exemplar von {owner}": "Usuń – egzemplarz {owner}",
+  "Exemplar entfernen": "Usuń egzemplarz",
+  "Weiteres Exemplar": "Kolejny egzemplarz",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Najpierw oznacz jako posiadany, potem dodaj kolejny egzemplarz",
+  "Höchstens {max} Exemplare pro Person": "Najwyżej {max} egzemplarzy na osobę",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "Ostatni egzemplarz usuwa się w „Właściciele”"
 }

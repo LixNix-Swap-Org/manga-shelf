@@ -3842,5 +3842,12 @@
   "ohne Verwalter": "без управляющего",
   "Zuletzt geändert von {name} am {date}": "Последнее изменение: {name}, {date}",
   "Zuletzt geändert von {name}": "Последнее изменение: {name}",
-  "Zuletzt geändert am {date}": "Последнее изменение: {date}"
+  "Zuletzt geändert am {date}": "Последнее изменение: {date}",
+  "{name} · Exemplar {n}": "{name} · экземпляр {n}",
+  "Entfernen – Exemplar von {owner}": "Удалить – экземпляр {owner}",
+  "Exemplar entfernen": "Удалить экземпляр",
+  "Weiteres Exemplar": "Ещё один экземпляр",
+  "Erst als Besitz markieren, dann ein weiteres Exemplar hinzufügen": "Сначала отметьте том как свой, затем добавьте ещё один экземпляр",
+  "Höchstens {max} Exemplare pro Person": "Не больше {max} экземпляров на человека",
+  "Das letzte Exemplar wird unter „Besitzer“ entfernt": "Последний экземпляр убирается в разделе «Владельцы»"
 }
