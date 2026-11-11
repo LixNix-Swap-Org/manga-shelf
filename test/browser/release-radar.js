@@ -80,17 +80,17 @@ const releaseDotted = releaseIso.split('-').reverse().join('.');
         await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle0' });
         await new Promise(r => setTimeout(r, 1000));
         
-        // Click the Release-Radar tab button
+        // Open the Radar tab and make sure it shows the manga releases (not the anime episodes)
         const clicked = await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll('button'));
-            const b = buttons.find(btn => btn.textContent.includes('Release-Radar'));
-            if (b) {
-                b.click();
-                return true;
-            }
-            return false;
+            const tab = document.querySelector('#btn-nav-radar');
+            if (!tab) return false;
+            tab.click();
+            return true;
         });
-        console.log('Clicked Release-Radar tab button:', clicked);
+        console.log('Clicked Radar tab button:', clicked);
+        if (!clicked) throw new Error('Radar tab button #btn-nav-radar not found');
+        await page.waitForSelector('#btn-radar-manga', { visible: true });
+        await page.click('#btn-radar-manga');
         await new Promise(r => setTimeout(r, 1500));
 
         // Switch to "Meine Vorbestellungen & Budget" tab

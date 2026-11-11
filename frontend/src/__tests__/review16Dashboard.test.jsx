@@ -64,6 +64,13 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
+// account menu, then "Verwaltung" (a lazy dialog)
+const openAdmin = async () => {
+  if (!document.getElementById('account-menu')) fireEvent.click(document.getElementById('btn-account-menu'));
+  fireEvent.click(document.getElementById('btn-open-admin'));
+  return screen.findByRole('dialog', { name: 'Verwaltung' });
+};
+
 describe('Dashboard: wiring of round 5', () => {
   it('the navigation state { openAccount: "keys" } opens the keys tab once and is cleared, the view stays', async () => {
     renderAt({ pathname: '/', search: '?view=shopping', state: { openAccount: 'keys' } });
@@ -86,7 +93,8 @@ describe('Dashboard: wiring of round 5', () => {
     const publisherCalls = () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/api/publishers')).length;
     await waitFor(() => expect(publisherCalls()).toBeGreaterThan(0));
     const publishersBefore = publisherCalls();
-    fireEvent.click(document.getElementById('btn-open-backups'));
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-backups'));
     fireEvent.click(await screen.findByRole('button', { name: 'Eingespielt' }));
     await waitFor(() => expect(state.radar.fetchReleaseRadar.mock.calls.length).toBeGreaterThan(radarBefore));
     expect(onLocalReplaced).toHaveBeenCalledTimes(1);
@@ -101,7 +109,8 @@ describe('Dashboard: wiring of round 5', () => {
     const onLocalReplaced = vi.fn(async () => ({ status: 'localFailed', user: null }));
     renderAt('/', { user: { id: 1, username: 'Ich', role: 'admin', local: true }, onLocalReplaced });
     const radarBefore = state.radar.fetchReleaseRadar.mock.calls.length;
-    fireEvent.click(document.getElementById('btn-open-backups'));
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-backups'));
     fireEvent.click(await screen.findByRole('button', { name: 'Eingespielt' }));
     expect(await screen.findByText('Geräteseite')).toBeTruthy();
     expect(state.radar.fetchReleaseRadar.mock.calls.length).toBe(radarBefore);

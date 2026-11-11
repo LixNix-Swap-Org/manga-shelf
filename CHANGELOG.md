@@ -78,6 +78,12 @@
 - A visitor or guest account never becomes the owner of an empty household shelf, so the shelf always keeps someone who can manage it.
 - A new series without a chosen shelf lands in a shelf you own today, also after a shelf was handed over to you or away from you.
 
+### Navigation
+- **Fewer buttons at the top:** the desktop header keeps search, "Neuer Manga", "Statistiken", "App installieren" and an account menu (the initial at the top right). The menu holds "Verwaltung", "Konto & Sprache" and logout.
+- **Verwaltung:** one dialog with four sections (Konto, Personen & Regale, Daten, System) holds everything that stood side by side in the header: users, shelves, backups, CSV, cleanup, trash, publishers and the system page. Each entry opens the same dialog as before, for the same roles.
+- **One Radar tab:** "Release-Radar" and "Anime-Radar" are one tab "Radar" with "Manga-Termine" and "Anime-Folgen". The addresses `?view=radar` and `?view=episodes` keep working.
+- **Phones:** "Mehr" starts with Anime, followed by statistics, "Neuer Manga" (or Radar for readers) and Verwaltung.
+
 ## 3.7.0
 
 ### Before updating

@@ -1,4 +1,4 @@
-import { Library, ShoppingCart, Calendar, Tv, CalendarClock } from 'lucide-react';
+import { Library, ShoppingCart, Calendar, Tv } from 'lucide-react';
 import { t } from '../../i18n/index.js';
 
 const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-1.5 min-[430px]:px-2.5 sm:px-4 py-2 [@media(pointer:coarse)]:py-3.5 rounded-xl text-[11px] min-[430px]:text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
@@ -20,11 +20,14 @@ const Label = ({ full, short }) => (
 );
 
 /**
- * Tabs Sammlung / Einkaufsliste / Release-Radar / Anime / Anime-Radar plus the mode hint next to them. `onSelectView` is Dashboard's
- * setView (state, ?view= and the view's data in one place).
+ * Tabs Sammlung / Einkaufsliste / Anime / Radar plus the mode hint next to them. Radar holds both calendars: the manga
+ * releases (view `radar`) and the anime episodes (view `episodes`), switched by RadarKindSwitch. `onSelectView` is
+ * Dashboard's setView (state, ?view= and the view's data in one place).
  */
 export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCount, animeCount = 0, shoppingData, radarData }) {
+  const isRadar = activeMainView === 'radar' || activeMainView === 'episodes';
   return (
+    <>
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-6">
         <nav aria-label={t('Hauptansicht')} className="flex items-center max-w-full shrink-0 overflow-x-auto overscroll-x-contain bg-slate-900/90 border border-slate-800 p-1 rounded-2xl shadow-inner">
           <button
@@ -54,22 +57,6 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
             )}
           </button>
           <button
-            id="btn-nav-radar"
-            type="button"
-            aria-current={activeMainView === 'radar' ? 'page' : undefined}
-            onClick={() => onSelectView('radar')}
-            className={tabClass(activeMainView === 'radar')}
-          >
-            <Calendar className="w-4 h-4 text-sky-400 hidden sm:block" aria-hidden="true" />
-            {/* i18n-ignore: both props are translated */}
-            <Label full={t('Release-Radar')} short={t('Radar')} />
-            {radarData && radarData.total_releases > 0 && (
-              <span className="bg-sky-500/30 text-sky-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold hidden sm:inline">
-                {radarData.total_releases}
-              </span>
-            )}
-          </button>
-          <button
             id="btn-nav-anime"
             type="button"
             aria-current={activeMainView === 'anime' ? 'page' : undefined}
@@ -85,14 +72,19 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
             )}
           </button>
           <button
-            id="btn-nav-episodes"
+            id="btn-nav-radar"
             type="button"
-            aria-current={activeMainView === 'episodes' ? 'page' : undefined}
-            onClick={() => onSelectView('episodes')}
-            className={tabClass(activeMainView === 'episodes')}
+            aria-current={isRadar ? 'page' : undefined}
+            onClick={() => onSelectView('radar')}
+            className={tabClass(isRadar)}
           >
-            <CalendarClock className="w-4 h-4 text-amber-400 hidden sm:block" aria-hidden="true" />
-            <span>{t('Anime-Radar')}</span>
+            <Calendar className="w-4 h-4 text-sky-400 hidden sm:block" aria-hidden="true" />
+            <span>{t('Radar')}</span>
+            {radarData && radarData.total_releases > 0 && (
+              <span className="bg-sky-500/30 text-sky-300 text-[11px] font-mono px-2 py-0.5 rounded-full font-bold hidden sm:inline">
+                {radarData.total_releases}
+              </span>
+            )}
           </button>
         </nav>
 
@@ -124,5 +116,25 @@ export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCo
           </div>
         )}
       </div>
+      {isRadar && <RadarKindSwitch activeMainView={activeMainView} onSelectView={onSelectView} />}
+    </>
+  );
+}
+
+const kindClass = (active) => `px-3 py-1.5 [@media(pointer:coarse)]:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+  active ? 'bg-gradient-to-r from-brand-800 to-brand-700 text-white shadow' : 'text-slate-400 hover:text-white'
+}`;
+
+/** Manga releases or anime episodes inside the Radar tab: the two calendars that used to be two tabs. */
+export function RadarKindSwitch({ activeMainView, onSelectView }) {
+  return (
+    <div role="group" aria-label={t('Was der Radar zeigt')} className="-mt-3 mb-6 inline-flex items-center gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl">
+      <button id="btn-radar-manga" type="button" aria-pressed={activeMainView === 'radar'} onClick={() => onSelectView('radar')} className={kindClass(activeMainView === 'radar')}>
+        {t('Manga-Termine')}
+      </button>
+      <button id="btn-radar-anime" type="button" aria-pressed={activeMainView === 'episodes'} onClick={() => onSelectView('episodes')} className={kindClass(activeMainView === 'episodes')}>
+        {t('Anime-Folgen')}
+      </button>
+    </div>
   );
 }

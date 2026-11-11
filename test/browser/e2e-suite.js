@@ -1,6 +1,6 @@
 // Browser test. Run it with `npm run test:e2e` (test/browser/run.js starts an isolated server and sets the variables).
 const {
-  suiteEnv, watchPage, waitForToast, waitUntil, clickText, clickSelector, typeInto, waitForApi, api, apiOk, seedSeries, getVolumes,
+  suiteEnv, watchPage, waitForToast, waitUntil, clickText, clickSelector, clickAccountEntry, clickAdminEntry, typeInto, waitForApi, api, apiOk, seedSeries, getVolumes,
   loginViaUi, assertNoHorizontalOverflow, visibleSeriesIds
 } = require('./helpers');
 const { baseUrl: BASE_URL, user: E2E_USER, password: E2E_PASSWORD } = suiteEnv();
@@ -102,7 +102,7 @@ async function runTestSuite() {
 
     // TEST 3: User management
     console.log('\n--- TEST 3: User Management Modal ---');
-    await clickSelector(page, '#btn-open-users');
+    await clickAdminEntry(page, '#btn-admin-users');
     await typeInto(page, 'input[placeholder*="alex"]', 'autotest_user');
     await typeInto(page, 'input[placeholder*="Mind."]', 'testpass123');
     const created = waitForApi(page, 'POST', '/api/users');
@@ -122,7 +122,7 @@ async function runTestSuite() {
 
     // TEST 3b: Own password dialog (dialog semantics, focus, Escape)
     console.log('\n--- TEST 3b: Change Password Dialog ---');
-    await clickSelector(page, '#btn-change-password');
+    await clickAccountEntry(page, '#btn-change-password');
     await page.waitForSelector('[role="dialog"][aria-label="Passwort ändern"]', { timeout: 5000 });
     const dialogInfo = await page.evaluate(() => {
       const dlg = document.querySelector('[role="dialog"][aria-label="Passwort ändern"]');
@@ -146,7 +146,7 @@ async function runTestSuite() {
     fs.writeFileSync(tempZipPath, Buffer.from(backupBytes.bytes));
     const sentinelId = await seedSeries(page, { title: '__E2E_RESTORE_SENTINEL__' });
 
-    await clickSelector(page, '#btn-open-backups');
+    await clickAdminEntry(page, '#btn-admin-backups');
     await clickText(page, 'ZIP-Datei hochladen');
     const fileInput = await page.waitForSelector('#backup-file-input', { timeout: 10000 });
     await fileInput.uploadFile(tempZipPath);

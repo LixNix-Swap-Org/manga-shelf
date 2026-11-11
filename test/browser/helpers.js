@@ -149,6 +149,19 @@ async function clickSelector(page, selector, { timeout = 10000 } = {}) {
     await el.evaluate(node => node.click());
 }
 
+/** An entry of the desktop account menu (top right), e.g. '#btn-change-password' or '#btn-logout'. */
+async function clickAccountEntry(page, selector) {
+    if (!(await page.$('#account-menu'))) await clickSelector(page, '#btn-account-menu');
+    await clickSelector(page, selector);
+}
+
+/** An entry of "Verwaltung" (account menu → Verwaltung), e.g. '#btn-admin-users' or '#btn-admin-backups'. */
+async function clickAdminEntry(page, selector) {
+    await clickAccountEntry(page, '#btn-open-admin');
+    await page.waitForSelector('#admin-center', { visible: true, timeout: 10000 });
+    await clickSelector(page, selector);
+}
+
 /** Replaces the value of an input/textarea with real key strokes (React sees every change). */
 async function typeInto(page, selectorOrHandle, value, { timeout = 10000 } = {}) {
     const el = typeof selectorOrHandle === 'string'
@@ -294,7 +307,7 @@ async function benchmarkEndpoint(baseUrl, path, cookieHeader, iterations = 50) {
 }
 
 module.exports = {
-    sleep, suiteEnv, watchPage, waitForToast, tagToast, waitUntil, clickText, clickSelector, typeInto, waitForApi, api, apiOk, seedSeries,
+    sleep, suiteEnv, watchPage, waitForToast, tagToast, waitUntil, clickText, clickSelector, clickAccountEntry, clickAdminEntry, typeInto, waitForApi, api, apiOk, seedSeries,
     getVolumes, loginViaUi, assertNoHorizontalOverflow, visibleSeriesIds, requestApi, latencyStats, benchmarkEndpoint,
     EXTERNAL_API
 };

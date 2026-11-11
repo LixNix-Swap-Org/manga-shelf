@@ -7,12 +7,14 @@ import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
 import { LOCAL_SERVER_NAME } from '../../app/connection';
 import { getCoverOrigin } from '../../utils/coverOrigin';
-import { BookOpen, BrushCleaning, Calendar, CalendarClock, ChartColumn, ChevronDown, CloudUpload, Download, FileSpreadsheet, GitMerge, Globe, Library, LogOut, Menu, Plus, Search, Server, Settings, Trash2, Tv, Users, Wrench, X } from 'lucide-react';
+import { BookOpen, Calendar, ChartColumn, ChevronDown, Download, Globe, LogOut, Menu, Plus, Search, Settings, ShieldCheck, Tv, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
+import { adminSections } from './adminSections';
 import { t } from '../../i18n/index.js';
 
 const SystemModal = lazy(() => import('../modals/SystemModal'));
 const BackupExportModal = lazy(() => import('../modals/BackupExportModal'));
+const AdminCenter = lazy(() => import('./AdminCenter'));
 
 // i18n
 const SEARCH_PLACEHOLDER = 'Titel, Autor, Tag, ISBN oder Notiz suchen...';
@@ -187,15 +189,14 @@ export default function DashboardHeader({
   // the system page lives here so the admin menu needs no new prop; rendered into body (the header's backdrop filter
   // would anchor a fixed dialog)
   const [systemOpen, setSystemOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const toolsRef = useRef(null);
-  const toolsButtonRef = useRef(null);
-  // without a server: no users, snapshots or system page; the backup entry exports/imports a ZIP on the device
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const accountRef = useRef(null);
+  const accountButtonRef = useRef(null);
+  // without a server: no users, snapshots or system page (adminSections); the backup entry exports/imports a ZIP on the device
   const local = isLocalMode();
-  const showSystemEntry = isAdmin && !local && !user?.offline;
-  // the tools need the server; shelves are shared between accounts, so they mean nothing on the device alone
+  // the tools need the server; shelves are shared between accounts, so they mean nothing on the device alone (adminSections)
   const toolsAvailable = !isOfflineMode && !user?.offline;
-  const showShelvesEntry = toolsAvailable && !local;
   const [backupOpen, setBackupOpen] = useState(false);
   const openBackups = local ? () => setBackupOpen(true) : handleOpenRestoreModal;
   const logoutLabel = local ? t('Sammlung schließen') : t('Abmelden');
@@ -209,19 +210,19 @@ export default function DashboardHeader({
   // a plain disclosure: a click or focus outside closes it; Escape closes it, hands focus back to the trigger and is
   // consumed (preventDefault), so the dashboard does not also clear the search
   useEffect(() => {
-    if (!toolsOpen) return undefined;
-    const outside = (e) => toolsRef.current && !toolsRef.current.contains(e.target);
+    if (!accountOpen) return undefined;
+    const outside = (e) => accountRef.current && !accountRef.current.contains(e.target);
     const onDocClick = (e) => {
-      if (outside(e)) setToolsOpen(false);
+      if (outside(e)) setAccountOpen(false);
     };
     const onFocusIn = (e) => {
-      if (outside(e)) setToolsOpen(false);
+      if (outside(e)) setAccountOpen(false);
     };
     const onKeyDown = (e) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       e.preventDefault();
-      setToolsOpen(false);
-      toolsButtonRef.current?.focus();
+      setAccountOpen(false);
+      accountButtonRef.current?.focus();
     };
     document.addEventListener('pointerdown', onDocClick);
     document.addEventListener('focusin', onFocusIn);
@@ -231,10 +232,31 @@ export default function DashboardHeader({
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [toolsOpen]);
-  useEffect(() => {
-    if (!toolsAvailable) setToolsOpen(false);
-  }, [toolsAvailable]);
+  }, [accountOpen]);
+
+  // an entry of the account menu: the menu closes, its button becomes the opener of the dialog the entry opens
+  const fromAccountMenu = (action) => {
+    accountButtonRef.current?.focus();
+    setAccountOpen(false);
+    action();
+  };
+  const adminEntries = adminSections({
+    local,
+    offline: Boolean(user?.offline),
+    isAdmin,
+    canEdit,
+    toolsAvailable,
+    onAccount: handleOpenPasswordModal,
+    onUsers: handleOpenUsersModal,
+    onShelves: () => handleOpenTool?.('shelves'),
+    onBackups: openBackups,
+    onCsv: showCsvEntry ? handleOpenCsvModal : null,
+    onCleanup: () => handleOpenTool?.('cleanup'),
+    onTrash: () => handleOpenTool?.('trash'),
+    onPublishers: () => handleOpenTool?.('publishers'),
+    onSystem: () => setSystemOpen(true),
+    onInstall: isInstallable && !isInstalledApp ? handleInstallClick : null
+  });
 
   // on phones the menu sits fixed above the bottom navigation, outside the header (its backdrop filter would anchor it)
   const sheet = (drawer) => (narrow
@@ -387,225 +409,81 @@ export default function DashboardHeader({
           </div>
         </div>
 
-        {/* Desktop Action buttons (>= xl) */}
+        {/* Desktop actions (>= xl): add, statistics, install and the account menu; everything else is in "Verwaltung" */}
         <div className="hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0 flex-nowrap justify-end min-w-0">
-          <button 
-            id="btn-open-stats"
-            type="button"
-            onClick={handleOpenStats} 
-            disabled={isOfflineMode}
-            className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
-            title={isOfflineMode ? t('Offline nicht verfügbar') : t('Statistik- & Finanz-Dashboard öffnen')}
-          >
-            <ChartColumn className="w-4 h-4 text-emerald-400 shrink-0" /> 
-            <span>{t('Statistiken')}<span className="hidden 2xl:inline"> {t('& Finanzen')}</span></span>
-          </button>
-
-          <div ref={toolsRef} className="relative">
-            <button 
-              id="btn-open-tools"
-              ref={toolsButtonRef}
-              type="button"
-              onClick={() => setToolsOpen(prev => !prev)}
-              disabled={!toolsAvailable}
-              aria-expanded={toolsOpen}
-              aria-controls={toolsOpen ? 'tools-dropdown-menu' : undefined}
-              className="btn-secondary flex items-center gap-1.5 text-xs text-sky-200 hover:text-white border-sky-500/30 hover:bg-sky-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
-              title={!toolsAvailable ? t('Offline nicht verfügbar') : local ? t('Werkzeuge: Aufräumen, Papierkorb') : t('Werkzeuge: Regale, Aufräumen, Papierkorb')}
-              aria-label={t('Werkzeuge')}
-            >
-              <Wrench className="w-4 h-4 text-sky-400 shrink-0" aria-hidden="true" />
-              <span className="hidden 2xl:inline">{t('Werkzeuge')}</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${toolsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
-            </button>
-
-            {toolsOpen && (
-              <div
-                id="tools-dropdown-menu"
-                className="absolute right-0 top-full mt-2 w-72 rounded-2xl glass-panel border border-slate-700/80 bg-slate-950/95 backdrop-blur-xl p-2 shadow-2xl z-50 animate-fade-in divide-y divide-slate-800/80"
-              >
-                <div className="py-1 space-y-1">
-                  {showShelvesEntry && (
-                    <button
-                      id="btn-menu-shelves"
-                      type="button"
-                      onClick={() => { setToolsOpen(false); handleOpenTool?.('shelves'); }}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 group-hover:scale-105 transition-transform">
-                        <Library className="w-4 h-4" aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-white group-hover:text-teal-300 transition-colors">{t('Regale')}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{t('Regale verwalten & freigeben')}</p>
-                      </div>
-                    </button>
-                  )}
-
-                  <button
-                    id="btn-menu-cleanup"
-                    type="button"
-                    onClick={() => { setToolsOpen(false); handleOpenTool?.('cleanup'); }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 group-hover:scale-105 transition-transform">
-                      <BrushCleaning className="w-4 h-4" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors">{t('Sammlung aufräumen')}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{t('Dubletten & Qualität prüfen')}</p>
-                    </div>
-                  </button>
-
-                  <button
-                    id="btn-menu-trash"
-                    type="button"
-                    onClick={() => { setToolsOpen(false); handleOpenTool?.('trash'); }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0 group-hover:scale-105 transition-transform">
-                      <Trash2 className="w-4 h-4" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white group-hover:text-rose-300 transition-colors">{t('Papierkorb')}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{t('Gelöschte Bände wiederherstellen')}</p>
-                    </div>
-                  </button>
-                </div>
-
-                {isAdmin && (
-                  <div className="pt-2 pb-1">
-                    <button
-                      id="btn-menu-publishers"
-                      type="button"
-                      onClick={() => { setToolsOpen(false); handleOpenTool?.('publishers'); }}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-slate-800/80 transition group"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0 group-hover:scale-105 transition-transform">
-                        <GitMerge className="w-4 h-4" aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-white group-hover:text-purple-300 transition-colors">{t('Verlage zusammenführen')}</p>
-                        <p className="text-[10px] text-slate-400 truncate">{t('Verlags-Aliase vereinheitlichen')}</p>
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {canEdit && (
-            <button 
+            <button
               id="btn-open-add-manga"
-              onClick={handleOpenModal} 
+              type="button"
+              onClick={handleOpenModal}
               className="btn-primary flex items-center gap-1.5 text-xs shadow-md py-2 px-2.5 2xl:px-3 whitespace-nowrap"
             >
-              <Plus className="w-4 h-4 shrink-0" /> 
+              <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>{t('Neuer Manga')}</span>
             </button>
           )}
 
+          <button
+            id="btn-open-stats"
+            type="button"
+            onClick={handleOpenStats}
+            disabled={isOfflineMode}
+            className="btn-secondary flex items-center gap-1.5 text-xs text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10 shadow-sm py-2 px-2.5 2xl:px-3 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+            title={isOfflineMode ? t('Offline nicht verfügbar') : t('Statistik- & Finanz-Dashboard öffnen')}
+          >
+            <ChartColumn className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+            <span>{t('Statistiken')}</span>
+          </button>
+
           {isInstallable && !isInstalledApp && (
             <button
               id="btn-install-pwa"
+              type="button"
               onClick={handleInstallClick}
               className="btn-secondary flex items-center gap-1.5 text-xs text-brand-300 hover:text-white border-brand-500/40 bg-brand-500/10 hover:bg-brand-500/20 py-2 px-2.5 2xl:px-3 shadow-sm transition-all whitespace-nowrap"
               title={t('Manga Shelf als native App auf deinem Gerät installieren')}
               aria-label={t('App installieren')}
             >
-              <Download className="w-4 h-4 text-brand-400 shrink-0" />
-              <span className="hidden 2xl:inline">{t('App installieren')}</span>
+              <Download className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
             </button>
           )}
 
-          {showCsvEntry && (
+          <div ref={accountRef} className="relative">
             <button
-              id="btn-open-csv"
+              id="btn-account-menu"
+              ref={accountButtonRef}
               type="button"
-              onClick={handleOpenCsvModal}
-              className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-              title={canEdit ? t('Sammlung als CSV exportieren oder aus CSV importieren') : t('Sammlung als CSV exportieren')}
+              onClick={() => setAccountOpen((prev) => !prev)}
+              aria-expanded={accountOpen}
+              aria-controls={accountOpen ? 'account-menu' : undefined}
+              aria-label={t('Konto-Menü von {name}', { name: user?.username || '' })}
+              title={t('Konto-Menü')}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 hover:border-brand-500/60 pl-1 pr-2 py-1 shrink-0"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-              <span>CSV</span>
+              <span aria-hidden="true" className="w-7 h-7 rounded-full bg-brand-500/25 border border-brand-400/60 text-brand-200 text-xs font-bold flex items-center justify-center uppercase">{(user?.username || '?').slice(0, 1)}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${accountOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
-          )}
-
-          {isAdmin && (
-            <>
-              {!local && (
-                <button
-                  id="btn-open-users"
-                  onClick={handleOpenUsersModal}
-                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                  title={t('Benutzer anlegen und verwalten')}
-                  aria-label={t('Benutzer')}
-                >
-                  <Users className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
-                  <span className="hidden 2xl:inline">{t('Benutzer')}</span>
+            {accountOpen && (
+              <div id="account-menu" className="absolute right-0 mt-2 w-72 glass-panel border border-slate-700/80 rounded-2xl shadow-2xl p-2 z-50 animate-fade-in">
+                <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-xs">
+                  <span className="text-slate-400 truncate">{t('Angemeldet als:')} <span className="font-semibold text-slate-100">{user?.username}</span></span>
+                  <span className={`${roleBadgeClass(user)} border text-[10px] px-1.5 py-px rounded font-mono font-bold uppercase shrink-0`}>{roleLabel(user)}</span>
+                </div>
+                <button id="btn-open-admin" type="button" onClick={() => fromAccountMenu(() => setAdminOpen(true))} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-slate-100 hover:bg-slate-800/80">
+                  <ShieldCheck className="w-4 h-4 text-brand-300" aria-hidden="true" /> {t('Verwaltung')}
                 </button>
-              )}
-
-              <button
-                id="btn-open-backups"
-                onClick={openBackups}
-                className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 hover:text-emerald-400 transition-colors py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                title={local ? t('Sicherung als ZIP exportieren oder importieren') : t('Backup-Zentrale, automatische Snapshots, ZIP-Download & Wiederherstellung')}
-                aria-label={t('Backups')}
-              >
-                <CloudUpload className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-                <span className="hidden 2xl:inline">{t('Backups')}</span>
-              </button>
-
-              {showSystemEntry && (
-                <button
-                  id="btn-open-system"
-                  type="button"
-                  onClick={() => setSystemOpen(true)}
-                  className="btn-secondary flex items-center gap-1.5 text-xs text-slate-200 py-2 px-2.5 2xl:px-3 whitespace-nowrap"
-                  title={t('System: Version, Speicher, Backups, Quellen')}
-                  aria-label={t('System')}
-                >
-                  <Server className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
-                  <span className="hidden 2xl:inline">{t('System')}</span>
+                {!user?.offline && (
+                  <button id="btn-change-password" type="button" onClick={() => fromAccountMenu(handleOpenPasswordModal)} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-slate-100 hover:bg-slate-800/80" title={accountLabel}>
+                    <Settings className="w-4 h-4 text-brand-300" aria-hidden="true" /> {t('Konto & Sprache')}
+                  </button>
+                )}
+                <div aria-hidden="true" className="my-1 border-t border-slate-800" />
+                <button id="btn-logout" type="button" onClick={() => fromAccountMenu(onLogout)} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-red-300 hover:bg-red-950/40">
+                  <LogOut className="w-4 h-4 text-red-400" aria-hidden="true" /> {logoutLabel}
                 </button>
-              )}
-            </>
-          )}
-
-          <div aria-hidden="true" className="h-6 w-[1px] bg-slate-800 mx-0.5 shrink-0"></div>
-
-          <div className="flex items-center gap-1.5 text-xs bg-slate-800/60 px-2 py-1.5 2xl:px-2.5 rounded-xl border border-slate-700/50 shrink-0">
-            <span className="text-slate-400 hidden 2xl:inline">{t('Angemeldet:')}</span>
-            <span className="font-semibold text-slate-200 truncate max-w-[90px] 2xl:max-w-none">{user?.username}</span>
-            <span className={`${roleBadgeClass(user)} border text-[10px] px-1.5 py-px rounded font-mono font-bold uppercase shrink-0`}>
-              {roleLabel(user)}
-            </span>
+              </div>
+            )}
           </div>
-
-          {!user?.offline && (
-            <button
-              id="btn-change-password"
-              onClick={handleOpenPasswordModal}
-              className="btn-secondary p-2 text-slate-300 hover:text-brand-300 transition-colors shrink-0"
-              title={accountLabel}
-              aria-label={accountLabel}
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          )}
-
-          <button 
-            id="btn-logout"
-            type="button"
-            onClick={onLogout} 
-            className="btn-secondary p-2 text-slate-300 hover:text-red-400 transition-colors shrink-0" 
-            title={logoutLabel}
-            aria-label={logoutLabel}
-          >
-            <LogOut className="w-4 h-4" aria-hidden="true" />
-          </button>
         </div>
 
       </div>
@@ -630,168 +508,61 @@ export default function DashboardHeader({
             </span>
           </div>
 
+          <button
+            id="btn-mobile-menu-anime"
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              setView('anime');
+            }}
+            className="w-full btn-secondary text-sm py-3 px-3 flex items-center justify-center gap-2 text-fuchsia-100 border-fuchsia-500/40 bg-fuchsia-500/10"
+          >
+            <Tv className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> {t('Anime')}
+          </button>
+
           <div className="grid grid-cols-2 gap-2">
-            <button 
+            <button
               id="btn-mobile-menu-stats"
               type="button"
               onClick={() => runFromMenu(handleOpenStats)}
               disabled={isOfflineMode}
               className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-emerald-300 border-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ChartColumn className="w-4 h-4 text-emerald-400" /> {t('Statistiken')}
+              <ChartColumn className="w-4 h-4 text-emerald-400" aria-hidden="true" /> {t('Statistiken')}
             </button>
 
-            <button 
-              id="btn-mobile-menu-radar"
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                setView('radar');
-              }}
-              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-sky-300 border-sky-500/30"
-            >
-              <Calendar className="w-4 h-4 text-sky-400" /> {t('Release-Radar')}
-            </button>
-
-            <button
-              id="btn-mobile-menu-anime"
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                setView('anime');
-              }}
-              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-fuchsia-200 border-fuchsia-500/30"
-            >
-              <Tv className="w-4 h-4 text-fuchsia-400" aria-hidden="true" /> {t('Anime')}
-            </button>
-
-            <button
-              id="btn-mobile-menu-episodes"
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                setView('episodes');
-              }}
-              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-amber-200 border-amber-500/30"
-            >
-              <CalendarClock className="w-4 h-4 text-amber-400" aria-hidden="true" /> {t('Anime-Radar')}
-            </button>
-
-            {canEdit && (
-              <button 
+            {canEdit ? (
+              <button
                 id="btn-mobile-menu-add"
                 type="button"
                 onClick={() => runFromMenu(handleOpenModal)}
                 className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-2"
               >
-                <Plus className="w-4 h-4" /> {t('Neuer Manga')}
+                <Plus className="w-4 h-4" aria-hidden="true" /> {t('Neuer Manga')}
               </button>
-            )}
-
-            {showCsvEntry && (
+            ) : (
               <button
-                id="btn-mobile-menu-csv"
+                id="btn-mobile-menu-radar"
                 type="button"
-                onClick={() => runFromMenu(handleOpenCsvModal)}
-                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200 hover:text-emerald-400"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setView('radar');
+                }}
+                className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-sky-300 border-sky-500/30"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-400" aria-hidden="true" /> CSV
+                <Calendar className="w-4 h-4 text-sky-400" aria-hidden="true" /> {t('Radar')}
               </button>
-            )}
-
-            {isAdmin && (
-              <>
-                {!local && (
-                  <button
-                    id="btn-mobile-menu-users"
-                    type="button"
-                    onClick={() => runFromMenu(handleOpenUsersModal)}
-                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
-                  >
-                    <Users className="w-4 h-4 text-brand-400" /> {t('Benutzer')}
-                  </button>
-                )}
-
-                <button 
-                  id="btn-mobile-menu-backups"
-                  type="button"
-                  onClick={() => runFromMenu(openBackups)}
-                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200 hover:text-emerald-400"
-                >
-                  <CloudUpload className="w-4 h-4 text-emerald-400" /> {t('Backups')}
-                </button>
-
-                {showSystemEntry && (
-                  <button
-                    id="btn-mobile-menu-system"
-                    type="button"
-                    onClick={() => runFromMenu(() => setSystemOpen(true))}
-                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-slate-200"
-                  >
-                    <Server className="w-4 h-4 text-brand-400" aria-hidden="true" /> {t('System')}
-                  </button>
-                )}
-              </>
             )}
           </div>
 
-          {isInstallable && !isInstalledApp && (
-            <button
-              id="btn-mobile-install-pwa"
-              type="button"
-              onClick={() => runFromMenu(handleInstallClick)}
-              className="w-full btn-secondary text-xs py-2 text-brand-300 bg-brand-500/10 border-brand-500/40 hover:bg-brand-500/20 flex items-center justify-center gap-2 font-medium"
-            >
-              <Download className="w-4 h-4 text-brand-400" /> {t('MangaShelf als App installieren')}
-            </button>
-          )}
-
-          {toolsAvailable && (
-            <div className="pt-2 border-t border-slate-800/80">
-              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-2 px-1">{showShelvesEntry ? t('Werkzeuge & Regale') : t('Werkzeuge')}</p>
-              <div className="grid grid-cols-2 gap-2">
-                {showShelvesEntry && (
-                  <button
-                    id="btn-mobile-menu-shelves"
-                    type="button"
-                    onClick={() => runFromMenu(() => handleOpenTool?.('shelves'))}
-                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-teal-300 border-teal-500/30"
-                  >
-                    <Library className="w-4 h-4 text-teal-400" aria-hidden="true" /> {t('Regale')}
-                  </button>
-                )}
-
-                <button
-                  id="btn-mobile-menu-cleanup"
-                  type="button"
-                  onClick={() => runFromMenu(() => handleOpenTool?.('cleanup'))}
-                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-amber-300 border-amber-500/30"
-                >
-                  <BrushCleaning className="w-4 h-4 text-amber-400" aria-hidden="true" /> {t('Aufräumen')}
-                </button>
-
-                <button
-                  id="btn-mobile-menu-trash"
-                  type="button"
-                  onClick={() => runFromMenu(() => handleOpenTool?.('trash'))}
-                  className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-rose-300 border-rose-500/30"
-                >
-                  <Trash2 className="w-4 h-4 text-rose-400" aria-hidden="true" /> {t('Papierkorb')}
-                </button>
-
-                {isAdmin && (
-                  <button
-                    id="btn-mobile-menu-publishers"
-                    type="button"
-                    onClick={() => runFromMenu(() => handleOpenTool?.('publishers'))}
-                    className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-2 text-purple-300 border-purple-500/30"
-                  >
-                    <GitMerge className="w-4 h-4 text-purple-400" aria-hidden="true" /> {t('Verlage')}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+          <button
+            id="btn-mobile-menu-admin"
+            type="button"
+            onClick={() => runFromMenu(() => setAdminOpen(true))}
+            className="w-full btn-secondary text-xs py-2 text-slate-200 flex items-center justify-center gap-2"
+          >
+            <ShieldCheck className="w-4 h-4 text-brand-400" aria-hidden="true" /> {t('Verwaltung')}
+          </button>
 
           {!user?.offline && (
             <button
@@ -813,6 +584,12 @@ export default function DashboardHeader({
             <LogOut className="w-4 h-4 text-red-400" /> {logoutLabel}
           </button>
         </nav>
+      )}
+      {adminOpen && createPortal(
+        <Suspense fallback={null}>
+          <AdminCenter sections={adminEntries} onClose={() => setAdminOpen(false)} />
+        </Suspense>,
+        document.body
       )}
       {systemOpen && createPortal(
         <Suspense fallback={null}>

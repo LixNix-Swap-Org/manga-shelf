@@ -36,6 +36,7 @@ import {
   SCAN_FAILED_MESSAGE
 } from '../components/dashboard/dashboardShell';
 import DashboardHeader, { opensCollection } from '../components/dashboard/DashboardHeader';
+import { adminSections } from '../components/dashboard/adminSections';
 import DashboardFooter from '../components/dashboard/DashboardFooter';
 import MangaCollectionGrid, { visibleSections } from '../components/dashboard/MangaCollectionGrid';
 import CollectionToolbar from '../components/dashboard/CollectionToolbar';
@@ -187,6 +188,13 @@ const headerProps = (overrides = {}) => ({
   ...overrides
 });
 
+// account menu, then "Verwaltung" (a lazy dialog)
+const openAdmin = async () => {
+  if (!document.getElementById('account-menu')) fireEvent.click(document.getElementById('btn-account-menu'));
+  fireEvent.click(document.getElementById('btn-open-admin'));
+  return screen.findByRole('dialog', { name: 'Verwaltung' });
+};
+
 const renderHeader = (overrides) => {
   const props = headerProps(overrides);
   const utils = render(<DashboardHeader {...props} />);
@@ -199,86 +207,48 @@ describe('DashboardHeader', () => {
     expect(document.getElementById('btn-mobile-menu-password').textContent).toBe(' Konto & Sprache');
   });
 
-  it('offers CSV to editors and visitors on desktop and in the menu, backups stay admin-only', () => {
-    const { rerender, props } = renderHeader({ canEdit: true, mobileMenuOpen: true });
-    expect(document.getElementById('btn-open-csv')).toBeTruthy();
-    expect(document.getElementById('btn-mobile-menu-csv')).toBeTruthy();
-    expect(document.getElementById('btn-open-backups')).toBeNull();
-    fireEvent.click(document.getElementById('btn-mobile-menu-csv'));
-    expect(props.handleOpenCsvModal).toHaveBeenCalledTimes(1);
-
-    rerender(<DashboardHeader {...headerProps({ user: { id: 2, username: 'gast', role: 'visitor' }, isVisitor: true, mobileMenuOpen: true })} />);
-    expect(document.getElementById('btn-open-csv')).toBeTruthy();
-
-    rerender(<DashboardHeader {...headerProps({ user: { id: 3, username: 'root', role: 'admin' }, canEdit: true, mobileMenuOpen: true })} />);
-    expect(document.getElementById('btn-open-csv')).toBeNull();
-    expect(document.getElementById('btn-open-backups')).toBeTruthy();
-    expect(document.getElementById('btn-mobile-menu-backups')).toBeTruthy();
-
-    rerender(<DashboardHeader {...headerProps({ user: { id: 1, username: 'anna', role: 'visitor', realRole: 'editor', offline: true }, isVisitor: true, isOfflineMode: true })} />);
-    expect(document.getElementById('btn-open-csv')).toBeNull();
+  it('Verwaltung offers CSV to editors and visitors, backups stay admin-only', () => {
+    const csv = vi.fn();
+    const ids = (opts) => adminSections({ onCsv: csv, onBackups: vi.fn(), onAccount: vi.fn(), ...opts }).flatMap((s) => s.entries.map((e) => e.id));
+    expect(ids({ canEdit: true })).toContain('btn-admin-csv');
+    expect(ids({ canEdit: true })).not.toContain('btn-admin-backups');
+    expect(ids({ isAdmin: true })).toContain('btn-admin-backups');
+    // the header leaves CSV out for admins (they have it in the backup dialog) and offline
+    expect(ids({ onCsv: null, isAdmin: true })).not.toContain('btn-admin-csv');
   });
 
-  it('offers the tools dropdown on desktop and tools entries in the mobile drawer', () => {
+  it('opens Verwaltung from the account menu; its entries open the same dialogs as before', async () => {
     const handleOpenTool = vi.fn();
-    const { rerender } = renderHeader({ handleOpenTool, mobileMenuOpen: true, user: { id: 1, username: 'anna', role: 'editor' } });
-
-    // Desktop Werkzeuge dropdown
-    const toolsBtn = document.getElementById('btn-open-tools');
-    expect(toolsBtn).toBeTruthy();
-    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
-
-    fireEvent.click(toolsBtn);
-    expect(document.getElementById('tools-dropdown-menu')).toBeTruthy();
-    expect(document.getElementById('btn-menu-shelves')).toBeTruthy();
-    expect(document.getElementById('btn-menu-cleanup')).toBeTruthy();
-    expect(document.getElementById('btn-menu-trash')).toBeTruthy();
-    expect(document.getElementById('btn-menu-publishers')).toBeNull();
-
-    fireEvent.click(document.getElementById('btn-menu-shelves'));
+    const { props } = renderHeader({ canEdit: true, handleOpenTool, user: { id: 1, username: 'anna', role: 'editor' } });
+    expect(document.getElementById('account-menu')).toBeNull();
+    await openAdmin();
+    for (const id of ['btn-admin-account', 'btn-admin-shelves', 'btn-admin-csv', 'btn-admin-cleanup', 'btn-admin-trash']) {
+      expect(document.getElementById(id)).toBeTruthy();
+    }
+    for (const id of ['btn-admin-users', 'btn-admin-backups', 'btn-admin-publishers', 'btn-admin-system']) {
+      expect(document.getElementById(id)).toBeNull();
+    }
+    fireEvent.click(document.getElementById('btn-admin-shelves'));
     expect(handleOpenTool).toHaveBeenCalledWith('shelves');
-    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
-
-    // Mobile drawer items
-    expect(document.getElementById('btn-mobile-menu-shelves')).toBeTruthy();
-    expect(document.getElementById('btn-mobile-menu-cleanup')).toBeTruthy();
-    expect(document.getElementById('btn-mobile-menu-trash')).toBeTruthy();
-    expect(document.getElementById('btn-mobile-menu-publishers')).toBeNull();
-
-    // Admin sees publishers in both
-    rerender(<DashboardHeader {...headerProps({ handleOpenTool, mobileMenuOpen: true, user: { id: 2, username: 'admin', role: 'admin' } })} />);
-    fireEvent.click(document.getElementById('btn-open-tools'));
-    expect(document.getElementById('btn-menu-publishers')).toBeTruthy();
-    expect(document.getElementById('btn-mobile-menu-publishers')).toBeTruthy();
-    fireEvent.click(document.getElementById('btn-menu-publishers'));
-    expect(handleOpenTool).toHaveBeenCalledWith('publishers');
+    expect(screen.queryByRole('dialog', { name: 'Verwaltung' })).toBeNull();
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-csv'));
+    expect(props.handleOpenCsvModal).toHaveBeenCalledTimes(1);
   });
 
-  it('the tools are plain buttons; "Regale" is gone on the device alone, and offline there are no tools', () => {
-    const user = { id: 1, username: 'anna', role: 'editor' };
-    const { rerender } = renderHeader({ mobileMenuOpen: true, user });
-    fireEvent.click(document.getElementById('btn-open-tools'));
-    expect(document.querySelectorAll('[role="menu"], [role="menuitem"]')).toHaveLength(0);
-    expect(document.getElementById('btn-open-tools').getAttribute('aria-controls')).toBe('tools-dropdown-menu');
-
-    mode.local = true;
-    rerender(<DashboardHeader {...headerProps({ mobileMenuOpen: true, user: { ...user, local: true } })} />);
-    expect(document.getElementById('btn-menu-shelves')).toBeNull();
-    expect(document.getElementById('btn-menu-cleanup')).toBeTruthy();
-    expect(document.getElementById('btn-mobile-menu-shelves')).toBeNull();
-    expect(document.getElementById('btn-mobile-menu-trash')).toBeTruthy();
-
-    mode.local = false;
-    rerender(<DashboardHeader {...headerProps({ mobileMenuOpen: true, isOfflineMode: true, user: { ...user, offline: true } })} />);
-    expect(document.getElementById('tools-dropdown-menu')).toBeNull();
-    expect(document.getElementById('btn-open-tools').disabled).toBe(true);
-    expect(document.getElementById('btn-mobile-menu-cleanup')).toBeNull();
-    expect(document.getElementById('btn-mobile-menu-shelves')).toBeNull();
+  it('Verwaltung: "Regale" is gone on the device alone, offline there are no tools, publishers are admin-only', () => {
+    const tools = (opts) => adminSections({ onAccount: vi.fn(), onShelves: vi.fn(), onCleanup: vi.fn(), onTrash: vi.fn(), onPublishers: vi.fn(), toolsAvailable: true, ...opts })
+      .flatMap((s) => s.entries.map((e) => e.id));
+    expect(tools({})).toEqual(['btn-admin-account', 'btn-admin-shelves', 'btn-admin-cleanup', 'btn-admin-trash']);
+    expect(tools({ isAdmin: true })).toContain('btn-admin-publishers');
+    expect(tools({ local: true })).not.toContain('btn-admin-shelves');
+    expect(tools({ local: true })).toContain('btn-admin-cleanup');
+    expect(tools({ toolsAvailable: false, offline: true })).toEqual([]);
   });
 
   it('without a server (local mode) users and system are hidden, "Backups" opens the device backup and logout closes the collection', async () => {
     mode.local = true;
-    const props = headerProps({ user: { id: 1, username: 'Ich', role: 'admin', local: true }, canEdit: true, mobileMenuOpen: true });
+    const props = headerProps({ user: { id: 1, username: 'Ich', role: 'admin', local: true }, canEdit: true });
     render(
       <MemoryRouter initialEntries={['/']}>
         <Routes>
@@ -287,20 +257,19 @@ describe('DashboardHeader', () => {
         </Routes>
       </MemoryRouter>
     );
-    for (const id of ['btn-open-users', 'btn-open-system', 'btn-mobile-menu-users', 'btn-mobile-menu-system']) {
-      expect(document.getElementById(id)).toBeNull();
-    }
-    expect(document.getElementById('btn-mobile-menu-backups')).toBeTruthy();
-    fireEvent.click(document.getElementById('btn-open-backups'));
+    await openAdmin();
+    for (const id of ['btn-admin-users', 'btn-admin-system']) expect(document.getElementById(id)).toBeNull();
+    fireEvent.click(document.getElementById('btn-admin-backups'));
     expect(await screen.findByRole('dialog', { name: 'Sicherung' })).toBeTruthy();
     expect(props.handleOpenRestoreModal).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Sicherung schließen' }));
     expect(screen.queryByRole('dialog', { name: 'Sicherung' })).toBeNull();
-    expect(document.getElementById('btn-logout').getAttribute('aria-label')).toBe('Sammlung schließen');
-    expect(document.getElementById('btn-mobile-menu-logout').textContent).toContain('Sammlung schließen');
-    expect(document.getElementById('btn-change-password').getAttribute('aria-label')).toBe('Konto: API-Schlüssel');
+    fireEvent.click(document.getElementById('btn-account-menu'));
+    expect(document.getElementById('btn-logout').textContent).toContain('Sammlung schließen');
+    expect(document.getElementById('btn-change-password').getAttribute('title')).toBe('Konto: API-Schlüssel');
 
-    fireEvent.click(document.getElementById('btn-open-backups'));
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-backups'));
     fireEvent.click(await screen.findByRole('button', { name: 'Eingespielt' }));
     expect(await screen.findByText('Geräteseite')).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'Sicherung' })).toBeNull();
@@ -319,7 +288,8 @@ describe('DashboardHeader', () => {
           </Routes>
         </MemoryRouter>
       );
-      fireEvent.click(document.getElementById('btn-open-backups'));
+      await openAdmin();
+      fireEvent.click(document.getElementById('btn-admin-backups'));
       fireEvent.click(await screen.findByRole('button', { name: 'Eingespielt' }));
       expect(await screen.findByText(page)).toBeTruthy();
       expect(onLocalReplaced).toHaveBeenCalledTimes(1);
@@ -333,14 +303,19 @@ describe('DashboardHeader', () => {
     expect(opensCollection(undefined)).toBe(false);
   });
 
-  it('with a server the admin keeps users, system and the server backups', () => {
-    const { props } = renderHeader({ user: { id: 3, username: 'root', role: 'admin' }, canEdit: true, mobileMenuOpen: true });
-    for (const id of ['btn-open-users', 'btn-open-system', 'btn-mobile-menu-users', 'btn-mobile-menu-system']) {
+  it('with a server the admin keeps users, system and the server backups', async () => {
+    const { props } = renderHeader({ user: { id: 3, username: 'root', role: 'admin' }, canEdit: true });
+    await openAdmin();
+    for (const id of ['btn-admin-users', 'btn-admin-system', 'btn-admin-backups', 'btn-admin-publishers']) {
       expect(document.getElementById(id)).toBeTruthy();
     }
-    fireEvent.click(document.getElementById('btn-open-backups'));
+    fireEvent.click(document.getElementById('btn-admin-backups'));
     expect(props.handleOpenRestoreModal).toHaveBeenCalledTimes(1);
-    expect(document.getElementById('btn-logout').getAttribute('aria-label')).toBe('Abmelden');
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-users'));
+    expect(props.handleOpenUsersModal).toHaveBeenCalledTimes(1);
+    fireEvent.click(document.getElementById('btn-account-menu'));
+    expect(document.getElementById('btn-logout').textContent).toContain('Abmelden');
   });
 
   it('tablets keep only add and menu in the header: the views are the tabs below it, not a second set of buttons', () => {
@@ -362,14 +337,29 @@ describe('DashboardHeader', () => {
     }
   });
 
-  it('the admin row fits 1280 px with the install button: users and backups are icons with names below 2xl', () => {
+  it('the desktop header keeps add, statistics, install and the account menu; the rest moved to Verwaltung', () => {
     renderHeader({ user: { id: 3, username: 'root', role: 'admin' }, canEdit: true, isInstallable: true });
-    for (const [id, name] of [['btn-open-users', 'Benutzer'], ['btn-open-backups', 'Backups'], ['btn-install-pwa', 'App installieren']]) {
-      const button = document.getElementById(id);
-      expect(button.getAttribute('aria-label')).toBe(name);
-      expect(within(button).getByText(name).className).toContain('hidden 2xl:inline');
+    for (const id of ['btn-open-add-manga', 'btn-open-stats', 'btn-install-pwa', 'btn-account-menu']) expect(document.getElementById(id)).toBeTruthy();
+    for (const id of ['btn-open-tools', 'btn-open-users', 'btn-open-backups', 'btn-open-system', 'btn-open-csv', 'btn-logout']) {
+      expect(document.getElementById(id)).toBeNull();
     }
+    expect(document.getElementById('btn-install-pwa').getAttribute('aria-label')).toBe('App installieren');
+    const account = document.getElementById('btn-account-menu');
+    expect(account.getAttribute('aria-label')).toBe('Konto-Menü von root');
+    expect(account.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(account);
+    expect(account.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById('btn-open-admin')).toBeTruthy();
     expect(document.getElementById('btn-logout')).toBeTruthy();
+  });
+
+  it('Escape closes the account menu and hands focus back to its button', () => {
+    renderHeader();
+    const account = document.getElementById('btn-account-menu');
+    fireEvent.click(account);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.getElementById('account-menu')).toBeNull();
+    expect(document.activeElement).toBe(account);
   });
 
   it('the version badge shrinks with the title instead of running into the controls', () => {
@@ -381,15 +371,21 @@ describe('DashboardHeader', () => {
     expect(badge.parentElement.className).toContain('min-w-0');
   });
 
-  it('the menu is a named navigation landmark and its radar entries go through setView', () => {
+  it('the menu is a named navigation landmark: Anime first, Radar for readers, everything else in Verwaltung', async () => {
     const { props } = renderHeader({ mobileMenuOpen: true });
     const menu = screen.getByRole('navigation', { name: 'Menü' });
     expect(menu.id).toBe('mobile-menu-drawer');
+    expect(menu.querySelector('button').id).toBe('btn-mobile-menu-anime');
+    fireEvent.click(document.getElementById('btn-mobile-menu-anime'));
+    expect(props.setView).toHaveBeenLastCalledWith('anime');
     fireEvent.click(document.getElementById('btn-mobile-menu-radar'));
     expect(props.setView).toHaveBeenLastCalledWith('radar');
     expect(props.setMobileMenuOpen).toHaveBeenCalledWith(false);
-    fireEvent.click(document.getElementById('btn-mobile-menu-episodes'));
-    expect(props.setView).toHaveBeenCalledWith('episodes');
+    for (const id of ['btn-mobile-menu-episodes', 'btn-mobile-menu-users', 'btn-mobile-menu-backups', 'btn-mobile-menu-shelves', 'btn-mobile-menu-csv']) {
+      expect(document.getElementById(id)).toBeNull();
+    }
+    fireEvent.click(document.getElementById('btn-mobile-menu-admin'));
+    expect(await screen.findByRole('dialog', { name: 'Verwaltung' })).toBeTruthy();
   });
 
   it('app build: the connection pill reports the state of a server, the device collection only names device and profile', () => {
@@ -446,6 +442,7 @@ describe('DashboardHeader', () => {
 
   it('shows German role labels in both header variants', () => {
     const { rerender } = renderHeader({ user: { id: 2, username: 'gast', role: 'visitor' }, isVisitor: true, mobileMenuOpen: true });
+    fireEvent.click(document.getElementById('btn-account-menu'));
     expect(screen.getAllByText('Gast')).toHaveLength(2);
     expect(screen.queryByText('visitor')).toBeNull();
     expect(screen.queryByText('User:')).toBeNull();
@@ -826,6 +823,24 @@ describe('MainViewSwitcher', () => {
     expect(hint.className).toContain('hidden lg:flex');
     for (const n of ['170', '36', '2']) expect(within(nav).getByText(n).className).toContain('hidden sm:inline');
     for (const b of within(nav).getAllByRole('button')) expect(b.className).toContain('whitespace-nowrap');
+  });
+
+  it('four tabs; Radar holds the manga releases and the anime episodes, switched inside the tab', () => {
+    const onSelectView = vi.fn();
+    const { rerender } = render(<MainViewSwitcher activeMainView="shelf" onSelectView={onSelectView} mangaCount={4} shoppingData={null} radarData={null} />);
+    const nav = screen.getByRole('navigation', { name: 'Hauptansicht' });
+    expect(within(nav).getAllByRole('button').map((b) => b.id)).toEqual(['btn-nav-shelf', 'btn-nav-shopping', 'btn-nav-anime', 'btn-nav-radar']);
+    expect(screen.queryByRole('group', { name: 'Was der Radar zeigt' })).toBeNull();
+
+    rerender(<MainViewSwitcher activeMainView="episodes" onSelectView={onSelectView} mangaCount={4} shoppingData={null} radarData={null} />);
+    expect(document.getElementById('btn-nav-radar').getAttribute('aria-current')).toBe('page');
+    const kinds = screen.getByRole('group', { name: 'Was der Radar zeigt' });
+    expect(within(kinds).getByRole('button', { name: 'Anime-Folgen' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(kinds).getByRole('button', { name: 'Manga-Termine' }));
+    expect(onSelectView).toHaveBeenLastCalledWith('radar');
+    rerender(<MainViewSwitcher activeMainView="radar" onSelectView={onSelectView} mangaCount={4} shoppingData={null} radarData={null} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Anime-Folgen' }));
+    expect(onSelectView).toHaveBeenLastCalledWith('episodes');
   });
 });
 

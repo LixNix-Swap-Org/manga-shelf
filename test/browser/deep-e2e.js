@@ -3,7 +3,7 @@
 // add-series header on a landscape phone, author buttons outside their card, a crowded desktop header, keyboard focus
 // under the sticky header and shelf spines cut off on a narrow phone. Run it with `npm run test:deep` (test/browser/run.js).
 const {
-  suiteEnv, watchPage, waitUntil, clickText, clickSelector, typeInto, waitForApi, apiOk, seedSeries, getVolumes,
+  suiteEnv, watchPage, waitUntil, clickText, clickSelector, clickAccountEntry, clickAdminEntry, typeInto, waitForApi, apiOk, seedSeries, getVolumes,
   loginViaUi, visibleSeriesIds
 } = require('./helpers');
 const { baseUrl: BASE_URL, user: E2E_USER, password: E2E_PASSWORD } = suiteEnv();
@@ -117,17 +117,17 @@ async function authorProblems(page, longAuthorId) {
   }, AUTHOR_BUTTON, longAuthorId);
 }
 
-// desktop header with the install button: nothing overflows, logout stays in the viewport
+// desktop header with the install button: nothing overflows, the account menu stays in the viewport
 async function headerProblems(page) {
   return page.evaluate(() => {
     const header = document.querySelector('header[data-sticky-header]');
     if (!header) return ['header not found'];
     const problems = [];
     if (header.scrollWidth > header.clientWidth) problems.push(`header overflows (${header.scrollWidth} > ${header.clientWidth})`);
-    const logout = document.querySelector('#btn-logout');
-    const r = logout && logout.getBoundingClientRect();
-    if (!r || r.width === 0) problems.push('#btn-logout not visible');
-    else if (r.right > innerWidth) problems.push(`#btn-logout ends at ${Math.round(r.right)} of ${innerWidth}`);
+    const account = document.querySelector('#btn-account-menu');
+    const r = account && account.getBoundingClientRect();
+    if (!r || r.width === 0) problems.push('#btn-account-menu not visible');
+    else if (r.right > innerWidth) problems.push(`#btn-account-menu ends at ${Math.round(r.right)} of ${innerWidth}`);
     return problems;
   });
 }
@@ -208,7 +208,7 @@ async function shelfProblems(page, minEntries = 26) {
  * reload), then back to the device language (--lang=de-DE). Ends with the dialog closed on the German shelf.
  */
 async function languageSwitch(page, snap = async () => {}) {
-    await clickSelector(page, '#btn-change-password');
+    await clickAccountEntry(page, '#btn-change-password');
     await clickSelector(page, '#account-tab-language');
     const languageSelect = '[role="dialog"] [role="tabpanel"] select';
     await page.waitForSelector(languageSelect, { visible: true, timeout: 5000 });
@@ -225,7 +225,7 @@ async function languageSwitch(page, snap = async () => {}) {
     await snap('15c_language_english');
     await page.reload({ waitUntil: 'networkidle0' });
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'en', 'the choice survives a reload');
-    await clickSelector(page, '#btn-change-password');
+    await clickAccountEntry(page, '#btn-change-password');
     await clickSelector(page, '#account-tab-language');
     await page.waitForSelector(languageSelect, { visible: true, timeout: 5000 });
     const toDevice = waitForApi(page, 'PUT', '/api/auth/profile');
@@ -433,13 +433,13 @@ async function runDeepTestSuite() {
 
     // STEP 7: User management
     console.log('\n--- Step 7: User Management Modal ---');
-    await clickSelector(page, '#btn-open-users');
+    await clickAdminEntry(page, '#btn-admin-users');
     await snap('14_user_management_modal');
     await clickSelector(page, '#btn-close-users-modal');
 
     // STEP 8: Backups
     console.log('\n--- Step 8: Backup & Snapshot Management ---');
-    await clickSelector(page, '#btn-open-backups');
+    await clickAdminEntry(page, '#btn-admin-backups');
     await snap('15_backup_snapshots_modal');
     await clickText(page, 'ZIP-Datei hochladen');
     await page.waitForSelector('#backup-file-input', { timeout: 5000 });
@@ -534,7 +534,7 @@ async function runDeepTestSuite() {
     console.log('\n--- Step 11: Desktop Header (1280 x 800) & Version Badge (640 x 400) ---');
     await page.setViewport({ width: 1280, height: 800 });
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('#btn-logout', { timeout: 10000 });
+    await page.waitForSelector('#btn-account-menu', { timeout: 10000 });
     await page.evaluate(() => {
       const e = new Event('beforeinstallprompt');
       e.prompt = () => {};
