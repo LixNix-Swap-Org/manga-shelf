@@ -12,6 +12,9 @@ import ReaderBar from './components/detail/ReaderBar';
 import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
 import CopyVolumesNotice from './components/detail/CopyVolumesNotice';
+import EditionTab from './components/detail/EditionTab';
+import SeriesInfo from './components/detail/SeriesInfo';
+import useTabList from './hooks/useTabList';
 import ShelfSpine from './components/detail/ShelfSpine';
 import BulkActionBar from './components/detail/BulkActionBar';
 import DetailBottomBar, { revealAboveKeyboard } from './components/detail/DetailBottomBar';
@@ -120,12 +123,35 @@ const LOAD_ERRORS = {
   unauthorized: { title: 'Sitzung abgelaufen', text: 'Bitte melde dich neu an.' }
 };
 
+// tabs below the series head; the choice is in the address (?tab=edition), the volumes need none
+// i18n
+const DETAIL_TABS = [
+  { id: 'baende', label: 'Bände' },
+  { id: 'edition', label: 'Edition & Abgleich' },
+  { id: 'infos', label: 'Infos' }
+];
+const DETAIL_TAB_IDS = DETAIL_TABS.map((tab) => tab.id);
+export const detailTabFromSearch = (search) => {
+  let value = null;
+  try { value = new URLSearchParams(search || '').get('tab'); } catch (_) { /* malformed query */ }
+  return DETAIL_TAB_IDS.includes(value) ? value : 'baende';
+};
+
 export default function MangaDetail({ user, onUnauthorized }) {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const backTo = backLinkTarget(location.state);
   const addVolumeRef = useRef(null);
+  const detailTab = detailTabFromSearch(location.search);
+  const setDetailTab = (tab) => {
+    const params = new URLSearchParams(location.search);
+    if (tab === 'baende') params.delete('tab');
+    else params.set('tab', tab);
+    const query = params.toString();
+    navigate({ search: query ? `?${query}` : '' }, { replace: true, state: location.state });
+  };
+  const { tabListProps, tabProps, panelProps } = useTabList({ tabs: DETAIL_TAB_IDS, selected: detailTab, onSelect: setDetailTab, prefix: 'detail' });
 
   // Role permissions (visitor / guest are read-only)
   const baseCanEdit = user && (user.role === 'admin' || user.role === 'editor');
@@ -306,19 +332,35 @@ export default function MangaDetail({ user, onUnauthorized }) {
     filteredVolumes, focusedVolumeId, setFocusedVolumeId, canEdit, canToggle, handleToggleVolumeRead, handleOpenEditVolume
   });
 
-  const focusAddVolume = () => {
+  // the add bar and the volumes live in the tab "Bände": a scan or "Band hinzufügen" on another tab switches to it first
+  const afterVolumesShown = useRef(null);
+  const showVolumes = (then) => {
+    if (detailTab === 'baende') {
+      then();
+      return;
+    }
+    afterVolumesShown.current = then;
+    setDetailTab('baende');
+  };
+  useEffect(() => {
+    if (detailTab !== 'baende' || !afterVolumesShown.current) return;
+    const run = afterVolumesShown.current;
+    afterVolumesShown.current = null;
+    run();
+  }, [detailTab]);
+  const focusAddVolume = () => showVolumes(() => {
     const field = addVolumeRef.current?.querySelector('input[id$="-number"]');
     if (!field) return;
     field.scrollIntoView?.({ block: 'center' });
     field.focus({ preventScroll: true });
     revealAboveKeyboard(field);
-  };
+  });
   const openScannedVolume = (vol) => {
     if (canEdit) {
       handleOpenEditVolume(vol);
       return;
     }
-    document.querySelector(`[data-volume-id="${vol.id}"]`)?.scrollIntoView?.({ block: 'center' });
+    showVolumes(() => document.querySelector(`[data-volume-id="${vol.id}"]`)?.scrollIntoView?.({ block: 'center' }));
   };
   const scanLookupSeqRef = useRef(0);
   const newVolumeNumRef = useRef(newVolumeNum);
@@ -533,9 +575,6 @@ export default function MangaDetail({ user, onUnauthorized }) {
           totalTarget={totalTarget}
           uploadingCover={uploadingCover}
           onCollectingSaved={(collecting) => patchManga((m) => ({ ...m, collecting }))}
-          canFillTags={canFillTags}
-          fillingTags={fillingTags}
-          handleFillTags={handleFillTags}
           onEditionsChanged={fetchManga}
         />
 
@@ -549,7 +588,51 @@ export default function MangaDetail({ user, onUnauthorized }) {
           />
         )}
 
+        <div {...tabListProps} aria-label={t('Bereiche der Reihe')} className="flex flex-nowrap items-center gap-1 mb-4 p-1 w-fit max-w-full overflow-x-auto no-scrollbar bg-slate-900/80 rounded-2xl border border-slate-800">
+          {DETAIL_TABS.map(({ id: tabId, label }) => (
+            <button
+              key={tabId}
+              {...tabProps(tabId)}
+              className={`shrink-0 whitespace-nowrap px-4 min-h-[40px] rounded-xl text-sm font-semibold transition-colors ${detailTab === tabId ? 'bg-brand-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              {tabId === 'baende' ? t('Bände ({count})', { count: volumes.length }) : t(label)}
+            </button>
+          ))}
+        </div>
+
+        <div {...panelProps} tabIndex={-1} className="focus:outline-none">
+        {detailTab === 'edition' && (
+          <section aria-label={t('Edition & Abgleich')} className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl">
+            <EditionTab
+              manga={manga}
+              canEdit={canEdit}
+              isOffline={isOffline}
+              onEditionsChanged={fetchManga}
+              detectedGapEntries={detectedGapEntries}
+              showGaps={showGaps}
+              onToggleShowGaps={handleToggleShowGaps}
+              onFillGaps={handleBatchFillGaps}
+              fillingGaps={fillingGapLoading}
+              mpEnabled={mpEnabled}
+              mpGapData={mpGapData}
+              mpGapLoading={mpGapLoading}
+              mpGapError={mpGapError}
+              onOpenMp={() => setShowMpEditionModal(true)}
+              shelfCount={shelfCount}
+              volumeCount={volumes.length}
+              onCopied={fetchManga}
+            />
+          </section>
+        )}
+
+        {detailTab === 'infos' && (
+          <section aria-label={t('Infos')} className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl">
+            <SeriesInfo manga={manga} canEdit={canEdit} canFillTags={canFillTags} fillingTags={fillingTags} handleFillTags={handleFillTags} />
+          </section>
+        )}
+
         {/* VOLUMES CHECKLIST SECTION */}
+        {detailTab === 'baende' && (
         <section aria-labelledby="volumes-heading" className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl">
           
           {/* Header & Controls */}
@@ -821,6 +904,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
           </div>
 
         </section>
+        )}
+        </div>
       </main>
 
       <DetailBottomBar

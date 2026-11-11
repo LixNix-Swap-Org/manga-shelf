@@ -11,6 +11,7 @@ import GapFillModal, { gapFillOptions, formatGermanDate } from '../components/de
 import MpEditionModal, { mpModalActions } from '../components/detail/MpEditionModal';
 import AddVolumeBar from '../components/detail/AddVolumeBar';
 import EditHeader from '../components/detail/volumeEdit/EditHeader';
+import SeriesInfo from '../components/detail/SeriesInfo';
 import { findDuplicateEntries } from '../MangaDetail';
 import { buildMpGapMap } from '../utils/volumeHelpers';
 import { fakeResponse } from './fakeResponse';
@@ -274,10 +275,10 @@ describe('MangaHeroCard', () => {
     }
   });
 
-  it('the empty description hint mentions Bearbeiten only to editors', () => {
-    const { rerender } = render(<MangaHeroCard {...baseProps()} />);
+  it('the empty description hint (tab Infos) mentions Bearbeiten only to editors', () => {
+    const { rerender } = render(<SeriesInfo {...baseProps()} />);
     expect(screen.getByText(/Klicke auf "Bearbeiten"/)).toBeTruthy();
-    rerender(<MangaHeroCard {...baseProps({ canEdit: false })} />);
+    rerender(<SeriesInfo {...baseProps({ canEdit: false })} />);
     expect(screen.queryByText(/Bearbeiten/)).toBe(null);
     expect(screen.getByText('Keine Beschreibung vorhanden.')).toBeTruthy();
   });
@@ -441,9 +442,12 @@ describe('MangaHeroCard: tags and lookup badges', () => {
     ...over
   });
 
-  it('shows the tags in German as links to the filtered shelf', () => {
+  it('shows the tags in German as links to the filtered shelf (tab Infos), no longer in the head', () => {
     expect(tagShelfPath('Slice of Life')).toBe('/?tags=Slice+of+Life');
-    render(<MemoryRouter><MangaHeroCard {...props()} /></MemoryRouter>);
+    const head = render(<MemoryRouter><MangaHeroCard {...props()} /></MemoryRouter>);
+    expect(document.getElementById('detail-tags')).toBeNull();
+    head.unmount();
+    render(<MemoryRouter><SeriesInfo {...props()} /></MemoryRouter>);
     const list = document.getElementById('detail-tags');
     expect([...list.querySelectorAll('a')].map(a => [a.textContent, a.getAttribute('href')])).toEqual([
       ['Abenteuer', '/?tags=Abenteuer'], ['Fantasy', '/?tags=Fantasy'], ['Shounen', '/?tags=Shounen']

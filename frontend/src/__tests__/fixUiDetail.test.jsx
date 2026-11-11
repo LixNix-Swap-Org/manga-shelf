@@ -8,6 +8,7 @@ vi.mock('../components/common/BarcodeScannerButton', () => ({
 }));
 
 import MangaHeroCard, { isLongDescription } from '../components/detail/MangaHeroCard';
+import SeriesInfo from '../components/detail/SeriesInfo';
 import AddVolumeBar from '../components/detail/AddVolumeBar';
 import DetailBottomBar, { revealAboveKeyboard, isTypingTarget } from '../components/detail/DetailBottomBar';
 import ReaderBar from '../components/detail/ReaderBar';
@@ -69,7 +70,7 @@ describe('MangaHeroCard layout (tablets, landscape phones, long German titles)',
     expect(isLongDescription(long)).toBe(true);
     expect(isLongDescription('Kurz.')).toBe(false);
     expect(isLongDescription('1\n2\n3\n4\n5\n6')).toBe(true);
-    const { rerender } = render(<MangaHeroCard {...props({ manga: { id: 7, title: 'T', description: long } })} />);
+    const { rerender } = render(<SeriesInfo {...props({ manga: { id: 7, title: 'T', description: long } })} />);
     const more = screen.getByRole('button', { name: 'Mehr anzeigen' });
     const text = document.getElementById(more.getAttribute('aria-controls'));
     expect(more.getAttribute('aria-expanded')).toBe('false');
@@ -78,7 +79,7 @@ describe('MangaHeroCard layout (tablets, landscape phones, long German titles)',
     fireEvent.click(more);
     expect(screen.getByRole('button', { name: 'Weniger anzeigen' }).getAttribute('aria-expanded')).toBe('true');
     expect(classesOf(text)).not.toContain('line-clamp-5');
-    rerender(<MangaHeroCard {...props({ manga: { id: 8, title: 'T', description: 'Kurz.' } })} />);
+    rerender(<SeriesInfo {...props({ manga: { id: 8, title: 'T', description: 'Kurz.' } })} />);
     expect(screen.queryByRole('button', { name: /anzeigen$/ })).toBeNull();
   });
 

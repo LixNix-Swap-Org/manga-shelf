@@ -494,7 +494,9 @@ manga-shelf/
 │           │       ├── PersonalDateChanges.jsx # banner "Termin übernehmen"
 │           │       └── useRadarDateChanges.js # date check (once per radar visit)
 │           ├── detail/           # detail view
-│           │   ├── MangaHeroCard.jsx # series header, edit form (with the shelf select and the move question), tags, author links, wishlist
+│           │   ├── MangaHeroCard.jsx # series header, edit form (with the shelf select and the move question), author links, wishlist
+│           │   ├── SeriesInfo.jsx # tab "Infos" of the series page (?tab=infos): genres/tags as shelf links, "Genres nachladen", the description
+│           │   ├── EditionTab.jsx # tab "Edition & Abgleich" (?tab=edition): gap detection ("Lücken zeigen", "Lücken füllen"), Manga Passion check, editions (second EditionSwitcher, ids with suffix -tab), volumes from another shelf
 │           │   ├── EditionSwitcher.jsx # editions of the same work (work_key) as pills under the title; "+ Ausgabe" dialog: create (POST /mangas/:id/editions), link/unlink (PUT /mangas/:id/work), suggestions by title + author
 │           │   ├── CollectingControl.jsx # collecting status (aktiv/pausiert/abgebrochen)
 │           │   ├── ReaderBar.jsx # reader toggle

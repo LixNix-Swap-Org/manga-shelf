@@ -51,6 +51,8 @@ export const SCREENS = [
   { name: 'anime-radar', url: '/?view=episodes' },
   { name: 'anime-radar-manga', url: '/?view=episodes', step: () => fireEvent.click(document.getElementById('anime-radar-tab-manga') || document.querySelectorAll('[role="tab"]')[1]) },
   { name: 'detail', url: `/manga/${ID}` },
+  { name: 'detail-edition', url: `/manga/${ID}?tab=edition` },
+  { name: 'detail-infos', url: `/manga/${ID}?tab=infos` },
   { name: 'stats', url: '/statistik' },
   { name: 'stats-finances', url: '/statistik/finanzen' },
   { name: 'stats-persons', url: '/statistik/personen' },
