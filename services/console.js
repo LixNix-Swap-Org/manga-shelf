@@ -1,6 +1,7 @@
 // Admin console of the server (stdin, the headless binary, scripts/admin.js): German commands for passwords, roles,
 // sources and status. Secrets never go to the log; generated passwords only reach a terminal or a 0600 file.
 const fs = require('fs');
+const { findUserByName } = require('../core/lib/usernames');
 const path = require('path');
 const crypto = require('crypto');
 const readline = require('readline');
@@ -26,7 +27,7 @@ function generatePassword() {
 }
 
 function findUser(name) {
-    return db.prepare('SELECT id, username, role, password_hash FROM users WHERE username = ? COLLATE NOCASE').get(name);
+    return findUserByName(db, name, 'id, username, role, password_hash');
 }
 
 function relativeAge(ms) {

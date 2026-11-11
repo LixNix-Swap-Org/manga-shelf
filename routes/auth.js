@@ -1,5 +1,6 @@
 // Setup, login, session and user-management routes.
 const express = require('express');
+const { foldUsername, findUserByName } = require('../core/lib/usernames');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -164,9 +165,8 @@ router.post('/auth/login', async (req, res) => {
     // "Max" and "max" are the same account; an exact match wins if old data has both
     // as typed or in NFC (new accounts are stored in NFC; an older one keeps the form it was created with). Written as
     // IN, not as two NOCASE equalities joined by OR: SQLite 3.47 (Node 22.13) turns that OR into a case-sensitive lookup
-    const typed = username.trim();
-    const user = db.prepare('SELECT * FROM users WHERE (username COLLATE NOCASE) IN (?, ?) ORDER BY (username = ?) DESC, id ASC LIMIT 1')
-        .get(typed, typed.normalize('NFC'), typed);
+    // (core/lib/usernames.js: "JÖRG" finds "Jörg" too; COLLATE NOCASE alone folds ASCII only)
+    const user = findUserByName(db, username);
     const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
     if (!user || !valid) throw new HttpError(401, 'Ungültige Anmeldedaten', 'INVALID_CREDENTIALS');
     loginGuard.succeeded(account, ip);
@@ -247,7 +247,6 @@ const auditFields = (req) => ({ admin: req.user.username, auth_scheme: req.authS
  * Whether an account of that name exists, ignoring case in every alphabet ("Ärik" and "ärik", which COLLATE NOCASE and
  * the unique index keep apart) and the Unicode form (NFKC). Accounts are few, so all names are compared here.
  */
-const foldUsername = (name) => String(name).normalize('NFKC').toLowerCase();
 function usernameInUse(name) {
     const folded = foldUsername(name);
     return db.prepare('SELECT username FROM users').all().some(u => foldUsername(u.username) === folded);

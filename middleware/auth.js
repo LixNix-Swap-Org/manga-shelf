@@ -159,7 +159,7 @@ function sessionFromRequest(req) {
 
 const tokenFromRequest = (req) => sessionFromRequest(req).token;
 
-const sameUsername = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+const { sameUsername } = require('../core/lib/usernames');
 
 const MAX_CLOCK_SKEW_SECONDS = 60;
 

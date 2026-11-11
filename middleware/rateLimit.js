@@ -3,6 +3,7 @@
  * dependency required. Keys are bounded in length and every store has an entry cap, so hostile input cannot grow memory.
  */
 const crypto = require('crypto');
+const { foldUsername } = require('../core/lib/usernames');
 const net = require('net');
 const log = require('../utils/logger').child('rate-limit');
 
@@ -243,7 +244,7 @@ function createFailureTracker({ windowMs, max, maxEntries, name }) {
 }
 
 /** Lockout key of an account; must match for login, password change and admin reset. */
-const accountKey = (username) => boundedKey(String(username).trim().toLowerCase(), 128);
+const accountKey = (username) => boundedKey(foldUsername(username), 128);
 
 /**
  * Guards password checks: a lock per account + IP after `maxPerClient` failures, one per account after

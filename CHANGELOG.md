@@ -24,6 +24,9 @@
 - Renaming a series no longer moves it to another catalog entry; only another language, format or Manga Passion edition does.
 - The cleanup of unused uploads keeps the covers the catalog still names.
 
+### Accounts
+- **Usernames with umlauts:** login, adding a shelf member by name, the console password reset and the login lockout ignore case in every alphabet, so "JÖRG" finds "Jörg" (`core/lib/usernames.js`; COLLATE NOCASE folds ASCII only).
+
 ### Shelves
 - **Admins see that private shelves exist:** "Regale" lists, for an admin, the shelves he is no member of under "Andere Regale", with name, Verwalter and the number of series, never their content (`GET /api/shelves/others`).
 

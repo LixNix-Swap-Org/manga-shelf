@@ -4,6 +4,7 @@ const { HttpError, msg, badRequest, notFound, conflict, forbidden } = require('.
 const { parsePositiveInt } = require('../lib/validate');
 const { qstr } = require('../lib/query');
 const access = require('../lib/access');
+const { findUserByName } = require('../lib/usernames');
 const { syncStatusWithOwners, purchaseDateFromRemainingOwners } = require('../lib/owners');
 const { rememberUndo } = require('./volumes');
 
@@ -159,7 +160,7 @@ function addMember(ctx, { params, body }) {
         const userId = parsePositiveInt(body.user_id);
         user = userId && ctx.db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
     } else if (typeof body.username === 'string' && body.username.trim()) {
-        user = ctx.db.prepare('SELECT id, username, role FROM users WHERE username = ? COLLATE NOCASE').get(body.username.trim());
+        user = findUserByName(ctx.db, body.username, 'id, username, role');
     } else {
         throw badRequest('Benutzername fehlt');
     }
