@@ -58,9 +58,9 @@ export function ownerOptions(people, user) {
   if (others.length === 0) return [];
   const name = (p) => p.display_name || p.username;
   return [
-    { value: FOR_ME, label: tr('Für mich') },
-    ...(user?.role === 'admin' ? others.map((p) => ({ value: String(p.user_id), label: tr('Für {name}', { name: name(p) }) })) : []),
-    { value: FOR_NOBODY, label: tr('Noch für niemanden (Haushalt)') }
+    { value: FOR_ME, text: tr('Für mich') },
+    ...(user?.role === 'admin' ? others.map((p) => ({ value: String(p.user_id), text: tr('Für {name}', { name: name(p) }) })) : []),
+    { value: FOR_NOBODY, text: tr('Noch für niemanden (Haushalt)') }
   ];
 }
 
@@ -271,7 +271,7 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
                 onChange={(e) => setBatchOwner(e.target.value)}
                 aria-describedby={`${ids}-owner-hint`}
               >
-                {owners.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {owners.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
               </select>
               <p id={`${ids}-owner-hint`} className="text-[11px] text-slate-400 mt-1">
                 {tr('Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.')}

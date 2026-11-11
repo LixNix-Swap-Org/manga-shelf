@@ -21,7 +21,7 @@ describe('ownerOptions', () => {
   });
 
   it('lists every other owner for an admin, read-only accounts left out', () => {
-    expect(ownerOptions(people, { id: 1, role: 'admin' }).map(o => o.label)).toEqual(['Für mich', 'Für Felix', 'Noch für niemanden (Haushalt)']);
+    expect(ownerOptions(people, { id: 1, role: 'admin' }).map(o => o.text)).toEqual(['Für mich', 'Für Felix', 'Noch für niemanden (Haushalt)']);
   });
 
   it('offers an editor only "me" and "nobody yet"', () => {
