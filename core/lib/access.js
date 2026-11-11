@@ -109,8 +109,11 @@ function ensureMembership(ctx) {
             const home = defaultShelf(ctx.db);
             if (home) {
                 const members = ctx.db.prepare('SELECT COUNT(*) AS n FROM shelf_members WHERE shelf_id = ?').get(home.id).n;
-                const role = members === 0 ? 'owner' : joinRole(user.role);
-                if (members === 0) ctx.db.prepare('UPDATE shelves SET owner_user_id = ? WHERE id = ?').run(userId, home.id);
+                // an empty household shelf gets its first member as owner, but only an account that can act as one: a
+                // visitor or guest owner would count as viewer and leave the shelf without anyone to manage it
+                const owns = members === 0 && !isReadOnlyAccount(user.role);
+                const role = owns ? 'owner' : joinRole(user.role);
+                if (owns) ctx.db.prepare('UPDATE shelves SET owner_user_id = ? WHERE id = ?').run(userId, home.id);
                 ctx.db.prepare('INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(home.id, userId, role);
             } else {
                 createPersonalShelf(ctx.db, userId);
@@ -320,7 +323,10 @@ function inShelves(column, ids) {
     return { sql: `${column} IN (${ids.map(() => '?').join(',')})`, params: ids };
 }
 
-/** The shelf a new series lands in: ?shelf_id/body.shelf_id (needs editor), else the caller's first own shelf. */
+/**
+ * The shelf a new series lands in: ?shelf_id/body.shelf_id (needs editor), else the caller's first shelf it owns (by its
+ * membership role, not the creator column `owner_user_id`, which never follows a handover), the household shelf next.
+ */
 function targetShelfId(ctx, raw) {
     if (raw !== undefined && raw !== null && raw !== '') {
         const id = parseId(raw);
@@ -330,7 +336,7 @@ function targetShelfId(ctx, raw) {
     }
     const ids = accessibleShelfIds(ctx, 'editor');
     if (!ids.length) throw new HttpError(403, 'Keine ausreichende Berechtigung für dieses Regal', 'FORBIDDEN');
-    const own = ctx.db.prepare(`SELECT id FROM shelves WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY (owner_user_id = ?) DESC, is_default DESC, id LIMIT 1`).get(...ids, ctx.user ? ctx.user.id : 0);
+    const own = ctx.db.prepare(`SELECT id FROM shelves WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY EXISTS (SELECT 1 FROM shelf_members o WHERE o.shelf_id = shelves.id AND o.user_id = ? AND o.role = 'owner') DESC, is_default DESC, id LIMIT 1`).get(...ids, ctx.user ? ctx.user.id : 0);
     return own.id;
 }
 

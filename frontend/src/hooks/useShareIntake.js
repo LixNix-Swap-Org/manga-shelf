@@ -12,7 +12,7 @@ import { t } from '../i18n/index.js';
 const seenText = (title, episode, complete) => (complete ? t('{title}: komplett gesehen', { title }) : t('{title}: Folge {episode} gesehen', { title, episode }));
 
 // A streaming link shared to the app (share target, Android share sheet, "Link einfügen"): asks the server what it points to,
-// lets the user confirm "Frieren, Folge 7 gesehen?" and saves it with an undo toast. `state` drives ShareLinkDialog:
+// lets the user confirm "Frieren, Folge 7 gesehen?" and saves it with an undo toast. `state` drives EpisodeLinkDialog:
 // { phase: 'paste' | 'reading' | 'error' | 'confirm' | 'saving', … } or null. Shares arriving while it is open wait in order.
 export default function useShareIntake({ anime, user, canEdit, showAnime, openAddAnime }) {
   const [state, setState] = useState(null);
