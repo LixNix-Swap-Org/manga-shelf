@@ -17,13 +17,12 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, laz
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { normalizePubName } from './utils/volumeHelpers';
-import { buildScanPrefill, parseSharedScan } from './utils/scanHelpers';
-import { lookupLocalIsbn } from './utils/offlineStore';
+import { buildScanPrefill } from './utils/scanHelpers';
 import { getStatusBadge } from './utils/collectionHelpers';
 import { monthNames } from './utils/format';
 import { mpMatchesSelection } from './utils/radarHelpers';
 import {
-  parseInitialView, viewSearch, scanDashboardAction, SCAN_OFFLINE_MESSAGE, SCAN_FAILED_MESSAGE
+  parseInitialView, viewSearch
 } from './components/dashboard/dashboardShell';
 import usePwaInstall from './hooks/usePwaInstall';
 import useOfflineStatus from './hooks/useOfflineStatus';
@@ -35,25 +34,22 @@ import useAnimeList from './hooks/useAnimeList';
 import useEpisodeAlerts from './hooks/useEpisodeAlerts';
 import { tagCounts } from './utils/animeHub';
 import useShareIntake from './hooks/useShareIntake';
-import { findStreamingLink } from './utils/shareIntake';
-import { SHARE_LINK_EVENT, takePendingShare } from './app/deepLink';
 import useDashboardKeyboard from './hooks/useDashboardKeyboard';
 import useSearchScope, { ONLINE_MIN_CHARS } from './hooks/useSearchScope';
 import { dialogEntryOnTop } from './hooks/useDialogA11y';
 import usePullToRefresh, { useForegroundRefresh, PULL_THRESHOLD_PX } from './hooks/usePullToRefresh';
-import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { invalidateShelves } from './utils/shelfScope';
 import { notify } from './utils/notify';
-import { takeReopenAccount } from './i18n/preference.js';
+import useDashboardScan from './hooks/useDashboardScan';
+import useAccountDialogRequests from './hooks/useAccountDialogRequests';
 import useAccountDefaults from './hooks/useAccountDefaults';
 import { t } from './i18n/index.js';
 
 // dialogs are loaded on first use and mounted only while open
 const UserManagementModal = lazy(() => import('./components/modals/UserManagementModal'));
+import DashboardAnimeDialogs from './components/dashboard/DashboardAnimeDialogs';
+import DashboardToolDialogs from './components/dashboard/DashboardToolDialogs';
 const AccountModal = lazy(() => import('./components/modals/AccountModal'));
-const AddAnimeModal = lazy(() => import('./components/modals/AddAnimeModal'));
-const AnimeDetailModal = lazy(() => import('./components/modals/AnimeDetailModal'));
-const EpisodeLinkDialog = lazy(() => import('./components/modals/EpisodeLinkDialog'));
 const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
 const StatsPage = lazy(() => import('./components/modals/StatsPage'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
@@ -61,10 +57,6 @@ const CsvExchangeModal = lazy(() => import('./components/dashboard/CsvExchangeMo
 const AnimeRadarView = lazy(() => import('./components/dashboard/AnimeRadarView'));
 const OnlineResults = lazy(() => import('./components/dashboard/OnlineResults'));
 const ConfirmDialog = lazy(() => import('./components/modals/ConfirmDialog'));
-const TrashModal = lazy(() => import('./components/modals/TrashModal'));
-const PublishersModal = lazy(() => import('./components/modals/PublishersModal'));
-const ShelvesModal = lazy(() => import('./components/modals/ShelvesModal'));
-const CleanupModal = lazy(() => import('./components/modals/CleanupModal'));
 
 // i18n
 const VIEW_TITLES = { shelf: 'Sammlung', shopping: 'Einkaufsliste', radar: 'Release-Radar', anime: 'Anime', episodes: 'Anime-Radar' };
@@ -72,7 +64,6 @@ const ANIME_VIEW = 'anime';
 const savedShelfScroll = () => {
   try { return Number(window.sessionStorage.getItem(SHELF_SCROLL_KEY)) || 0; } catch (_) { return 0; }
 };
-const OPEN_ACCOUNT_EVENT = 'mangashelf:open-account';
 
 // older names of the dashboardShell helpers (animeTab.test.jsx imports them from here)
 export const mainViewOf = (search) => parseInitialView(search).mainView;
@@ -88,10 +79,7 @@ const addTargetOf = (search) => {
     return null;
   }
 };
-// i18n
-export const SHARED_NO_ISBN_MESSAGE = 'Im geteilten Text wurde keine ISBN gefunden.';
-// i18n
-export const SHARED_MP_LINK_MESSAGE = 'Manga-Passion-Link erkannt: Lege die Reihe an und übernimm die Daten per Auto-Fill.';
+export { SHARED_NO_ISBN_MESSAGE, SHARED_MP_LINK_MESSAGE } from './hooks/useDashboardScan';
 
 export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const isVisitor = !user || user.role === 'visitor' || user.role === 'guest';
@@ -116,13 +104,10 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [scanPrefill, setScanPrefill] = useState(null); // ISBN scan without a matching series: opens the add dialog prefilled
   const [scanChoice, setScanChoice] = useState(null); // { candidates, book, isbn }: several series match a scan
-  const scanRequestRef = useRef(0);
-  const scanToastRef = useRef(null);
 
   // Modal visibility states
   const [showUsersModal, setShowUsersModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [accountTab, setAccountTab] = useState('password');
+  const { showPasswordModal, setShowPasswordModal, accountTab, handleOpenPasswordModal, openApiKeys } = useAccountDialogRequests({ location, navigate });
   const [animeAdd, setAnimeAdd] = useState(null); // { mangaId, query?, share? } while the add dialog is open
   const [animeDetailId, setAnimeDetailId] = useState(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -361,15 +346,6 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     mobileMenuOpen, setMobileMenuOpen, search, setSearch, searchInputRef
   });
 
-  /** One scan message at a time in the app's toast stack; a busy or action message stays until replaced or closed. */
-  const showScanToast = (kind, message, options) => {
-    if (scanToastRef.current !== null) notify.dismiss(scanToastRef.current);
-    scanToastRef.current = kind ? notify[kind](message, options) : null;
-  };
-  useEffect(() => () => {
-    if (scanToastRef.current !== null) notify.dismiss(scanToastRef.current);
-  }, []);
-
   const openAddWithPrefill = (prefill) => {
     if (!canEdit) return;
     setScanPrefill(prefill);
@@ -417,100 +393,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     navigateFromDialog(`/manga/${manga.id}`);
   };
 
-  const handleBarcodeDetected = async (scannedCode) => {
-    const requestId = ++scanRequestRef.current;
-    const isLatest = () => requestId === scanRequestRef.current;
-    // a volume of the offline copy opens its series at once, also offline and without asking the server
-    const local = await lookupLocalIsbn(scannedCode);
-    if (!isLatest()) return;
-    if (local?.manga) {
-      showScanToast(null);
-      openSeries(local.manga);
-      return;
-    }
-    if (isOfflineMode) {
-      showScanToast('error', t(SCAN_OFFLINE_MESSAGE));
-      return;
-    }
-    showScanToast('info', t('ISBN {isbn} wird gesucht...', { isbn: scannedCode }), { duration: 0 });
-    let res;
-    let data;
-    try {
-      res = await apiFetch(`/api/lookup/isbn?isbn=${encodeURIComponent(scannedCode)}`, { timeout: TIMEOUTS.lookup });
-      data = await readJson(res); // a proxy 502/504 answers with HTML
-    } catch (_) {
-      if (isLatest()) showScanToast('error', t(SCAN_FAILED_MESSAGE));
-      return;
-    }
-    if (!isLatest()) return;
-    const isbn = data?.isbn || scannedCode;
-    const action = scanDashboardAction({ ok: res.ok, data, canEdit });
-    switch (action.type) {
-      case 'navigate':
-        showScanToast(null);
-        openSeries(action.manga);
-        break;
-      case 'choose':
-        showScanToast(null);
-        setScanChoice({ candidates: action.candidates, book: action.book, isbn });
-        break;
-      case 'prefill':
-        showScanToast(null);
-        openAddWithPrefill(buildScanPrefill(action.book, isbn));
-        break;
-      case 'notFound':
-        showScanToast('info', action.message, action.canAdd ? {
-          duration: 0,
-          action: { label: t('Reihe manuell anlegen'), onClick: () => openAddWithPrefill(buildScanPrefill({}, isbn)) }
-        } : { duration: 8000 });
-        break;
-      case 'notice':
-        showScanToast('info', action.message, { duration: 8000 });
-        break;
-      default:
-        showScanToast('error', action.message);
-    }
-  };
-
-  // a shared text: a streaming link goes to the anime tab's confirmation, else an ISBN is looked up like a scan
-  const handleSharedRef = useRef(null);
-  handleSharedRef.current = (input, options) => {
-    if (share.start(input, options)) return;
-    const shared = parseSharedScan({ text: input.text || '', url: input.url || '' });
-    if (shared?.isbn) handleBarcodeDetected(shared.isbn);
-    else if (shared?.mpUrl && canEdit) {
-      showScanToast('info', t(SHARED_MP_LINK_MESSAGE), { duration: 0, action: { label: t('Reihe anlegen'), onClick: () => openAddWithPrefill(null) } });
-    } else showScanToast('info', t(SHARED_NO_ISBN_MESSAGE), { duration: 8000 });
-  };
-
-  // share target (manifest share_text / share_url): the parameters are removed at once, a streaming link opens ?view=anime
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (!params.has('share_text') && !params.has('share_url')) return;
-    const input = { text: params.get('share_text') || '', url: params.get('share_url') || '' };
-    params.delete('share_text');
-    params.delete('share_url');
-    const rest = params.toString() ? `?${params}` : '';
-    navigate({ search: findStreamingLink(input.text, input.url) ? viewSearch(rest, ANIME_VIEW) : rest }, { replace: true });
-    // after the first paint: a toast stack mounted after the dashboard would miss a message sent during mount
-    const timer = setTimeout(() => handleSharedRef.current(input, { switchView: false }), 0);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
-  }, []);
-
-  // app shells: a share that arrived before the dashboard mounted waits in deepLink.js, later ones come as an event
-  useEffect(() => {
-    const onShare = () => {
-      const pending = takePendingShare();
-      if (pending) handleSharedRef.current(pending);
-    };
-    const timer = setTimeout(onShare, 0);
-    window.addEventListener(SHARE_LINK_EVENT, onShare);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener(SHARE_LINK_EVENT, onShare);
-    };
-  }, []);
+  const handleBarcodeDetected = useDashboardScan({ isOfflineMode, canEdit, openSeries, openAddWithPrefill, setScanChoice, share, location, navigate });
 
   const handleOpenStats = useCallback(() => {
     if (isOfflineMode) return;
@@ -536,40 +419,6 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     setDeleteTarget({ id, title });
   }, []);
 
-  const handleOpenPasswordModal = () => {
-    setAccountTab('password');
-    setShowPasswordModal(true);
-  };
-
-  const openApiKeys = () => {
-    setAccountTab('keys');
-    setShowPasswordModal(true);
-  };
-  // App sends the desktop menu "Quellen & Schlüssel…" here: as an in-page event while the shelf is mounted (no history
-  // write, open dialogs keep their entries), else as navigation state that is used once
-  useEffect(() => {
-    const onOpenAccount = (event) => {
-      if (event.detail !== 'keys') return;
-      event.preventDefault();
-      setAccountTab('keys');
-      setShowPasswordModal(true);
-    };
-    window.addEventListener(OPEN_ACCOUNT_EVENT, onOpenAccount);
-    return () => window.removeEventListener(OPEN_ACCOUNT_EVENT, onOpenAccount);
-  }, []);
-  // a language switch from the account dialog remounted the page: the dialog comes back on its language tab
-  useEffect(() => {
-    const tab = takeReopenAccount();
-    if (!tab) return;
-    setAccountTab(tab);
-    setShowPasswordModal(true);
-  }, []);
-  const openAccount = location.state?.openAccount;
-  useEffect(() => {
-    if (openAccount !== 'keys') return;
-    openApiKeys();
-    navigate({ search: location.search }, { replace: true, state: null });
-  }, [openAccount]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per request
 
   // a restore from the header's local backup dialog: App reloads the profile, the shelf reloads its data
   const handleLocalReplaced = async () => {
@@ -971,68 +820,22 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
 
         {showPasswordModal && <AccountModal isOpen onClose={() => setShowPasswordModal(false)} user={user} initialTab={accountTab} />}
 
-        {/* own boundaries: a dialog whose chunk is still loading must not hide the open share dialog (focus would leave it) */}
-        <Suspense fallback={null}>
-          {share.state && (
-            <EpisodeLinkDialog
-              state={share.state}
-              list={anime.list}
-              listLoaded={anime.loaded}
-              canAdd={canEdit && !user?.offline}
-              rootRef={shareDialogRef}
-              onClose={share.close}
-              onSubmitPaste={share.submitPaste}
-              onRetry={share.retry}
-              onChoose={share.choose}
-              onAddToList={share.addToList}
-              onConfirm={share.confirm}
-              onCreate={share.create}
-            />
-          )}
-        </Suspense>
-
-        <Suspense fallback={null}>
-          {animeAdd && (
-            <AddAnimeModal
-              isOpen
-              onClose={() => { settleMatchSearch(null); setAnimeAdd(null); }}
-              search={anime.search}
-              loadAdaptations={anime.adaptations}
-              onAdd={animeAdd.share
-                ? async (body) => { const added = await anime.add(body); share.choose(added?.id ?? null); return added; }
-                : async (body) => { const added = await anime.add(body); settleMatchSearch(added?.id ? { id: added.id } : null); return added; }}
-              onOpenExisting={animeAdd.share ? share.choose : (id) => { if (matchSearch.current) settleMatchSearch({ id }); else setAnimeDetailId(id); }}
-              mangas={mangas}
-              initialMangaId={animeAdd.mangaId}
-              initialQuery={animeAdd.query || ''}
-              returnFocusRef={animeAdd.share ? shareDialogRef : undefined}
-              sources={anime.sources}
-              loadSources={anime.fetchSources}
-              animeOnly={Boolean(animeAdd.share) || matchSearch.current !== null}
-            />
-          )}
-        </Suspense>
-
-        {animeDetailId !== null && (
-          <AnimeDetailModal
-            isOpen
-            animeId={animeDetailId}
-            fallback={animeEntry(animeDetailId)}
-            onClose={() => setAnimeDetailId(null)}
-            canEdit={canEdit && !user?.offline}
-            mangas={mangas}
-            fetchDetail={anime.fetchDetail}
-            updateProgress={anime.updateProgress}
-            removeFromMyList={anime.removeFromMyList}
-            update={anime.update}
-            seasonSuggestion={anime.seasonSuggestion}
-            refresh={anime.refresh}
-            remove={anime.remove}
-            onAdd={anime.add}
-            onOpenAnime={(id) => setAnimeDetailId(id)}
-            knownTags={animeTagNames}
-          />
-        )}
+        <DashboardAnimeDialogs
+          anime={anime}
+          share={share}
+          shareDialogRef={shareDialogRef}
+          canEdit={canEdit}
+          user={user}
+          mangas={mangas}
+          animeAdd={animeAdd}
+          setAnimeAdd={setAnimeAdd}
+          matchSearch={matchSearch}
+          settleMatchSearch={settleMatchSearch}
+          animeDetailId={animeDetailId}
+          setAnimeDetailId={setAnimeDetailId}
+          animeEntry={animeEntry}
+          animeTagNames={animeTagNames}
+        />
 
         {showUsersModal && <UserManagementModal isOpen onClose={() => setShowUsersModal(false)} currentUser={user} />}
 
@@ -1081,63 +884,21 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           />
         )}
 
-        {activeToolModal === 'shelves' && (
-          <ShelvesModal
-            onClose={() => setActiveToolModal(null)}
-            user={user}
-            onChanged={() => {
-              loadPublisherNames({ force: true });
-              fetchMangas();
-              fetchShoppingList();
-              fetchReleaseRadar();
-            }}
-          />
-        )}
-
-        {activeToolModal === 'trash' && (
-          <TrashModal
-            onClose={() => setActiveToolModal(null)}
-            user={user}
-            onChanged={() => {
-              loadPublisherNames({ force: true });
-              fetchMangas();
-              fetchShoppingList();
-              fetchReleaseRadar();
-            }}
-            shelfId={scopedShelfId}
-            shelfName={scopedShelfName}
-            onClearShelf={clearShelfScope}
-            onShelfMissing={onShelfMissing}
-          />
-        )}
-
-        {activeToolModal === 'cleanup' && (
-          <CleanupModal
-            onClose={() => setActiveToolModal(null)}
-            user={user}
-            onChanged={() => {
-              loadPublisherNames({ force: true });
-              fetchMangas();
-              fetchShoppingList();
-              fetchReleaseRadar();
-            }}
-            onNavigate={() => setActiveToolModal(null)}
-            onOpenPublishers={user?.role === 'admin' ? () => setActiveToolModal('publishers') : undefined}
-          />
-        )}
-
-        {activeToolModal === 'publishers' && (
-          <PublishersModal
-            onClose={() => setActiveToolModal(null)}
-            user={user}
-            onChanged={() => {
-              loadPublisherNames({ force: true });
-              fetchMangas();
-              fetchShoppingList();
-              fetchReleaseRadar();
-            }}
-          />
-        )}
+        <DashboardToolDialogs
+          tool={activeToolModal}
+          setTool={setActiveToolModal}
+          user={user}
+          onDataChanged={() => {
+            loadPublisherNames({ force: true });
+            fetchMangas();
+            fetchShoppingList();
+            fetchReleaseRadar();
+          }}
+          shelfId={scopedShelfId}
+          shelfName={scopedShelfName}
+          onClearShelf={clearShelfScope}
+          onShelfMissing={onShelfMissing}
+        />
       </Suspense>
 
       {scanChoice && (
