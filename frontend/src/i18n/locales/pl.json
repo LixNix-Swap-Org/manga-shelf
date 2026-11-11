@@ -3739,7 +3739,6 @@
   "Infos": "Informacje",
   "Bereiche der Reihe": "Sekcje serii",
   "Lücken-Erkennung": "Wykrywanie luk",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Brakujące numery tomów: {count}. Na życzenie półka zaznaczy luki, a można je dodać naraz jako „Brak”.",
   "Keine Lücken in der Nummerierung.": "Brak luk w numeracji.",
   "Lücken zeigen": "Pokaż luki",
   "Lücken werden angelegt…": "Dodawanie luk…",
@@ -3807,5 +3806,14 @@
   "fehlt noch": "jeszcze brakuje",
   "gelesen am {date}": "przeczytano {date}",
   "Leser und Besitz: {label}": "Czytelnik i właściciel: {label}",
-  "Wer liest?": "Kto czyta?"
+  "Wer liest?": "Kto czyta?",
+  "Nicht im Regal: {list}.": "Nie ma na półce: {list}.",
+  "{a} und {b}": "{a} i {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} dodatek, np. etui lub tom specjalny",
+    "few": "{n} dodatki, np. etui lub tomy specjalne",
+    "many": "{n} dodatków, np. etui lub tomy specjalne",
+    "other": "{n} dodatków, np. etui lub tomy specjalne"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Na życzenie półka zaznaczy luki, a można je dodać naraz jako „Brak”."
 }

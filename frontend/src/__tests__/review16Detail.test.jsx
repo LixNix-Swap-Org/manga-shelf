@@ -329,7 +329,7 @@ describe('MangaDetail tabs (Bände, Edition & Abgleich, Infos)', () => {
     renderAt('/manga/5?tab=edition');
     const gaps = await screen.findByRole('heading', { name: 'Lücken-Erkennung' });
     const card = gaps.closest('#edition-card-gaps');
-    expect(within(card).getByText(/Fehlende Bandnummern: 1\./)).toBeTruthy();
+    expect(within(card).getByText(/Nicht im Regal: 1 Band\./)).toBeTruthy();
     const toggle = within(card).getByRole('switch', { name: 'Lücken zeigen' });
     const before = toggle.getAttribute('aria-checked');
     fireEvent.click(toggle);

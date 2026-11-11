@@ -3635,7 +3635,6 @@
   "Infos": "Infos",
   "Bereiche der Reihe": "Sections de la série",
   "Lücken-Erkennung": "Détection des trous",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Numéros de tome manquants : {count}. Si tu veux, l’étagère marque les trous, et tu peux tous les ajouter comme « Manquant ».",
   "Keine Lücken in der Nummerierung.": "Aucun trou dans la numérotation.",
   "Lücken zeigen": "Afficher les trous",
   "Lücken werden angelegt…": "Ajout des trous…",
@@ -3701,5 +3700,13 @@
   "fehlt noch": "manque encore",
   "gelesen am {date}": "lu le {date}",
   "Leser und Besitz: {label}": "Lecteur et propriétaire : {label}",
-  "Wer liest?": "Qui lit ?"
+  "Wer liest?": "Qui lit ?",
+  "Nicht im Regal: {list}.": "Pas sur l’étagère : {list}.",
+  "{a} und {b}": "{a} et {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} extra comme un coffret ou un tome spécial",
+    "many": "{n} extras comme des coffrets ou des tomes spéciaux",
+    "other": "{n} extras comme des coffrets ou des tomes spéciaux"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Si tu veux, l’étagère marque les trous, et tu peux tous les ajouter comme « Manquant »."
 }

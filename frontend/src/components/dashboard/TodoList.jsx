@@ -14,12 +14,39 @@ const KIND_CLASS = {
   gap: 'bg-amber-500/15 text-amber-300 border-amber-500/30'
 };
 
+/**
+ * Volume numbers as a short list: three or more consecutive whole numbers become a range ("21–113"), everything else
+ * (two in a row, 12.5, specials) stays as it is, in the given order.
+ */
+export function compactVolumes(volumes) {
+  const out = [];
+  let run = [];
+  const flush = () => {
+    if (run.length >= 3) out.push(`${run[0]}–${run[run.length - 1]}`);
+    else out.push(...run.map(String));
+    run = [];
+  };
+  for (const v of volumes || []) {
+    const s = String(v).trim();
+    const n = /^\d+$/.test(s) ? Number(s) : null;
+    if (n !== null && run.length && n === run[run.length - 1] + 1) {
+      run.push(n);
+    } else {
+      flush();
+      if (n !== null) run.push(n);
+      else out.push(s);
+    }
+  }
+  flush();
+  return out.join(', ');
+}
+
 /** The sentence of one entry of GET /api/todo. */
 export function todoText(item) {
   const title = item.title || t('Ohne Titel');
   const one = item.count === 1;
   const volume = item.volumes?.[0] ?? '';
-  const volumes = (item.volumes || []).join(', ');
+  const volumes = compactVolumes(item.volumes);
   if (item.kind === 'elsewhere') {
     return one
       ? t('{title}: Band {volume} steht schon im Regal „{shelf}“', { title, volume, shelf: item.shelf_name })

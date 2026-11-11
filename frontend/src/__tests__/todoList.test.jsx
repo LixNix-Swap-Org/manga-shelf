@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import TodoList, { todoText } from '../components/dashboard/TodoList';
+import TodoList, { compactVolumes, todoText } from '../components/dashboard/TodoList';
 import { fakeResponse } from './fakeResponse';
 
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -18,8 +18,17 @@ describe('todoText', () => {
   it('names the volumes for each kind', () => {
     expect(todoText(items[0])).toBe('One Piece: Band 57 steht schon im Regal „Familie“');
     expect(todoText(items[1])).toBe('Frieren: Bände 13, 14 sollten erschienen sein');
-    expect(todoText(items[2])).toBe('Blue Lock: 3 Bände fehlen (24, 25, 26)');
+    expect(todoText(items[2])).toBe('Blue Lock: 3 Bände fehlen (24–26)');
     expect(todoText(items[3])).toBe('Dandadan: Band 3 fehlt');
+  });
+});
+
+describe('compactVolumes', () => {
+  it('turns three or more consecutive numbers into a range and keeps the rest', () => {
+    expect(compactVolumes(['21', '22', '23', '24', '113'])).toBe('21–24, 113');
+    expect(compactVolumes(['6', '7'])).toBe('6, 7');
+    expect(compactVolumes(['1', '2', '3', '12.5', '13', '14', '15'])).toBe('1–3, 12.5, 13–15');
+    expect(compactVolumes([])).toBe('');
   });
 });
 

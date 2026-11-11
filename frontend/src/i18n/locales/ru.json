@@ -3739,7 +3739,6 @@
   "Infos": "Сведения",
   "Bereiche der Reihe": "Разделы серии",
   "Lücken-Erkennung": "Поиск пропусков",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Пропущенные номера томов: {count}. При желании полка отметит пропуски, и их можно сразу добавить как «Нет».",
   "Keine Lücken in der Nummerierung.": "В нумерации нет пропусков.",
   "Lücken zeigen": "Показывать пропуски",
   "Lücken werden angelegt…": "Пропуски добавляются…",
@@ -3807,5 +3806,14 @@
   "fehlt noch": "ещё нет",
   "gelesen am {date}": "прочитано {date}",
   "Leser und Besitz: {label}": "Читатель и владелец: {label}",
-  "Wer liest?": "Кто читает?"
+  "Wer liest?": "Кто читает?",
+  "Nicht im Regal: {list}.": "Нет на полке: {list}.",
+  "{a} und {b}": "{a} и {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} дополнение, например бокс или спецтом",
+    "few": "{n} дополнения, например боксы или спецтома",
+    "many": "{n} дополнений, например боксы или спецтома",
+    "other": "{n} дополнений, например боксы или спецтома"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "При желании полка отметит пропуски, и их можно сразу добавить как «Нет»."
 }

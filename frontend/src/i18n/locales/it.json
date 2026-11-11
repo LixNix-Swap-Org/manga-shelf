@@ -3635,7 +3635,6 @@
   "Infos": "Info",
   "Bereiche der Reihe": "Sezioni della serie",
   "Lücken-Erkennung": "Rilevamento lacune",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Numeri di volume mancanti: {count}. Se vuoi, lo scaffale segna le lacune e puoi aggiungerle tutte come «Manca».",
   "Keine Lücken in der Nummerierung.": "Nessuna lacuna nella numerazione.",
   "Lücken zeigen": "Mostra lacune",
   "Lücken werden angelegt…": "Aggiunta lacune…",
@@ -3701,5 +3700,13 @@
   "fehlt noch": "manca ancora",
   "gelesen am {date}": "letto il {date}",
   "Leser und Besitz: {label}": "Lettore e proprietario: {label}",
-  "Wer liest?": "Chi legge?"
+  "Wer liest?": "Chi legge?",
+  "Nicht im Regal: {list}.": "Non sullo scaffale: {list}.",
+  "{a} und {b}": "{a} e {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} extra come un cofanetto o un volume speciale",
+    "many": "{n} extra come cofanetti o volumi speciali",
+    "other": "{n} extra come cofanetti o volumi speciali"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Se vuoi, lo scaffale segna le lacune e puoi aggiungerle tutte come «Manca»."
 }

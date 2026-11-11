@@ -3531,7 +3531,6 @@
   "Infos": "Info",
   "Bereiche der Reihe": "Sections of the series",
   "Lücken-Erkennung": "Gap detection",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Missing volume numbers: {count}. If you like, the shelf marks the gaps, and they can be added as “Missing” all at once.",
   "Keine Lücken in der Nummerierung.": "No gaps in the numbering.",
   "Lücken zeigen": "Show gaps",
   "Lücken werden angelegt…": "Adding gaps…",
@@ -3595,5 +3594,12 @@
   "fehlt noch": "still missing",
   "gelesen am {date}": "read on {date}",
   "Leser und Besitz: {label}": "Reader and owner: {label}",
-  "Wer liest?": "Who is reading?"
+  "Wer liest?": "Who is reading?",
+  "Nicht im Regal: {list}.": "Not on the shelf: {list}.",
+  "{a} und {b}": "{a} and {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} extra such as a slipcase or special volume",
+    "other": "{n} extras such as slipcases or special volumes"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "If you like, the shelf marks the gaps, and they can be added as “Missing” all at once."
 }

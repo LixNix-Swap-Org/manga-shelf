@@ -3427,7 +3427,6 @@
   "Infos": "정보",
   "Bereiche der Reihe": "시리즈 영역",
   "Lücken-Erkennung": "누락 감지",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "빠진 권 번호: {count}. 원하면 책장에 누락을 표시하고 한 번에 ‘없음’으로 추가할 수 있습니다.",
   "Keine Lücken in der Nummerierung.": "번호에 누락이 없습니다.",
   "Lücken zeigen": "누락 표시",
   "Lücken werden angelegt…": "누락 추가 중…",
@@ -3489,5 +3488,11 @@
   "fehlt noch": "아직 없음",
   "gelesen am {date}": "{date}에 읽음",
   "Leser und Besitz: {label}": "독자와 소유자: {label}",
-  "Wer liest?": "누가 읽나요?"
+  "Wer liest?": "누가 읽나요?",
+  "Nicht im Regal: {list}.": "책장에 없음: {list}.",
+  "{a} und {b}": "{a}와 {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "other": "케이스나 특별판 같은 엑스트라 {n}개"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "원하면 책장에 누락을 표시하고 한 번에 ‘없음’으로 추가할 수 있습니다."
 }

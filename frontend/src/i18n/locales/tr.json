@@ -3531,7 +3531,6 @@
   "Infos": "Bilgiler",
   "Bereiche der Reihe": "Serinin bölümleri",
   "Lücken-Erkennung": "Eksik tespiti",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Eksik cilt numaraları: {count}. İstersen raf eksikleri işaretler ve hepsi bir kerede “Eksik” olarak eklenebilir.",
   "Keine Lücken in der Nummerierung.": "Numaralandırmada eksik yok.",
   "Lücken zeigen": "Eksikleri göster",
   "Lücken werden angelegt…": "Eksikler ekleniyor…",
@@ -3595,5 +3594,12 @@
   "fehlt noch": "hâlâ eksik",
   "gelesen am {date}": "{date} tarihinde okundu",
   "Leser und Besitz: {label}": "Okuyan ve sahip: {label}",
-  "Wer liest?": "Kim okuyor?"
+  "Wer liest?": "Kim okuyor?",
+  "Nicht im Regal: {list}.": "Rafta yok: {list}.",
+  "{a} und {b}": "{a} ve {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "kutu ya da özel cilt gibi {n} ekstra",
+    "other": "kutu ya da özel cilt gibi {n} ekstra"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "İstersen raf eksikleri işaretler ve hepsi bir kerede “Eksik” olarak eklenebilir."
 }

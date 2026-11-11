@@ -3635,7 +3635,6 @@
   "Infos": "Informações",
   "Bereiche der Reihe": "Seções da série",
   "Lücken-Erkennung": "Detecção de lacunas",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Números de volume faltando: {count}. Se quiser, a estante marca as lacunas e você pode adicioná-las de uma vez como “Falta”.",
   "Keine Lücken in der Nummerierung.": "Nenhuma lacuna na numeração.",
   "Lücken zeigen": "Mostrar lacunas",
   "Lücken werden angelegt…": "Adicionando lacunas…",
@@ -3701,5 +3700,13 @@
   "fehlt noch": "ainda falta",
   "gelesen am {date}": "lido em {date}",
   "Leser und Besitz: {label}": "Leitor e dono: {label}",
-  "Wer liest?": "Quem está lendo?"
+  "Wer liest?": "Quem está lendo?",
+  "Nicht im Regal: {list}.": "Fora da estante: {list}.",
+  "{a} und {b}": "{a} e {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} extra como uma caixa ou volume especial",
+    "many": "{n} extras como caixas ou volumes especiais",
+    "other": "{n} extras como caixas ou volumes especiais"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Se quiser, a estante marca as lacunas e você pode adicioná-las de uma vez como “Falta”."
 }

@@ -3531,7 +3531,6 @@
   "Infos": "Info",
   "Bereiche der Reihe": "Onderdelen van de reeks",
   "Lücken-Erkennung": "Gatendetectie",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Ontbrekende deelnummers: {count}. Desgewenst markeert de kast de gaten en kun je ze in één keer als ‘Ontbreekt’ toevoegen.",
   "Keine Lücken in der Nummerierung.": "Geen gaten in de nummering.",
   "Lücken zeigen": "Gaten tonen",
   "Lücken werden angelegt…": "Gaten worden toegevoegd…",
@@ -3595,5 +3594,12 @@
   "fehlt noch": "ontbreekt nog",
   "gelesen am {date}": "gelezen op {date}",
   "Leser und Besitz: {label}": "Lezer en eigenaar: {label}",
-  "Wer liest?": "Wie leest?"
+  "Wer liest?": "Wie leest?",
+  "Nicht im Regal: {list}.": "Niet in de kast: {list}.",
+  "{a} und {b}": "{a} en {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} extra zoals een verzamelbox of speciaal deel",
+    "other": "{n} extra’s zoals verzamelboxen of speciale delen"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Desgewenst markeert de kast de gaten en kun je ze in één keer als ‘Ontbreekt’ toevoegen."
 }

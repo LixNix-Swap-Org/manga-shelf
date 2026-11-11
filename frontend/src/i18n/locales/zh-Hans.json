@@ -3427,7 +3427,6 @@
   "Infos": "信息",
   "Bereiche der Reihe": "系列分区",
   "Lücken-Erkennung": "缺卷检测",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "缺少的卷号：{count}。可在书架上标出缺卷，并一次性添加为“缺少”。",
   "Keine Lücken in der Nummerierung.": "编号中没有缺卷。",
   "Lücken zeigen": "显示缺卷",
   "Lücken werden angelegt…": "正在添加缺卷…",
@@ -3489,5 +3488,11 @@
   "fehlt noch": "仍缺",
   "gelesen am {date}": "{date} 已读",
   "Leser und Besitz: {label}": "读者和拥有者：{label}",
-  "Wer liest?": "谁在读？"
+  "Wer liest?": "谁在读？",
+  "Nicht im Regal: {list}.": "书架上没有：{list}。",
+  "{a} und {b}": "{a}和{b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "other": "{n} 件附加品，如书盒或特别卷"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "可在书架上标出缺卷，并一次性添加为“缺少”。"
 }

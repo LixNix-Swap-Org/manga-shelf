@@ -3635,7 +3635,6 @@
   "Infos": "Información",
   "Bereiche der Reihe": "Secciones de la serie",
   "Lücken-Erkennung": "Detección de huecos",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Números de tomo que faltan: {count}. Si quieres, la estantería marca los huecos y puedes añadirlos todos como «Falta».",
   "Keine Lücken in der Nummerierung.": "No hay huecos en la numeración.",
   "Lücken zeigen": "Mostrar huecos",
   "Lücken werden angelegt…": "Añadiendo huecos…",
@@ -3701,5 +3700,13 @@
   "fehlt noch": "aún falta",
   "gelesen am {date}": "leído el {date}",
   "Leser und Besitz: {label}": "Lector y propietario: {label}",
-  "Wer liest?": "¿Quién lee?"
+  "Wer liest?": "¿Quién lee?",
+  "Nicht im Regal: {list}.": "No están en la estantería: {list}.",
+  "{a} und {b}": "{a} y {b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "one": "{n} extra como un estuche o tomo especial",
+    "many": "{n} extras como estuches o tomos especiales",
+    "other": "{n} extras como estuches o tomos especiales"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Si quieres, la estantería marca los huecos y puedes añadirlos todos como «Falta»."
 }

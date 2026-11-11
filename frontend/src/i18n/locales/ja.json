@@ -3427,7 +3427,6 @@
   "Infos": "情報",
   "Bereiche der Reihe": "シリーズの項目",
   "Lücken-Erkennung": "欠番の検出",
-  "Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "欠けている巻番号: {count}。必要なら棚に欠番を表示し、まとめて「未所持」として追加できます。",
   "Keine Lücken in der Nummerierung.": "番号に欠番はありません。",
   "Lücken zeigen": "欠番を表示",
   "Lücken werden angelegt…": "欠番を追加中…",
@@ -3489,5 +3488,11 @@
   "fehlt noch": "まだ不足",
   "gelesen am {date}": "{date}に読了",
   "Leser und Besitz: {label}": "読者と所有者: {label}",
-  "Wer liest?": "誰が読む？"
+  "Wer liest?": "誰が読む？",
+  "Nicht im Regal: {list}.": "棚にないもの: {list}。",
+  "{a} und {b}": "{a}と{b}",
+  "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
+    "other": "収納ボックスや特別巻などのおまけ{n}点"
+  },
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "必要なら棚に欠番を表示し、まとめて「未所持」として追加できます。"
 }

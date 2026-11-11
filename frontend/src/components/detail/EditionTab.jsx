@@ -2,7 +2,7 @@ import { Eye, EyeOff, Globe, Layers, Library, ListPlus } from 'lucide-react';
 import EditionSwitcher from './EditionSwitcher';
 import CopyVolumesNotice from './CopyVolumesNotice';
 import { mpPillText } from './volumeViewHelpers';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 
 function Card({ id, Icon, title, text, children }) {
   return (
@@ -28,7 +28,18 @@ export default function EditionTab({
   shelfCount = 1, volumeCount = 0, onCopied
 }) {
   const regularGaps = detectedGapEntries.filter((entry) => entry.type === 'volume').length;
+  const extraGaps = detectedGapEntries.length - regularGaps;
   const anyGaps = detectedGapEntries.length > 0;
+  // volumes and extras (Schuber, special volumes from Manga Passion) are counted apart: "10" alone read like volume 10
+  const gapParts = [
+    regularGaps > 0 ? tn('{n} Band', '{n} Bände', regularGaps) : null,
+    extraGaps > 0 ? tn('{n} Extra wie Schuber oder Sonderband', '{n} Extras wie Schuber oder Sonderbände', extraGaps) : null
+  ].filter(Boolean);
+  const gapList = gapParts.length === 2 ? t('{a} und {b}', { a: gapParts[0], b: gapParts[1] }) : gapParts[0];
+  const gapText = [
+    t('Nicht im Regal: {list}.', { list: gapList }),
+    regularGaps > 0 ? t('Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.') : null
+  ].filter(Boolean).join(' ');
   const online = !isOffline;
   return (
     <div id="detail-edition" className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -37,7 +48,7 @@ export default function EditionTab({
         Icon={Layers}
         title={t('Lücken-Erkennung')}
         text={anyGaps
-          ? t('Fehlende Bandnummern: {count}. Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.', { count: detectedGapEntries.length })
+          ? gapText
           : t('Keine Lücken in der Nummerierung.')}
       >
         {anyGaps && (
