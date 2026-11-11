@@ -462,7 +462,6 @@
   "Besitz konnte nicht gespeichert werden": "Sahiplik kaydedilemedi",
   "Besitz pro Nutzer": "Kullanıcı başına sahiplik",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "Sahiplik ve okuma durumu bu profile aittir – sunucudaki bir kullanıcı gibi, yalnızca parolasız.",
-  "Besitz:": "Sahiplik:",
   "Besitzer": "Sahipler",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Sahip “{name}” bu rafa ait değil (yok sayıldı)",
   "Besitzer: {names}": "Sahipler: {names}",
@@ -1568,7 +1567,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Okuyucu / konuk (salt okunur)",
   "Leser auswählen": "Okuyucu seç",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Okuyucu “{name}” bu rafa ait değil (yok sayıldı)",
-  "Leser:": "Okuyucu:",
   "Lesestand pro Regal": "Raf başına okuma",
   "Lesestatus": "Okuma durumu",
   "Lesestatus der Leser – {volume}": "Okuyucuların okuma durumu – {volume}",
@@ -3589,5 +3587,13 @@
   "Hinweise ({count})": "Notlar ({count})",
   "Ungültige Filter": "Geçersiz filtreler",
   "Bitte einen Namen für den Filter angeben": "Lütfen filtreye bir ad verin",
-  "Gemerkter Filter nicht gefunden": "Kaydedilen filtre bulunamadı"
+  "Gemerkter Filter nicht gefunden": "Kaydedilen filtre bulunamadı",
+  "Wessen Bände zeigen?": "Kimin ciltleri?",
+  "{name} liest": "{name} okuyor",
+  "Bände von {name}": "{name} ciltleri",
+  "Alle Bände": "Tüm ciltler",
+  "fehlt noch": "hâlâ eksik",
+  "gelesen am {date}": "{date} tarihinde okundu",
+  "Leser und Besitz: {label}": "Okuyan ve sahip: {label}",
+  "Wer liest?": "Kim okuyor?"
 }

@@ -450,7 +450,6 @@
   "Besitz konnte nicht gespeichert werden": "所持状況を保存できませんでした",
   "Besitz pro Nutzer": "ユーザー別の所持数",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "所持状況と既読状況はこのプロフィールに紐づきます – サーバー上のユーザーと同じですが、パスワードはありません。",
-  "Besitz:": "所持:",
   "Besitzer": "所有者",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "所有者「{name}」はこの本棚に属していません(無視されました)",
   "Besitzer: {names}": "所有者: {names}",
@@ -1540,7 +1539,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "閲覧者／ゲスト（閲覧のみ）",
   "Leser auswählen": "読者を選択",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "読者「{name}」はこの本棚に属していません(無視されました)",
-  "Leser:": "読者:",
   "Lesestand pro Regal": "本棚ごとの読書状況",
   "Lesestatus": "既読状況",
   "Lesestatus der Leser – {volume}": "読者ごとの既読状況 – {volume}",
@@ -3483,5 +3481,13 @@
   "Hinweise ({count})": "お知らせ ({count})",
   "Ungültige Filter": "無効なフィルター",
   "Bitte einen Namen für den Filter angeben": "フィルターの名前を入力してください",
-  "Gemerkter Filter nicht gefunden": "保存したフィルターが見つかりません"
+  "Gemerkter Filter nicht gefunden": "保存したフィルターが見つかりません",
+  "Wessen Bände zeigen?": "誰の巻を表示？",
+  "{name} liest": "{name}が読書中",
+  "Bände von {name}": "{name}の巻",
+  "Alle Bände": "すべての巻",
+  "fehlt noch": "まだ不足",
+  "gelesen am {date}": "{date}に読了",
+  "Leser und Besitz: {label}": "読者と所有者: {label}",
+  "Wer liest?": "誰が読む？"
 }

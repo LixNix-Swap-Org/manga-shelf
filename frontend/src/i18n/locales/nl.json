@@ -462,7 +462,6 @@
   "Besitz konnte nicht gespeichert werden": "Bezit kon niet worden opgeslagen",
   "Besitz pro Nutzer": "Bezit per gebruiker",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "Bezit en leesstatus horen bij dit profiel – zoals een gebruiker op een server, alleen zonder wachtwoord.",
-  "Besitz:": "Bezit:",
   "Besitzer": "Eigenaren",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Eigenaar “{name}” hoort niet bij deze plank (genegeerd)",
   "Besitzer: {names}": "Eigenaren: {names}",
@@ -1568,7 +1567,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Lezer / gast (alleen lezen)",
   "Leser auswählen": "Lezer kiezen",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Lezer “{name}” hoort niet bij deze plank (genegeerd)",
-  "Leser:": "Lezer:",
   "Lesestand pro Regal": "Leesstand per plank",
   "Lesestatus": "Leesstatus",
   "Lesestatus der Leser – {volume}": "Leesstatus van de lezers – {volume}",
@@ -3589,5 +3587,13 @@
   "Hinweise ({count})": "Meldingen ({count})",
   "Ungültige Filter": "Ongeldige filters",
   "Bitte einen Namen für den Filter angeben": "Geef het filter een naam",
-  "Gemerkter Filter nicht gefunden": "Opgeslagen filter niet gevonden"
+  "Gemerkter Filter nicht gefunden": "Opgeslagen filter niet gevonden",
+  "Wessen Bände zeigen?": "Wiens delen tonen?",
+  "{name} liest": "{name} leest",
+  "Bände von {name}": "Delen van {name}",
+  "Alle Bände": "Alle delen",
+  "fehlt noch": "ontbreekt nog",
+  "gelesen am {date}": "gelezen op {date}",
+  "Leser und Besitz: {label}": "Lezer en eigenaar: {label}",
+  "Wer liest?": "Wie leest?"
 }

@@ -9,7 +9,6 @@ import VolumeFilterBar from './components/detail/VolumeFilterBar';
 import MangaHeroCard from './components/detail/MangaHeroCard';
 import ChapterProgress, { withChapter } from './components/detail/ChapterProgress';
 import ReaderBar from './components/detail/ReaderBar';
-import OwnerFilterBar from './components/detail/OwnerFilterBar';
 import GapNotices from './components/detail/GapNotices';
 import CopyVolumesNotice from './components/detail/CopyVolumesNotice';
 import NoticesGroup from './components/detail/NoticesGroup';
@@ -684,7 +683,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
             )}
           </div>
 
-          {/* Lese-Tracking Bar */}
+          {/* Reading row: reader / ownership chip, "+ Band n gelesen", progress */}
           <ReaderBar
             readers={readers}
             selectedReaderId={selectedReaderId}
@@ -698,16 +697,14 @@ export default function MangaDetail({ user, onUnauthorized }) {
             setReadDate={setReadDate}
             nextUnreadVolume={nextUnreadVolume}
             onMarkNextRead={nextUnreadVolume ? () => handleToggleVolumeRead(nextUnreadVolume, nextReaderId) : undefined}
-          />
-
-          {/* Ownership per person (only with several users) */}
-          <OwnerFilterBar
-            users={readers}
-            volumes={volumes}
-            ownerFilter={volumeOwnerFilter}
-            setOwnerFilter={setVolumeOwnerFilter}
-            ownerMissing={volumeOwnerMissing}
-            setOwnerMissing={setVolumeOwnerMissing}
+            owners={{
+              users: readers,
+              volumes,
+              ownerFilter: volumeOwnerFilter,
+              setOwnerFilter: setVolumeOwnerFilter,
+              ownerMissing: volumeOwnerMissing,
+              setOwnerMissing: setVolumeOwnerMissing
+            }}
           />
 
           {/* Filter, View & Sort Controls */}

@@ -474,7 +474,6 @@
   "Besitz konnte nicht gespeichert werden": "Impossibile salvare il possesso",
   "Besitz pro Nutzer": "Possesso per utente",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "Possesso e stato di lettura appartengono a questo profilo – come un utente su un server, ma senza password.",
-  "Besitz:": "Possesso:",
   "Besitzer": "Proprietari",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Il proprietario “{name}” non fa parte di questo scaffale (ignorato)",
   "Besitzer: {names}": "Proprietari: {names}",
@@ -1596,7 +1595,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Lettore / ospite (sola lettura)",
   "Leser auswählen": "Scegli lettore",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Il lettore “{name}” non fa parte di questo scaffale (ignorato)",
-  "Leser:": "Lettore:",
   "Lesestand pro Regal": "Lettura per scaffale",
   "Lesestatus": "Stato di lettura",
   "Lesestatus der Leser – {volume}": "Stato di lettura dei lettori – {volume}",
@@ -3695,5 +3693,13 @@
   "Hinweise ({count})": "Avvisi ({count})",
   "Ungültige Filter": "Filtri non validi",
   "Bitte einen Namen für den Filter angeben": "Dai un nome al filtro",
-  "Gemerkter Filter nicht gefunden": "Filtro salvato non trovato"
+  "Gemerkter Filter nicht gefunden": "Filtro salvato non trovato",
+  "Wessen Bände zeigen?": "Di chi sono i volumi?",
+  "{name} liest": "Legge {name}",
+  "Bände von {name}": "Volumi di {name}",
+  "Alle Bände": "Tutti i volumi",
+  "fehlt noch": "manca ancora",
+  "gelesen am {date}": "letto il {date}",
+  "Leser und Besitz: {label}": "Lettore e proprietario: {label}",
+  "Wer liest?": "Chi legge?"
 }

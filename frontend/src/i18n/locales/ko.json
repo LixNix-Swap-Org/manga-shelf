@@ -450,7 +450,6 @@
   "Besitz konnte nicht gespeichert werden": "보유 정보를 저장하지 못했어요",
   "Besitz pro Nutzer": "사용자별 보유",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "보유 및 읽음 상태는 이 프로필에 속해요 – 서버의 사용자와 같지만 비밀번호가 없어요.",
-  "Besitz:": "보유:",
   "Besitzer": "보유자",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "보유자 “{name}”은(는) 이 책장에 속하지 않아요 (무시됨)",
   "Besitzer: {names}": "보유자: {names}",
@@ -1540,7 +1539,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "독자 / 게스트(읽기 전용)",
   "Leser auswählen": "독자 선택",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "읽은 사람 “{name}”은(는) 이 책장에 속하지 않아요 (무시됨)",
-  "Leser:": "독자:",
   "Lesestand pro Regal": "책장별 읽기 현황",
   "Lesestatus": "읽음 상태",
   "Lesestatus der Leser – {volume}": "독자별 읽음 상태 – {volume}",
@@ -3483,5 +3481,13 @@
   "Hinweise ({count})": "안내 ({count})",
   "Ungültige Filter": "잘못된 필터",
   "Bitte einen Namen für den Filter angeben": "필터 이름을 입력하세요",
-  "Gemerkter Filter nicht gefunden": "저장된 필터를 찾을 수 없습니다"
+  "Gemerkter Filter nicht gefunden": "저장된 필터를 찾을 수 없습니다",
+  "Wessen Bände zeigen?": "누구의 권을 표시할까요?",
+  "{name} liest": "{name} 님이 읽는 중",
+  "Bände von {name}": "{name} 님의 권",
+  "Alle Bände": "모든 권",
+  "fehlt noch": "아직 없음",
+  "gelesen am {date}": "{date}에 읽음",
+  "Leser und Besitz: {label}": "독자와 소유자: {label}",
+  "Wer liest?": "누가 읽나요?"
 }

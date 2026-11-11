@@ -474,7 +474,6 @@
   "Besitz konnte nicht gespeichert werden": "No se pudo guardar la posesión",
   "Besitz pro Nutzer": "Posesión por usuario",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "La posesión y el estado de lectura pertenecen a este perfil, como un usuario en un servidor, pero sin contraseña.",
-  "Besitz:": "Posesión:",
   "Besitzer": "Propietarios",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "El propietario «{name}» no pertenece a esta estantería (se ignora)",
   "Besitzer: {names}": "Propietarios: {names}",
@@ -1596,7 +1595,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Lector / invitado (solo lectura)",
   "Leser auswählen": "Elegir lector",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "El lector «{name}» no pertenece a esta estantería (se ignora)",
-  "Leser:": "Lector:",
   "Lesestand pro Regal": "Lectura por estantería",
   "Lesestatus": "Estado de lectura",
   "Lesestatus der Leser – {volume}": "Estado de lectura de los lectores – {volume}",
@@ -3695,5 +3693,13 @@
   "Hinweise ({count})": "Avisos ({count})",
   "Ungültige Filter": "Filtros no válidos",
   "Bitte einen Namen für den Filter angeben": "Ponle un nombre al filtro",
-  "Gemerkter Filter nicht gefunden": "Filtro guardado no encontrado"
+  "Gemerkter Filter nicht gefunden": "Filtro guardado no encontrado",
+  "Wessen Bände zeigen?": "¿De quién son los tomos?",
+  "{name} liest": "Lee {name}",
+  "Bände von {name}": "Tomos de {name}",
+  "Alle Bände": "Todos los tomos",
+  "fehlt noch": "aún falta",
+  "gelesen am {date}": "leído el {date}",
+  "Leser und Besitz: {label}": "Lector y propietario: {label}",
+  "Wer liest?": "¿Quién lee?"
 }

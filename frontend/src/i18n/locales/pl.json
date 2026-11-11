@@ -486,7 +486,6 @@
   "Besitz konnte nicht gespeichert werden": "Nie udało się zapisać posiadania",
   "Besitz pro Nutzer": "Posiadanie według użytkownika",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "Posiadanie i status czytania należą do tego profilu – jak użytkownik na serwerze, tylko bez hasła.",
-  "Besitz:": "Posiadane:",
   "Besitzer": "Właściciele",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Właściciel „{name}” nie należy do tej półki (pominięto)",
   "Besitzer: {names}": "Właściciele: {names}",
@@ -1624,7 +1623,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Czytelnik / gość (tylko odczyt)",
   "Leser auswählen": "Wybierz czytelnika",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Czytelnik „{name}” nie należy do tej półki (pominięto)",
-  "Leser:": "Czytelnik:",
   "Lesestand pro Regal": "Czytanie według półki",
   "Lesestatus": "Status czytania",
   "Lesestatus der Leser – {volume}": "Status czytania czytelników – {volume}",
@@ -3801,5 +3799,13 @@
   "Hinweise ({count})": "Wskazówki ({count})",
   "Ungültige Filter": "Nieprawidłowe filtry",
   "Bitte einen Namen für den Filter angeben": "Podaj nazwę filtra",
-  "Gemerkter Filter nicht gefunden": "Nie znaleziono zapisanego filtra"
+  "Gemerkter Filter nicht gefunden": "Nie znaleziono zapisanego filtra",
+  "Wessen Bände zeigen?": "Czyje tomy pokazać?",
+  "{name} liest": "{name} czyta",
+  "Bände von {name}": "Tomy: {name}",
+  "Alle Bände": "Wszystkie tomy",
+  "fehlt noch": "jeszcze brakuje",
+  "gelesen am {date}": "przeczytano {date}",
+  "Leser und Besitz: {label}": "Czytelnik i właściciel: {label}",
+  "Wer liest?": "Kto czyta?"
 }

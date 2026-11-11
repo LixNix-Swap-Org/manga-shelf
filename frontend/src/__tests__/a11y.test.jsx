@@ -387,13 +387,21 @@ describe('detail page controls', () => {
   it('reader bar: reading progress is a progress bar', () => {
     render(
       <ReaderBar
-        readers={[{ user_id: 1, username: 'ed', read_count: 2, total_owned: 4 }]} selectedReaderId={1} setSelectedReaderId={vi.fn()}
+        readers={[{ user_id: 1, username: 'ed', read_count: 2, total_owned: 4 }, { user_id: 2, username: 'lea', read_count: 0, total_owned: 4 }]}
+        selectedReaderId={1} setSelectedReaderId={vi.fn()}
         user={{ id: 1 }} ownedCount={4} currentReaderReadCount={2} currentReaderUnreadCount={2}
       />
     );
     const bar = screen.getByRole('progressbar', { name: 'Lesefortschritt' });
     expect(bar.getAttribute('aria-valuenow')).toBe('50');
     expect(bar.getAttribute('aria-valuetext')).toBe('2 von 4 gelesen');
+    // the chip names its state and the panel it opens
+    const chip = screen.getByRole('button', { name: 'Leser und Besitz: ed liest' });
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('group', { name: 'Leser auswählen' })).toBeNull();
+    fireEvent.click(chip);
+    expect(chip.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById(chip.getAttribute('aria-controls')).hidden).toBe(false);
     expect(screen.getByRole('group', { name: 'Leser auswählen' })).toBeTruthy();
   });
 

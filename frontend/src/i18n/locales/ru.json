@@ -486,7 +486,6 @@
   "Besitz konnte nicht gespeichert werden": "Не удалось сохранить данные о наличии",
   "Besitz pro Nutzer": "Наличие по пользователям",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "Данные о наличии и статусе чтения принадлежат этому профилю — как пользователь на сервере, только без пароля.",
-  "Besitz:": "Наличие:",
   "Besitzer": "Владельцы",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Владелец «{name}» не относится к этой полке (игнорируется)",
   "Besitzer: {names}": "Владелец: {names}",
@@ -1624,7 +1623,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Читатель / гость (только чтение)",
   "Leser auswählen": "Выбрать читателя",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Читатель «{name}» не относится к этой полке (игнорируется)",
-  "Leser:": "Читатель:",
   "Lesestand pro Regal": "Чтение по полкам",
   "Lesestatus": "Статус чтения",
   "Lesestatus der Leser – {volume}": "Статус чтения читателей — {volume}",
@@ -3801,5 +3799,13 @@
   "Hinweise ({count})": "Подсказки ({count})",
   "Ungültige Filter": "Недопустимые фильтры",
   "Bitte einen Namen für den Filter angeben": "Укажите название фильтра",
-  "Gemerkter Filter nicht gefunden": "Сохранённый фильтр не найден"
+  "Gemerkter Filter nicht gefunden": "Сохранённый фильтр не найден",
+  "Wessen Bände zeigen?": "Чьи тома показать?",
+  "{name} liest": "Читает {name}",
+  "Bände von {name}": "Тома: {name}",
+  "Alle Bände": "Все тома",
+  "fehlt noch": "ещё нет",
+  "gelesen am {date}": "прочитано {date}",
+  "Leser und Besitz: {label}": "Читатель и владелец: {label}",
+  "Wer liest?": "Кто читает?"
 }

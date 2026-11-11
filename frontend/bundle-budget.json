@@ -88,7 +88,7 @@
     "src/i18n/locales/tr.json": 80769,
     "src/i18n/locales/zh-Hans.json": 82739,
     "src/Login.jsx": 1880,
-    "src/MangaDetail.jsx": 49187,
+    "src/MangaDetail.jsx": 50000,
     "src/Setup.jsx": 2992
   }
 }

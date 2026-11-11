@@ -450,7 +450,6 @@
   "Besitz konnte nicht gespeichert werden": "无法保存拥有状态",
   "Besitz pro Nutzer": "各用户的拥有量",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "拥有和阅读状态属于此个人资料——就像服务器上的用户，只是没有密码。",
-  "Besitz:": "拥有：",
   "Besitzer": "拥有者",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "拥有者“{name}”不属于此书架（已忽略）",
   "Besitzer: {names}": "拥有者：{names}",
@@ -1540,7 +1539,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "读者/访客（只读）",
   "Leser auswählen": "选择读者",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "阅读者“{name}”不属于此书架（已忽略）",
-  "Leser:": "读者：",
   "Lesestand pro Regal": "各书架的阅读进度",
   "Lesestatus": "阅读状态",
   "Lesestatus der Leser – {volume}": "读者的阅读状态——{volume}",
@@ -3483,5 +3481,13 @@
   "Hinweise ({count})": "提示（{count}）",
   "Ungültige Filter": "无效的筛选条件",
   "Bitte einen Namen für den Filter angeben": "请为筛选条件命名",
-  "Gemerkter Filter nicht gefunden": "未找到已保存的筛选条件"
+  "Gemerkter Filter nicht gefunden": "未找到已保存的筛选条件",
+  "Wessen Bände zeigen?": "显示谁的卷？",
+  "{name} liest": "{name} 在读",
+  "Bände von {name}": "{name} 的卷",
+  "Alle Bände": "所有卷",
+  "fehlt noch": "仍缺",
+  "gelesen am {date}": "{date} 已读",
+  "Leser und Besitz: {label}": "读者和拥有者：{label}",
+  "Wer liest?": "谁在读？"
 }

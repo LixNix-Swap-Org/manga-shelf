@@ -503,12 +503,12 @@ manga-shelf/
 │           │   ├── EditionTab.jsx # tab "Edition & Abgleich" (?tab=edition): gap detection ("Lücken zeigen", "Lücken füllen"), Manga Passion check, editions (second EditionSwitcher, ids with suffix -tab), volumes from another shelf
 │           │   ├── EditionSwitcher.jsx # editions of the same work (work_key) as pills under the title; "+ Ausgabe" dialog: create (POST /mangas/:id/editions), link/unlink (PUT /mangas/:id/work), suggestions by title + author
 │           │   ├── CollectingControl.jsx # collecting status (aktiv/pausiert/abgebrochen)
-│           │   ├── ReaderBar.jsx # reader toggle, "Gelesen am", "+ Band n gelesen" (first owned regular volume the shown reader has not read, via handleToggleVolumeRead)
+│           │   ├── ReaderBar.jsx # reading row: chip "Max liest | Alle Bände" whose panel holds the reader choice, the ownership filter (OwnerFilterBar) and "Gelesen am"; "+ Band n gelesen" (first owned regular volume the shown reader has not read, via handleToggleVolumeRead) and the progress stay in the row
 │           │   ├── ChapterProgress.jsx # panel "Kapitel" of a webtoon: own chapter (+1, "Gelesen bis Kapitel", undo toast), the other readers; withChapter() patches the detail
 │           │   ├── CopyVolumesNotice.jsx # notice above the volumes (catalog stage c2): "N Bände aus „<Regal>“ fehlen hier." with "Bände übernehmen" (GET …/volume-sources, POST …/volumes/copy); only for editors online with more than one shelf
 │           │   ├── NoticesGroup.jsx # "Hinweise (n)" above the volumes: from two `data-notice` children on they fold into one row with a badge per notice (badge opens and focuses it); open/folded in localStorage `mangashelf_detail_notices_open`
 │           │   ├── CatalogNotice.jsx # notice in the series edit form (migration 46): an edition also in a shelf the caller only reads keeps changes in this shelf, local fields, "Auf Katalogstand zurücksetzen" (POST /mangas/:id/catalog-reset)
-│           │   ├── OwnerFilterBar.jsx # ownership per person
+│           │   ├── OwnerFilterBar.jsx # "Wessen Bände zeigen?" inside the reader chip: ownership per person, "Nur zeigen, was noch fehlt" (ownerChoices: who is listed)
 │           │   ├── OwnerBadges.jsx # owner badges
 │           │   ├── GapNotices.jsx # banners: duplicates, edition, gaps (with the announced count and the button for special editions)
 │           │   ├── VolumeFilterBar.jsx # filter chips, Manga Passion pill, "Auswählen"

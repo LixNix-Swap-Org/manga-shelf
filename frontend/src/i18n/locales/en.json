@@ -462,7 +462,6 @@
   "Besitz konnte nicht gespeichert werden": "Ownership could not be saved",
   "Besitz pro Nutzer": "Owned per user",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "Ownership and read status belong to this profile – like a user on a server, just without a password.",
-  "Besitz:": "Owned:",
   "Besitzer": "Owners",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Owner “{name}” does not belong to this shelf (ignored)",
   "Besitzer: {names}": "Owners: {names}",
@@ -1568,7 +1567,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Viewer / Guest (read-only)",
   "Leser auswählen": "Select reader",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Reader “{name}” does not belong to this shelf (ignored)",
-  "Leser:": "Reader:",
   "Lesestand pro Regal": "Reading by shelf",
   "Lesestatus": "Read status",
   "Lesestatus der Leser – {volume}": "Readers' read status – {volume}",
@@ -3589,5 +3587,13 @@
   "Hinweise ({count})": "Notices ({count})",
   "Ungültige Filter": "Invalid filters",
   "Bitte einen Namen für den Filter angeben": "Please give the filter a name",
-  "Gemerkter Filter nicht gefunden": "Saved filter not found"
+  "Gemerkter Filter nicht gefunden": "Saved filter not found",
+  "Wessen Bände zeigen?": "Whose volumes?",
+  "{name} liest": "{name} is reading",
+  "Bände von {name}": "{name}'s volumes",
+  "Alle Bände": "All volumes",
+  "fehlt noch": "still missing",
+  "gelesen am {date}": "read on {date}",
+  "Leser und Besitz: {label}": "Reader and owner: {label}",
+  "Wer liest?": "Who is reading?"
 }

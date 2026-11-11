@@ -474,7 +474,6 @@
   "Besitz konnte nicht gespeichert werden": "Impossible d'enregistrer la possession",
   "Besitz pro Nutzer": "Possédé par utilisateur",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "La possession et l'état de lecture appartiennent à ce profil – comme un utilisateur sur un serveur, mais sans mot de passe.",
-  "Besitz:": "Possession :",
   "Besitzer": "Propriétaires",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Le propriétaire « {name} » n'appartient pas à cette étagère (ignoré)",
   "Besitzer: {names}": "Propriétaires : {names}",
@@ -1596,7 +1595,6 @@
   "Leser / Gast (Reiner Lesezugriff)": "Lecteur / invité (lecture seule)",
   "Leser auswählen": "Choisir le lecteur",
   "Leser „{name}“ gehört nicht zu diesem Regal (ignoriert)": "Le lecteur « {name} » n'appartient pas à cette étagère (ignoré)",
-  "Leser:": "Lecteur :",
   "Lesestand pro Regal": "Lecture par étagère",
   "Lesestatus": "État de lecture",
   "Lesestatus der Leser – {volume}": "État de lecture des lecteurs – {volume}",
@@ -3695,5 +3693,13 @@
   "Hinweise ({count})": "Remarques ({count})",
   "Ungültige Filter": "Filtres non valides",
   "Bitte einen Namen für den Filter angeben": "Veuillez donner un nom au filtre",
-  "Gemerkter Filter nicht gefunden": "Filtre enregistré introuvable"
+  "Gemerkter Filter nicht gefunden": "Filtre enregistré introuvable",
+  "Wessen Bände zeigen?": "Les tomes de qui ?",
+  "{name} liest": "{name} lit",
+  "Bände von {name}": "Tomes de {name}",
+  "Alle Bände": "Tous les tomes",
+  "fehlt noch": "manque encore",
+  "gelesen am {date}": "lu le {date}",
+  "Leser und Besitz: {label}": "Lecteur et propriétaire : {label}",
+  "Wer liest?": "Qui lit ?"
 }
