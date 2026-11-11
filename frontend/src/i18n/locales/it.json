@@ -3724,5 +3724,9 @@
   "Für mich": "Per me",
   "Für {name}": "Per {name}",
   "Noch für niemanden (Haushalt)": "Ancora per nessuno (casa)",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "A chi appartengono i volumi. «Ancora per nessuno»: chi segna per primo un volume come «Posseduto» lo riceve."
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "A chi appartengono i volumi. «Ancora per nessuno»: chi segna per primo un volume come «Posseduto» lo riceve.",
+  "{read} von deinen {own}": "{read} dei tuoi {own}",
+  "{read} von {own} eigenen": "{read} di {own} propri",
+  "Gelesen von den eigenen Bänden": "Letti tra i propri volumi",
+  "Gelesen von allen Bänden im Regal": "Letti tra tutti i volumi dello scaffale"
 }

@@ -3510,5 +3510,9 @@
   "Für mich": "给我",
   "Für {name}": "给 {name}",
   "Noch für niemanden (Haushalt)": "暂不归任何人（家庭）",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "这些卷归谁所有。“暂不归任何人”：第一个将该卷勾选为“已拥有”的人获得它。"
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "这些卷归谁所有。“暂不归任何人”：第一个将该卷勾选为“已拥有”的人获得它。",
+  "{read} von deinen {own}": "你的 {own} 卷中读了 {read} 卷",
+  "{read} von {own} eigenen": "自己的 {own} 卷中读了 {read} 卷",
+  "Gelesen von den eigenen Bänden": "自己拥有的卷中已读",
+  "Gelesen von allen Bänden im Regal": "书架上所有卷中已读"
 }

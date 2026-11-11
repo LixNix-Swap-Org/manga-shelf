@@ -3724,5 +3724,9 @@
   "Für mich": "Pour moi",
   "Für {name}": "Pour {name}",
   "Noch für niemanden (Haushalt)": "Pour personne encore (foyer)",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "À qui appartiennent les tomes. « Pour personne encore » : la première personne qui coche un tome comme « Possédé » le reçoit."
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "À qui appartiennent les tomes. « Pour personne encore » : la première personne qui coche un tome comme « Possédé » le reçoit.",
+  "{read} von deinen {own}": "{read} sur tes {own}",
+  "{read} von {own} eigenen": "{read} sur {own} à soi",
+  "Gelesen von den eigenen Bänden": "Lus parmi ses propres tomes",
+  "Gelesen von allen Bänden im Regal": "Lus parmi tous les tomes de l’étagère"
 }

@@ -3617,5 +3617,9 @@
   "Für mich": "For me",
   "Für {name}": "For {name}",
   "Noch für niemanden (Haushalt)": "Nobody yet (household)",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Who owns the volumes. “Nobody yet”: whoever first ticks a volume as “Owned” gets it."
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Who owns the volumes. “Nobody yet”: whoever first ticks a volume as “Owned” gets it.",
+  "{read} von deinen {own}": "{read} of your {own}",
+  "{read} von {own} eigenen": "{read} of {own} own",
+  "Gelesen von den eigenen Bänden": "Read of their own volumes",
+  "Gelesen von allen Bänden im Regal": "Read of all volumes on the shelf"
 }

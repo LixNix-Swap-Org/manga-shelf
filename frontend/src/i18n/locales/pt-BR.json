@@ -3724,5 +3724,9 @@
   "Für mich": "Para mim",
   "Für {name}": "Para {name}",
   "Noch für niemanden (Haushalt)": "Ainda para ninguém (casa)",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "De quem são os volumes. “Ainda para ninguém”: quem marcar primeiro um volume como “Possuído” fica com ele."
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "De quem são os volumes. “Ainda para ninguém”: quem marcar primeiro um volume como “Possuído” fica com ele.",
+  "{read} von deinen {own}": "{read} dos seus {own}",
+  "{read} von {own} eigenen": "{read} de {own} próprios",
+  "Gelesen von den eigenen Bänden": "Lidos entre os próprios volumes",
+  "Gelesen von allen Bänden im Regal": "Lidos entre todos os volumes da estante"
 }

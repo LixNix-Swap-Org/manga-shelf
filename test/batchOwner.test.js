@@ -65,3 +65,18 @@ test('missing volumes stay without copies whatever owner_user_id says', async ()
     await admin('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Fehlt', owner_user_id: ids.felix });
     assert.deepEqual((await ownersOf(admin, id))['1'], { status: 'Fehlt', owners: [] });
 });
+
+test('reader_stats count each person\'s own copies and what they read of them ("4 von deinen 8")', async () => {
+    const { id } = (await admin('POST', '/mangas', { title: 'Eigene Bände' })).body;
+    await admin('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3 });
+    await admin('POST', '/volumes/batch', { manga_id: id, from: 4, to: 5, owner_user_id: ids.felix });
+    const vols = (await admin('GET', `/mangas/${id}`)).body.volumes;
+    const v = (n) => vols.find((x) => x.volume_number === String(n)).id;
+    await admin('POST', `/volumes/${v(1)}/read`, { read: true });
+    await admin('POST', `/volumes/${v(4)}/read`, { read: true });
+    const stats = (await admin('GET', `/mangas/${id}`)).body.reader_stats;
+    const me = stats.find((r) => r.username === 'admin');
+    const felix = stats.find((r) => r.user_id === ids.felix);
+    assert.deepEqual([me.read_count, me.total_owned, me.own_read, me.own_owned], [2, 5, 1, 3]);
+    assert.deepEqual([felix.own_read, felix.own_owned], [0, 2]);
+});

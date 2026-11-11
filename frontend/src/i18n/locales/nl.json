@@ -3617,5 +3617,9 @@
   "Für mich": "Voor mij",
   "Für {name}": "Voor {name}",
   "Noch für niemanden (Haushalt)": "Nog voor niemand (huishouden)",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Van wie de delen zijn. ‘Nog voor niemand’: wie een deel als eerste als ‘In bezit’ aanvinkt, krijgt het."
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Van wie de delen zijn. ‘Nog voor niemand’: wie een deel als eerste als ‘In bezit’ aanvinkt, krijgt het.",
+  "{read} von deinen {own}": "{read} van jouw {own}",
+  "{read} von {own} eigenen": "{read} van {own} eigen",
+  "Gelesen von den eigenen Bänden": "Gelezen van de eigen delen",
+  "Gelesen von allen Bänden im Regal": "Gelezen van alle delen op de plank"
 }

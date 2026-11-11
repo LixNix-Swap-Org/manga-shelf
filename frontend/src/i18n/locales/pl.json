@@ -3831,5 +3831,9 @@
   "Für mich": "Dla mnie",
   "Für {name}": "Dla {name}",
   "Noch für niemanden (Haushalt)": "Jeszcze dla nikogo (dom)",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Do kogo należą tomy. „Jeszcze dla nikogo”: kto pierwszy zaznaczy tom jako „Posiadany”, ten go dostaje."
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Do kogo należą tomy. „Jeszcze dla nikogo”: kto pierwszy zaznaczy tom jako „Posiadany”, ten go dostaje.",
+  "{read} von deinen {own}": "{read} z twoich {own}",
+  "{read} von {own} eigenen": "{read} z {own} własnych",
+  "Gelesen von den eigenen Bänden": "Przeczytane z własnych tomów",
+  "Gelesen von allen Bänden im Regal": "Przeczytane ze wszystkich tomów na półce"
 }

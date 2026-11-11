@@ -184,6 +184,9 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
     let full_value = 0;
     let ownedCount = 0;
     const readCounts = new Map();
+    // per person: owned volumes with an own copy, and how many of those they read ("4 von deinen 8" on the chip)
+    const ownCounts = new Map();
+    const ownReadCounts = new Map();
     for (const v of volumes) {
         const p = typeof v.price === 'number' ? v.price : (parseFloat(v.price) || 0);
         const owned = v.status === 'Vorhanden';
@@ -205,6 +208,12 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
         v.is_read = v.read_by.includes(userId);
         // reads stay when a volume is sold or lent out, but progress only counts owned volumes
         if (owned) for (const id of v.read_by) readCounts.set(id, (readCounts.get(id) || 0) + 1);
+        if (owned) {
+            for (const id of new Set(v.owners.map(o => o.user_id))) {
+                ownCounts.set(id, (ownCounts.get(id) || 0) + 1);
+                if (v.read_by.includes(id)) ownReadCounts.set(id, (ownReadCounts.get(id) || 0) + 1);
+            }
+        }
 
         try {
             if (v.images) {
@@ -235,7 +244,9 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
             read_count: count,
             total_owned: ownedCount,
             unread_count: ownedCount - count,
-            percentage: ownedCount > 0 ? Math.min(100, Math.round((count / ownedCount) * 100)) : 0
+            percentage: ownedCount > 0 ? Math.min(100, Math.round((count / ownedCount) * 100)) : 0,
+            own_owned: ownCounts.get(u.id) || 0,
+            own_read: ownReadCounts.get(u.id) || 0
         };
     });
     return manga;

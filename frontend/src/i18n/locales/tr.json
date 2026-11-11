@@ -3617,5 +3617,9 @@
   "Für mich": "Benim için",
   "Für {name}": "{name} için",
   "Noch für niemanden (Haushalt)": "Henüz kimse için değil (ev)",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Ciltlerin sahibi. “Henüz kimse için değil”: bir cildi ilk “Sahip” olarak işaretleyen onu alır."
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Ciltlerin sahibi. “Henüz kimse için değil”: bir cildi ilk “Sahip” olarak işaretleyen onu alır.",
+  "{read} von deinen {own}": "{own} cildinden {read}",
+  "{read} von {own} eigenen": "{own} kendi cildinden {read}",
+  "Gelesen von den eigenen Bänden": "Kendi ciltlerinden okunan",
+  "Gelesen von allen Bänden im Regal": "Raftaki tüm ciltlerden okunan"
 }

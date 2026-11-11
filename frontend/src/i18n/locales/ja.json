@@ -3510,5 +3510,9 @@
   "Für mich": "自分用",
   "Für {name}": "{name}用",
   "Noch für niemanden (Haushalt)": "まだ誰のものでもない（家庭）",
-  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "巻の持ち主。「まだ誰のものでもない」：最初に「所持」にチェックした人のものになります。"
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "巻の持ち主。「まだ誰のものでもない」：最初に「所持」にチェックした人のものになります。",
+  "{read} von deinen {own}": "自分の{own}冊中{read}冊",
+  "{read} von {own} eigenen": "自分の{own}冊中{read}冊",
+  "Gelesen von den eigenen Bänden": "自分の巻のうち既読",
+  "Gelesen von allen Bänden im Regal": "棚のすべての巻のうち既読"
 }
