@@ -3451,5 +3451,29 @@
   "Basis": "基本",
   "Edition": "版本",
   "Reihe bearbeiten": "编辑系列",
-  "Abschnitte": "分区"
+  "Abschnitte": "分区",
+  "Finden": "查找",
+  "Edition & Regal": "版本与书架",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "系列已创建，但卷未创建：{reason}。请用“创建卷”重试。",
+  "Bände anlegen": "创建卷",
+  "Schritte": "步骤",
+  "Schritt {n}: {title}": "第 {n} 步：{title}",
+  "Ohne Vorlage weiter": "不使用模板继续",
+  "Weiter": "下一步",
+  "Erschienene Bände": "已出版卷数",
+  "z.B. 12": "例如 12",
+  "Band 1 bis": "第 1 卷到",
+  "übernehmen": "应用",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "点选你拥有的卷。按住 Shift 点击可选中自上次以来的所有卷。",
+  "Vorhandene Bände": "拥有的卷",
+  "Band {n}": "第 {n} 卷",
+  "Übrige Bände als „Fehlt“ anlegen": "将其余卷创建为“缺少”",
+  "Ohne Auswahl werden keine Bände angelegt.": "不选择则不会创建卷。",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "输入已出版的卷数即可点选你拥有的卷。不填写则创建不含卷的系列。",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "other": "{n} 卷 已拥有"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "other": "{n} 卷 记为“缺少”"
+  }
 }

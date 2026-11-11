@@ -19,6 +19,8 @@ import FormatFields from '../common/FormatFields';
 import LanguagePill from '../common/LanguagePill';
 import { editionDefaults, editionLanguage, isMpEdition } from '../../utils/editions';
 import { foldText } from '../../utils/search';
+import { pickerCount, volumeRuns } from '../../utils/volumePicker';
+import AddVolumesStep from './AddVolumesStep';
 import { alsoOnLabels, hitToForm, lookupSourceLabels, releasedSoFar } from '../../utils/lookupPrefill';
 
 export { lookupSourceLabels };
@@ -46,6 +48,9 @@ const EMPTY_FORM = {
   wish: false,
   wish_priority: String(DEFAULT_WISH_PRIORITY)
 };
+// i18n
+const STEPS = ['Finden', 'Edition & Regal', 'Bände'];
+
 const MAX_COVER_BYTES = 15 * 1024 * 1024;
 // i18n
 const NETWORK_ERROR = 'Netzwerkfehler – bitte Verbindung prüfen und erneut versuchen.';
@@ -117,6 +122,14 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   // series created, scanned volume failed: the next submit only retries the volume
   const [createdManga, setCreatedManga] = useState(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  // the three steps (Finden, Edition & Regal, Bände); every step stays mounted, so all fields keep their values
+  const [step, setStep] = useState(1);
+  const [usedTemplate, setUsedTemplate] = useState(false);
+  const [typedCount, setTypedCount] = useState('');
+  const [ownedVolumes, setOwnedVolumes] = useState(() => new Set());
+  const [missingRest, setMissingRest] = useState(true);
+  const stepHeadingRef = useRef(null);
+  const stepMovedRef = useRef(false);
   const uploadAbortRef = useRef(null);
 
   const sessionRef = useRef(0);
@@ -152,6 +165,12 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     replacePreview(prefill?.form?.cover_image || '');
     setLookupResults(null);
     setLookupError('');
+    setStep(1);
+    stepMovedRef.current = false;
+    setUsedTemplate(false);
+    setTypedCount('');
+    setOwnedVolumes(new Set());
+    setMissingRest(true);
 
     // Catalogue cover (Open Library): cache it locally; if there is none, drop it instead of saving a dead link.
     // Submit awaits the same promise, so a quick submit never stores the remote URL.
@@ -191,7 +210,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   };
 
   // typed or picked input that closing would throw away (not once the series exists: then only the scanned volume is left)
-  const isDirty = () => !createdManga && (Boolean(coverFile)
+  const isDirty = () => !createdManga && (Boolean(coverFile) || ownedVolumes.size > 0 || String(typedCount).trim() !== ''
     || Object.keys(form).some((key) => String(form[key] ?? '') !== String(openedFormRef.current[key] ?? '')));
 
   // the question before input is thrown away; callers ask it only while isDirty(), so an untouched dialog closes at once
@@ -204,6 +223,20 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     if (submitting) return;
     if (isDirty() && !(await askDiscard())) return;
     handleClose();
+  };
+
+  // a step change moves focus to the step's heading, so a screen reader hears where it is
+  const goToStep = (next) => {
+    stepMovedRef.current = true;
+    setStep(next);
+  };
+  const nextStep = () => {
+    if (step === 1 && !form.title.trim()) {
+      setErrorMessage(t('Bitte gib einen Titel ein.'));
+      return;
+    }
+    setErrorMessage('');
+    goToStep(Math.min(step + 1, 3));
   };
 
   const handleLookupMetadata = async () => {
@@ -255,6 +288,8 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       }
       setLookupResults(null);
       setLookupError('');
+      setUsedTemplate(true);
+      goToStep(2);
     } finally {
       if (isCurrent()) setApplyingId(null);
     }
@@ -328,11 +363,40 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     return serverText(body) || t('Fehler beim Anlegen des Bands');
   };
 
+  const volumeCount = pickerCount({ typed: typedCount, released: releasedHint, total: form.total_volumes });
+  const pickedRuns = volumeRuns({ count: volumeCount, owned: ownedVolumes, missingRest, skip: scanVolume?.enabled ? scanVolume.volume_number : null });
+
+  /** Creates the volumes picked in step "Bände" (numbers that exist already are skipped, so a retry is safe); null or the error text. */
+  const createPickedVolumes = async (manga) => {
+    let created = 0;
+    for (const run of pickedRuns) {
+      let res;
+      try {
+        res = await apiFetch('/api/volumes/batch', {
+          method: 'POST',
+          body: { manga_id: manga.id, from: run.from, to: run.to, status: run.status, publisher: form.publisher.trim() || null },
+          timeout: TIMEOUTS.long
+        });
+      } catch {
+        return t('Netzwerkfehler – bitte Verbindung prüfen');
+      }
+      const body = await readJson(res);
+      if (!res.ok) return serverText(body) || t('Fehler beim Hinzufügen mehrerer Bände');
+      created += Number(body?.created) || 0;
+    }
+    // a Manga Passion edition fills in prices and dates of the new volumes, as "Mehrere Bände anlegen" does
+    if (created > 0 && isMpEdition(form) && form.manga_passion_id) {
+      await apiFetch(`/api/mangas/${manga.id}/autofill-volumes`, { method: 'POST', body: {}, timeout: TIMEOUTS.lookup }).catch(() => null);
+    }
+    return null;
+  };
+
   const handleCreateManga = async (e) => {
     e.preventDefault();
     if (submitting || applyingId !== null) return;
     if (!createdManga && !form.title.trim()) {
       setErrorMessage(t('Bitte gib einen Titel ein.'));
+      goToStep(1);
       return;
     }
     const withVolume = Boolean(scanVolume?.enabled);
@@ -385,7 +449,18 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
         const volumeError = await createScanVolume(manga.id, isRetry);
         if (volumeError) {
           if (!isRetry && onSeriesCreated) onSeriesCreated(manga);
+          setStep(3);
           setErrorMessage(t('Die Reihe wurde angelegt, der Band aber nicht: {reason}. Mit „Band anlegen“ erneut versuchen.', { reason: volumeError.replace(/[.\s]+$/, '') }));
+          return;
+        }
+      }
+
+      if (pickedRuns.length > 0) {
+        const volumesError = await createPickedVolumes(manga);
+        if (volumesError) {
+          if (!isRetry && onSeriesCreated) onSeriesCreated(manga);
+          setStep(3);
+          setErrorMessage(t('Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.', { reason: volumesError.replace(/[.\s]+$/, '') }));
           return;
         }
       }
@@ -454,6 +529,13 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     }
   };
 
+  useEffect(() => {
+    if (!stepMovedRef.current) return;
+    stepMovedRef.current = false;
+    stepHeadingRef.current?.focus({ preventScroll: true });
+    stepHeadingRef.current?.closest('[role="dialog"]')?.scrollTo?.({ top: 0 });
+  }, [step]);
+
   const dialogRef = useDialogA11y(isOpen);
   if (!isOpen) return null;
 
@@ -467,7 +549,9 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     onOpenExisting(manga);
   };
   const applying = applyingId !== null;
-  const submitLabel = seriesLocked ? (scanVolume?.enabled ? t('Band anlegen') : t('Fertig')) : t('Manga anlegen');
+  const submitLabel = seriesLocked
+    ? (pickedRuns.length > 0 ? t('Bände anlegen') : scanVolume?.enabled ? t('Band anlegen') : t('Fertig'))
+    : t('Manga anlegen');
 
   return (
     <div
@@ -525,451 +609,507 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
         )}
 
         {/* Form */}
-        <form onSubmit={handleCreateManga} className="space-y-4">
+        <form onSubmit={handleCreateManga} noValidate className="space-y-4">
           {seriesLocked && (
             <p className="bg-emerald-950/30 border border-emerald-500/30 text-emerald-200 rounded-xl p-3 text-xs">
               {t('Reihe „{title}“ ist bereits angelegt. Änderungen an der Reihe später über „Bearbeiten“ auf ihrer Seite.', { title: form.title.trim() })}
             </p>
           )}
 
+          <ol aria-label={t('Schritte')} className="grid grid-cols-3 gap-2 text-xs">
+            {STEPS.map((label, i) => {
+              const n = i + 1;
+              const current = step === n;
+              return (
+                <li key={label}>
+                  <button
+                    type="button"
+                    id={`btn-add-step-${n}`}
+                    aria-current={current ? 'step' : undefined}
+                    onClick={() => (n > 1 && !form.title.trim() ? nextStep() : goToStep(n))}
+                    disabled={submitting}
+                    className={`w-full h-full text-left rounded-xl border px-2.5 py-2 flex items-center gap-2 ${current ? 'bg-brand-500/15 border-brand-500/50 text-white' : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'}`}
+                  >
+                    <span aria-hidden="true" className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold ${current ? 'bg-brand-700 text-white' : step > n ? 'bg-emerald-500/30 text-emerald-200' : 'bg-slate-800 text-slate-300'}`}>{n}</span>
+                    <span className="font-semibold leading-tight">{t(label)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+
           <fieldset disabled={seriesLocked} className="space-y-4 min-w-0 disabled:opacity-60">
-          <div>
-            <div className="mb-1.5 flex justify-between items-center gap-2">
-              <label htmlFor={`${ids}-title`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                {t('Titel')} <span className="text-red-400">*</span>
-              </label>
-              <span className="text-[11px] text-brand-400 font-normal">{t('Tipp: Titel eingeben & auf „Auto-Fill“ klicken')}</span>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                id={`${ids}-title`}
-                type="text"
-                placeholder={t('z.B. One Piece, Chainsaw Man, Frieren...')}
-                className="input-field flex-1"
-                required
-                data-autofocus
-                value={form.title}
-                onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, title: value })); }}
-              />
-              <button
-                type="button"
-                onClick={handleLookupMetadata}
-                disabled={lookingUp || applying || !form.title.trim()}
-                className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 bg-gradient-to-r hover:from-emerald-600/30 hover:to-sky-600/30 border-brand-500/40 text-brand-300 hover:text-white"
-                title={t(isMpEdition(form) ? LOOKUP_SOURCES_HINT : LOOKUP_SOURCES_HINT_OTHER)}
-              >
-                {lookingUp ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>{t('Suche...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-                    <span>{t('Auto-Fill')}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* same title, language and format already in the collection: a hint with a way to it, creating stays allowed */}
-          {!seriesLocked && duplicates.length > 0 && (
-            <div id={`${ids}-duplicate`} role="status" className="bg-sky-500/10 border border-sky-500/30 text-sky-200 p-2.5 rounded-xl text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
-              <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
-              <span>{t('„{title}“ steht schon in deiner Sammlung.', { title: duplicates[0].title })}</span>
-              {onOpenExisting && (
-                <button type="button" className="underline underline-offset-2 font-semibold hover:text-white" onClick={() => requestOpenExisting(duplicates[0])}>
-                  {t('Zur Reihe')}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* the same series in another own shelf: take it over with its values instead of searching again */}
-          {!seriesLocked && copyHits.length > 0 && (
-            <section aria-labelledby={`${ids}-copy`} className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 space-y-2" data-copy-hits="">
-              <h3 id={`${ids}-copy`} className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <Library className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> {t('Aus deinen Regalen')}
-              </h3>
-              <ul className="space-y-2">
-                {copyHits.map((hit) => (
-                  <li key={hit.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-white break-words">
-                        {hit.title} <LanguagePill language={hit.language} />
-                      </p>
-                      <p className="text-slate-400">
-                        {t('in „{shelf}“', { shelf: hit.shelf_name })} · {tn('{n} Band', '{n} Bände', hit.volume_count)}
-                      </p>
-                    </div>
-                    {copyPick !== hit.id ? (
-                      <button
-                        type="button"
-                        className="btn-secondary hit-44 px-3 py-1.5 text-xs"
-                        aria-label={t('Übernehmen: {title}', { title: hit.title })}
-                        onClick={() => { setCopyPick(hit.id); setCopyVolumes(false); }}
-                        disabled={copying || submitting}
-                      >
-                        {tc('copy', 'Übernehmen')}
-                      </button>
-                    ) : (
-                      <div className="w-full flex flex-wrap items-center gap-3">
-                        {hit.volume_count > 0 && (
-                          <span className="flex items-center gap-2">
-                            <input id={`${ids}-copy-volumes`} type="checkbox" checked={copyVolumes} onChange={(e) => setCopyVolumes(e.target.checked)} />
-                            <label htmlFor={`${ids}-copy-volumes`} className="text-slate-300">{t('Bände mitnehmen (als „Fehlt“)')}</label>
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          className="btn-primary hit-44 px-3 py-1.5 text-xs"
-                          onClick={() => copyFromShelf(hit)}
-                          disabled={copying || submitting}
-                          aria-busy={copying || undefined}
-                        >
-                          {t('In dieses Regal übernehmen')}
-                        </button>
-                        <button type="button" className="hit-44 px-1 py-1 text-slate-400 hover:text-white underline underline-offset-2" onClick={() => setCopyPick(null)} disabled={copying}>
-                          {t('Abbrechen')}
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* Lookup Error Banner */}
-          {lookupError && (
-            <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
-              <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-amber-400" />
-              <span>{lookupError}</span>
-            </div>
-          )}
-
-          {/* Lookup Results Selector */}
-          {!seriesLocked && lookupResults && lookupResults.length > 0 && (
-            <div className="bg-slate-950/95 border border-brand-500/40 rounded-xl p-3 space-y-2.5 shadow-xl" aria-busy={applying || undefined}>
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-semibold text-brand-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" /> {isMpEdition(form) ? t('Treffer auswählen (Manga Passion zuerst):') : t('Treffer auswählen (AniList / MyAnimeList):')}
-                </span>
+          <div data-step="1" hidden={step !== 1} className="space-y-4">
+            <h3 ref={step === 1 ? stepHeadingRef : undefined} tabIndex={-1} className="sr-only">{t('Schritt {n}: {title}', { n: 1, title: t('Finden') })}</h3>
+            <div>
+              <div className="mb-1.5 flex justify-between items-center gap-2">
+                <label htmlFor={`${ids}-title`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  {t('Titel')} <span className="text-red-400">*</span>
+                </label>
+                <span className="text-[11px] text-brand-400 font-normal">{t('Tipp: Titel eingeben & auf „Auto-Fill“ klicken')}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  id={`${ids}-title`}
+                  type="text"
+                  placeholder={t('z.B. One Piece, Chainsaw Man, Frieren...')}
+                  className="input-field flex-1"
+                  required
+                  data-autofocus
+                  value={form.title}
+                  onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, title: value })); }}
+                />
                 <button
                   type="button"
-                  onClick={closeLookupResults}
-                  disabled={applying}
-                  className="text-slate-400 hover:text-white text-[11px] disabled:opacity-50"
+                  onClick={handleLookupMetadata}
+                  disabled={lookingUp || applying || !form.title.trim()}
+                  className="btn-secondary text-xs flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 bg-gradient-to-r hover:from-emerald-600/30 hover:to-sky-600/30 border-brand-500/40 text-brand-300 hover:text-white"
+                  title={t(isMpEdition(form) ? LOOKUP_SOURCES_HINT : LOOKUP_SOURCES_HINT_OTHER)}
                 >
-                  {t('Schließen')}
+                  {lookingUp ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>{t('Suche...')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-brand-400" />
+                      <span>{t('Auto-Fill')}</span>
+                    </>
+                  )}
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                {lookupResults.map(item => {
-                  const isApplying = applyingId === lookupKey(item);
-                  return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => applyLookupResult(item)}
-                    disabled={applying}
-                    aria-busy={isApplying || undefined}
-                    className={`flex items-center gap-2.5 p-2 rounded-lg border text-left transition-all group disabled:cursor-wait ${
-                      applying && !isApplying ? 'opacity-50' : ''
-                    } ${
-                      item.source === 'manga_passion'
-                        ? 'bg-gradient-to-r from-emerald-950/30 to-slate-900/90 border-emerald-500/40 hover:border-emerald-400 hover:from-emerald-950/50'
-                        : 'bg-slate-900/80 hover:bg-brand-950/60 border-slate-800 hover:border-brand-500/50'
-                    }`}
-                  >
-                    {item.cover_image && !failedImages[`lookup-${item.id || item.title}`] ? (
-                      <img
-                        {...assetImgProps(item.cover_image)}
-                        alt={item.title}
-                        onError={() => setFailedImages(prev => ({ ...prev, [`lookup-${item.id || item.title}`]: true }))}
-                        className="w-10 h-14 object-cover rounded shadow shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-14 bg-slate-800 rounded shrink-0 flex items-center justify-center text-slate-400">
-                        <BookOpen className="w-5 h-5" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        {item.source === 'manga_passion' && (
-                          <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
-                            <Library className="w-3 h-3" aria-hidden="true" />{t('Manga Passion')}
-                          </span>
-                        )}
-                        {(item.source === 'manga_passion' ? alsoOnLabels(item) : lookupSourceLabels(item)).map((label) => (
-                          <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
-                            <Globe className="w-3 h-3" aria-hidden="true" />{label}
-                          </span>
-                        ))}
-                        {item.format_label && (
-                          <span className="inline-flex items-center bg-amber-500/20 text-amber-200 border border-amber-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">{item.format_label}</span>
-                        )}
-                        {isApplying && (
-                          <span className="flex items-center gap-1 text-[10px] text-brand-300">
-                            <RefreshCw className="w-3 h-3 animate-spin" /> {t('Wird übernommen…')}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs font-semibold text-white truncate group-hover:text-brand-300">
-                        {item.title}
-                      </p>
-                      <p className="text-[11px] text-slate-400 truncate">
-                        {item.author || item.alt_title || t('Unbekannt')}
-                      </p>
-                      <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
-                        {item.publisher && (
-                          <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]">
-                            {item.publisher}
-                          </span>
-                        )}
-                        {item.total_volumes && (
-                          <span className="bg-slate-800 text-slate-200 border border-slate-700/80 px-1.5 py-0.5 rounded font-bold">
-                            {formatCount(item.total_volumes, 'Band', 'Bände')}
-                          </span>
-                        )}
-                        <span className="bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-400">
-                          {mangaStatusLabel(item.status)}
-                        </span>
-                      </div>
-                    </div>
+            </div>
+
+            {/* same title, language and format already in the collection: a hint with a way to it, creating stays allowed */}
+            {!seriesLocked && duplicates.length > 0 && (
+              <div id={`${ids}-duplicate`} role="status" className="bg-sky-500/10 border border-sky-500/30 text-sky-200 p-2.5 rounded-xl text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
+                <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-sky-300" aria-hidden="true" />
+                <span>{t('„{title}“ steht schon in deiner Sammlung.', { title: duplicates[0].title })}</span>
+                {onOpenExisting && (
+                  <button type="button" className="underline underline-offset-2 font-semibold hover:text-white" onClick={() => requestOpenExisting(duplicates[0])}>
+                    {t('Zur Reihe')}
                   </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor={`${ids}-author`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                {t('Autor / Mangaka')}
-              </label>
-              <input
-                id={`${ids}-author`}
-                type="text"
-                placeholder={t('z.B. Eiichiro Oda')}
-                className="input-field"
-                value={form.author}
-                onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, author: value })); }}
-              />
-            </div>
-
-            <div>
-              <label htmlFor={`${ids}-publisher`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                {t('Verlag')}
-              </label>
-              <input
-                id={`${ids}-publisher`}
-                type="text"
-                placeholder={t('z.B. Carlsen Manga, Tokyopop...')}
-                className="input-field"
-                value={form.publisher}
-                onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, publisher: value })); }}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor={`${ids}-status`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                {t('Status')}
-              </label>
-              <select
-                id={`${ids}-status`}
-                className="input-field bg-slate-950"
-                value={form.status}
-                onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, status: value })); }}
-              >
-                {MANGA_STATUSES.map(status => <option key={status} value={status}>{mangaStatusLabel(status)}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor={`${ids}-total`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                {t('Geplante / Gesamtbände')}
-              </label>
-              <input
-                id={`${ids}-total`}
-                type="number"
-                inputMode="numeric"
-                min="1"
-                max="5000"
-                step="1"
-                placeholder={releasedHint ? t('bisher {n} erschienen', { n: releasedHint }) : t('z.B. 108')}
-                className="input-field"
-                value={form.total_volumes}
-                onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, total_volumes: value })); }}
-              />
-            </div>
-          </div>
-
-          <FormatFields
-            idPrefix={`${ids}-format`}
-            value={form}
-            // Manga Passion knows no webtoons: a picked Manga Passion id goes with the switch
-            onChange={(patch) => setForm(prev => ({ ...prev, ...patch, ...(patch.format === 'webtoon' ? { manga_passion_id: null } : {}) }))}
-          />
-
-          {shelves.length > 1 && (
-            <div>
-              <label htmlFor={`${ids}-shelf`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Regal')}</label>
-              <select id={`${ids}-shelf`} className="input-field" value={shelfId} onChange={e => setShelfId(e.target.value)}>
-                <option value="">{t('Standard (mein erstes Regal)')}</option>
-                {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-          )}
-
-          <EditionFields
-            idPrefix={`${ids}-edition`}
-            value={form}
-            // a picked Manga Passion hit names a German edition: another language must not keep its id (409 MP_LANGUAGE later)
-            onChange={(patch) => setForm(prev => ({ ...prev, ...patch, ...(patch.language && !isMpEdition(patch) ? { manga_passion_id: null } : {}) }))}
-          />
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-            <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
-              <input
-                id={`${ids}-wish`}
-                type="checkbox"
-                className="w-4 h-4 accent-rose-500"
-                checked={form.wish}
-                onChange={e => { const checked = e.target.checked; setForm(prev => ({ ...prev, wish: checked })); }}
-              />
-              {t('Auf die Wunschliste')}
-            </label>
-            {form.wish && (
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                {t('Priorität')}
-                <select
-                  id={`${ids}-wish-priority`}
-                  className="input-field bg-slate-950 py-1.5 w-auto text-base sm:text-sm"
-                  value={form.wish_priority}
-                  onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, wish_priority: value })); }}
-                >
-                  {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{t(o.label)}</option>)}
-                </select>
-              </label>
-            )}
-          </div>
-
-          {/* Cover Upload / URL */}
-          <div>
-            <label htmlFor={`${ids}-cover`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              {t('Cover-Bild (Datei hochladen oder URL)')}
-            </label>
-            <div className="flex flex-col sm:flex-row gap-3 items-center">
-              <input
-                id={`${ids}-cover`}
-                type="text"
-                placeholder={t('https://example.com/cover.jpg oder /uploads/...')}
-                className="input-field flex-1 text-base sm:text-sm"
-                value={form.cover_image}
-                onChange={e => {
-                  const value = e.target.value;
-                  setForm(prev => ({ ...prev, cover_image: value }));
-                  replacePreview(value);
-                  setCoverFile(null);
-                }}
-              />
-              <span className="text-xs text-slate-400">{t('oder')}</span>
-              <FilePickerButton
-                accept="image/*"
-                onChange={handleCoverChange}
-                label={t('Cover-Datei wählen')}
-                className="btn-secondary text-xs flex items-center gap-2 cursor-pointer shrink-0 py-2.5"
-              >
-                <Upload className="w-4 h-4" /> {t('Datei wählen')}
-              </FilePickerButton>
-            </div>
-            {coverPreview && (
-              <div className="mt-2.5 flex items-center gap-3 p-2 bg-slate-950/80 rounded-xl border border-slate-800">
-                <img {...assetImgProps(coverPreview)} alt={t('Cover-Vorschau')} className="w-10 h-14 object-cover rounded-lg" />
-                <span className="text-xs text-slate-300 truncate">
-                  {coverCaching && isRemoteUrl(coverPreview) ? t('Cover wird geladen…') : t('Vorschau aktiv')}
-                </span>
+                )}
               </div>
             )}
-          </div>
 
-          <div>
-            <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              {t('Beschreibung')}
-            </label>
-            <textarea
-              id={`${ids}-description`}
-              rows="3"
-              placeholder={t('Kurze Inhaltsangabe...')}
-              className="input-field resize-none text-base sm:text-sm"
-              value={form.description}
-              onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, description: value })); }}
-            />
-          </div>
-          </fieldset>
+            {/* the same series in another own shelf: take it over with its values instead of searching again */}
+            {!seriesLocked && copyHits.length > 0 && (
+              <section aria-labelledby={`${ids}-copy`} className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 space-y-2" data-copy-hits="">
+                <h3 id={`${ids}-copy`} className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Library className="w-3.5 h-3.5 text-brand-400" aria-hidden="true" /> {t('Aus deinen Regalen')}
+                </h3>
+                <ul className="space-y-2">
+                  {copyHits.map((hit) => (
+                    <li key={hit.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-white break-words">
+                          {hit.title} <LanguagePill language={hit.language} />
+                        </p>
+                        <p className="text-slate-400">
+                          {t('in „{shelf}“', { shelf: hit.shelf_name })} · {tn('{n} Band', '{n} Bände', hit.volume_count)}
+                        </p>
+                      </div>
+                      {copyPick !== hit.id ? (
+                        <button
+                          type="button"
+                          className="btn-secondary hit-44 px-3 py-1.5 text-xs"
+                          aria-label={t('Übernehmen: {title}', { title: hit.title })}
+                          onClick={() => { setCopyPick(hit.id); setCopyVolumes(false); }}
+                          disabled={copying || submitting}
+                        >
+                          {tc('copy', 'Übernehmen')}
+                        </button>
+                      ) : (
+                        <div className="w-full flex flex-wrap items-center gap-3">
+                          {hit.volume_count > 0 && (
+                            <span className="flex items-center gap-2">
+                              <input id={`${ids}-copy-volumes`} type="checkbox" checked={copyVolumes} onChange={(e) => setCopyVolumes(e.target.checked)} />
+                              <label htmlFor={`${ids}-copy-volumes`} className="text-slate-300">{t('Bände mitnehmen (als „Fehlt“)')}</label>
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-primary hit-44 px-3 py-1.5 text-xs"
+                            onClick={() => copyFromShelf(hit)}
+                            disabled={copying || submitting}
+                            aria-busy={copying || undefined}
+                          >
+                            {t('In dieses Regal übernehmen')}
+                          </button>
+                          <button type="button" className="hit-44 px-1 py-1 text-slate-400 hover:text-white underline underline-offset-2" onClick={() => setCopyPick(null)} disabled={copying}>
+                            {t('Abbrechen')}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-          {scanVolume && (
-            <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 space-y-3">
-              <label className="flex items-center gap-2 text-sm font-semibold text-emerald-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={scanVolume.enabled}
-                  onChange={e => { const checked = e.target.checked; setScanVolume(prev => ({ ...prev, enabled: checked })); }}
-                />
-                <ScanBarcode className="w-4 h-4" /> {t('Gescannten Band gleich anlegen')}
-              </label>
-              {scanVolume.enabled && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor={`${ids}-volume-number`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">{t('Bandnummer')} <span className="text-red-400">*</span></label>
-                    <input
-                      id={`${ids}-volume-number`}
-                      type="text"
-                      className="input-field"
-                      placeholder={t('z.B. 1')}
-                      maxLength={80}
-                      value={scanVolume.volume_number}
-                      onChange={e => { const value = e.target.value; setScanVolume(prev => ({ ...prev, volume_number: value })); }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={`${ids}-volume-status`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">{t('Status')}</label>
-                    <select
-                      id={`${ids}-volume-status`}
-                      className="input-field"
-                      value={scanVolume.status}
-                      onChange={e => { const value = e.target.value; setScanVolume(prev => ({ ...prev, status: value })); }}
+            {/* Lookup Error Banner */}
+            {lookupError && (
+              <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 p-2.5 rounded-xl text-xs flex items-center gap-2">
+                <TriangleExclamationPoint className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>{lookupError}</span>
+              </div>
+            )}
+
+            {/* Lookup Results Selector */}
+            {!seriesLocked && lookupResults && lookupResults.length > 0 && (
+              <div className="bg-slate-950/95 border border-brand-500/40 rounded-xl p-3 space-y-2.5 shadow-xl" aria-busy={applying || undefined}>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-brand-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" /> {isMpEdition(form) ? t('Treffer auswählen (Manga Passion zuerst):') : t('Treffer auswählen (AniList / MyAnimeList):')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={closeLookupResults}
+                    disabled={applying}
+                    className="text-slate-400 hover:text-white text-[11px] disabled:opacity-50"
+                  >
+                    {t('Schließen')}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                  {lookupResults.map(item => {
+                    const isApplying = applyingId === lookupKey(item);
+                    return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => applyLookupResult(item)}
+                      disabled={applying}
+                      aria-busy={isApplying || undefined}
+                      className={`flex items-center gap-2.5 p-2 rounded-lg border text-left transition-all group disabled:cursor-wait ${
+                        applying && !isApplying ? 'opacity-50' : ''
+                      } ${
+                        item.source === 'manga_passion'
+                          ? 'bg-gradient-to-r from-emerald-950/30 to-slate-900/90 border-emerald-500/40 hover:border-emerald-400 hover:from-emerald-950/50'
+                          : 'bg-slate-900/80 hover:bg-brand-950/60 border-slate-800 hover:border-brand-500/50'
+                      }`}
                     >
-                      <option value="Vorhanden">{t('Vorhanden')}</option>
-                      <option value="Fehlt">{t('Fehlt (Einkaufsliste)')}</option>
-                    </select>
-                  </div>
-                  <p className="col-span-2 text-[11px] text-slate-400">
-                    {t('ISBN {details} werden mit übernommen.', {
-                      details: `${scanVolume.isbn || '–'}${scanVolume.price ? ` · ${scanVolume.price} €` : ''}${scanVolume.pages ? ` · ${t('{pages} Seiten', { pages: scanVolume.pages })}` : ''}${scanVolume.release_year ? ` · ${scanVolume.release_year}` : ''}`
-                    })}
-                  </p>
+                      {item.cover_image && !failedImages[`lookup-${item.id || item.title}`] ? (
+                        <img
+                          {...assetImgProps(item.cover_image)}
+                          alt={item.title}
+                          onError={() => setFailedImages(prev => ({ ...prev, [`lookup-${item.id || item.title}`]: true }))}
+                          className="w-10 h-14 object-cover rounded shadow shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-14 bg-slate-800 rounded shrink-0 flex items-center justify-center text-slate-400">
+                          <BookOpen className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          {item.source === 'manga_passion' && (
+                            <span className="inline-flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-px rounded text-[9px] font-bold shrink-0">
+                              <Library className="w-3 h-3" aria-hidden="true" />{t('Manga Passion')}
+                            </span>
+                          )}
+                          {(item.source === 'manga_passion' ? alsoOnLabels(item) : lookupSourceLabels(item)).map((label) => (
+                            <span key={label} className="inline-flex items-center gap-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">
+                              <Globe className="w-3 h-3" aria-hidden="true" />{label}
+                            </span>
+                          ))}
+                          {item.format_label && (
+                            <span className="inline-flex items-center bg-amber-500/20 text-amber-200 border border-amber-500/40 px-1 py-px rounded text-[9px] font-medium shrink-0">{item.format_label}</span>
+                          )}
+                          {isApplying && (
+                            <span className="flex items-center gap-1 text-[10px] text-brand-300">
+                              <RefreshCw className="w-3 h-3 animate-spin" /> {t('Wird übernommen…')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold text-white truncate group-hover:text-brand-300">
+                          {item.title}
+                        </p>
+                        <p className="text-[11px] text-slate-400 truncate">
+                          {item.author || item.alt_title || t('Unbekannt')}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                          {item.publisher && (
+                            <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]">
+                              {item.publisher}
+                            </span>
+                          )}
+                          {item.total_volumes && (
+                            <span className="bg-slate-800 text-slate-200 border border-slate-700/80 px-1.5 py-0.5 rounded font-bold">
+                              {formatCount(item.total_volumes, 'Band', 'Bände')}
+                            </span>
+                          )}
+                          <span className="bg-slate-800/80 px-1.5 py-0.5 rounded text-slate-400">
+                            {mangaStatusLabel(item.status)}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+          </div>
+          <div data-step="2" hidden={step !== 2} className="space-y-4">
+            <h3 ref={step === 2 ? stepHeadingRef : undefined} tabIndex={-1} className="sr-only">{t('Schritt {n}: {title}', { n: 2, title: t('Edition & Regal') })}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor={`${ids}-author`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t('Autor / Mangaka')}
+                </label>
+                <input
+                  id={`${ids}-author`}
+                  type="text"
+                  placeholder={t('z.B. Eiichiro Oda')}
+                  className="input-field"
+                  value={form.author}
+                  onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, author: value })); }}
+                />
+              </div>
+
+              <div>
+                <label htmlFor={`${ids}-publisher`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t('Verlag')}
+                </label>
+                <input
+                  id={`${ids}-publisher`}
+                  type="text"
+                  placeholder={t('z.B. Carlsen Manga, Tokyopop...')}
+                  className="input-field"
+                  value={form.publisher}
+                  onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, publisher: value })); }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor={`${ids}-status`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t('Status')}
+                </label>
+                <select
+                  id={`${ids}-status`}
+                  className="input-field bg-slate-950"
+                  value={form.status}
+                  onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, status: value })); }}
+                >
+                  {MANGA_STATUSES.map(status => <option key={status} value={status}>{mangaStatusLabel(status)}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor={`${ids}-total`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t('Geplante / Gesamtbände')}
+                </label>
+                <input
+                  id={`${ids}-total`}
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="5000"
+                  step="1"
+                  placeholder={releasedHint ? t('bisher {n} erschienen', { n: releasedHint }) : t('z.B. 108')}
+                  className="input-field"
+                  value={form.total_volumes}
+                  onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, total_volumes: value })); }}
+                />
+              </div>
+            </div>
+
+            <FormatFields
+              idPrefix={`${ids}-format`}
+              value={form}
+              // Manga Passion knows no webtoons: a picked Manga Passion id goes with the switch
+              onChange={(patch) => setForm(prev => ({ ...prev, ...patch, ...(patch.format === 'webtoon' ? { manga_passion_id: null } : {}) }))}
+            />
+
+            {shelves.length > 1 && (
+              <div>
+                <label htmlFor={`${ids}-shelf`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Regal')}</label>
+                <select id={`${ids}-shelf`} className="input-field" value={shelfId} onChange={e => setShelfId(e.target.value)}>
+                  <option value="">{t('Standard (mein erstes Regal)')}</option>
+                  {shelves.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <EditionFields
+              idPrefix={`${ids}-edition`}
+              value={form}
+              // a picked Manga Passion hit names a German edition: another language must not keep its id (409 MP_LANGUAGE later)
+              onChange={(patch) => setForm(prev => ({ ...prev, ...patch, ...(patch.language && !isMpEdition(patch) ? { manga_passion_id: null } : {}) }))}
+            />
+
+            {/* Cover Upload / URL */}
+            <div>
+              <label htmlFor={`${ids}-cover`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                {t('Cover-Bild (Datei hochladen oder URL)')}
+              </label>
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                <input
+                  id={`${ids}-cover`}
+                  type="text"
+                  placeholder={t('https://example.com/cover.jpg oder /uploads/...')}
+                  className="input-field flex-1 text-base sm:text-sm"
+                  value={form.cover_image}
+                  onChange={e => {
+                    const value = e.target.value;
+                    setForm(prev => ({ ...prev, cover_image: value }));
+                    replacePreview(value);
+                    setCoverFile(null);
+                  }}
+                />
+                <span className="text-xs text-slate-400">{t('oder')}</span>
+                <FilePickerButton
+                  accept="image/*"
+                  onChange={handleCoverChange}
+                  label={t('Cover-Datei wählen')}
+                  className="btn-secondary text-xs flex items-center gap-2 cursor-pointer shrink-0 py-2.5"
+                >
+                  <Upload className="w-4 h-4" /> {t('Datei wählen')}
+                </FilePickerButton>
+              </div>
+              {coverPreview && (
+                <div className="mt-2.5 flex items-center gap-3 p-2 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <img {...assetImgProps(coverPreview)} alt={t('Cover-Vorschau')} className="w-10 h-14 object-cover rounded-lg" />
+                  <span className="text-xs text-slate-300 truncate">
+                    {coverCaching && isRemoteUrl(coverPreview) ? t('Cover wird geladen…') : t('Vorschau aktiv')}
+                  </span>
                 </div>
               )}
             </div>
-          )}
+
+            <div>
+              <label htmlFor={`${ids}-description`} className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                {t('Beschreibung')}
+              </label>
+              <textarea
+                id={`${ids}-description`}
+                rows="3"
+                placeholder={t('Kurze Inhaltsangabe...')}
+                className="input-field resize-none text-base sm:text-sm"
+                value={form.description}
+                onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, description: value })); }}
+              />
+            </div>
+          </div>
+          </fieldset>
+
+          <div data-step="3" hidden={step !== 3} className="space-y-4">
+            <h3 ref={step === 3 ? stepHeadingRef : undefined} tabIndex={-1} className="sr-only">{t('Schritt {n}: {title}', { n: 3, title: t('Bände') })}</h3>
+            <AddVolumesStep
+              ids={ids}
+              count={volumeCount}
+              typedCount={typedCount}
+              onTypedCount={setTypedCount}
+              owned={ownedVolumes}
+              onOwned={setOwnedVolumes}
+              missingRest={missingRest}
+              onMissingRest={setMissingRest}
+              skip={scanVolume?.enabled ? scanVolume.volume_number : null}
+              disabled={submitting}
+            />
+
+            <fieldset disabled={seriesLocked} className="min-w-0 disabled:opacity-60">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+                <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+                  <input
+                    id={`${ids}-wish`}
+                    type="checkbox"
+                    className="w-4 h-4 accent-rose-500"
+                    checked={form.wish}
+                    onChange={e => { const checked = e.target.checked; setForm(prev => ({ ...prev, wish: checked })); }}
+                  />
+                  {t('Auf die Wunschliste')}
+                </label>
+                {form.wish && (
+                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                    {t('Priorität')}
+                    <select
+                      id={`${ids}-wish-priority`}
+                      className="input-field bg-slate-950 py-1.5 w-auto text-base sm:text-sm"
+                      value={form.wish_priority}
+                      onChange={e => { const value = e.target.value; setForm(prev => ({ ...prev, wish_priority: value })); }}
+                    >
+                      {PRIORITY_OPTIONS.map(o => <option key={o.value} value={String(o.value)}>{t(o.label)}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+            </fieldset>
+
+            {scanVolume && (
+              <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 space-y-3">
+                <label className="flex items-center gap-2 text-sm font-semibold text-emerald-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scanVolume.enabled}
+                    onChange={e => { const checked = e.target.checked; setScanVolume(prev => ({ ...prev, enabled: checked })); }}
+                  />
+                  <ScanBarcode className="w-4 h-4" /> {t('Gescannten Band gleich anlegen')}
+                </label>
+                {scanVolume.enabled && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor={`${ids}-volume-number`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">{t('Bandnummer')} <span className="text-red-400">*</span></label>
+                      <input
+                        id={`${ids}-volume-number`}
+                        type="text"
+                        className="input-field"
+                        placeholder={t('z.B. 1')}
+                        maxLength={80}
+                        value={scanVolume.volume_number}
+                        onChange={e => { const value = e.target.value; setScanVolume(prev => ({ ...prev, volume_number: value })); }}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={`${ids}-volume-status`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">{t('Status')}</label>
+                      <select
+                        id={`${ids}-volume-status`}
+                        className="input-field"
+                        value={scanVolume.status}
+                        onChange={e => { const value = e.target.value; setScanVolume(prev => ({ ...prev, status: value })); }}
+                      >
+                        <option value="Vorhanden">{t('Vorhanden')}</option>
+                        <option value="Fehlt">{t('Fehlt (Einkaufsliste)')}</option>
+                      </select>
+                    </div>
+                    <p className="col-span-2 text-[11px] text-slate-400">
+                      {t('ISBN {details} werden mit übernommen.', {
+                        details: `${scanVolume.isbn || '–'}${scanVolume.price ? ` · ${scanVolume.price} €` : ''}${scanVolume.pages ? ` · ${t('{pages} Seiten', { pages: scanVolume.pages })}` : ''}${scanVolume.release_year ? ` · ${scanVolume.release_year}` : ''}`
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-800">
             <button
               id="btn-close-add-modal"
               type="button"
               onClick={requestClose}
-              className="btn-secondary text-sm"
+              className="btn-secondary text-sm sm:mr-auto"
               disabled={submitting}
             >
               {seriesLocked ? t('Schließen') : t('Abbrechen')}
             </button>
+            {step > 1 && !seriesLocked && (
+              <button type="button" id="btn-add-step-back" onClick={() => goToStep(step - 1)} className="btn-secondary text-sm" disabled={submitting}>
+                {t('Zurück')}
+              </button>
+            )}
+            {step < 3 && !seriesLocked && (
+              <button type="button" id="btn-add-step-next" onClick={nextStep} className="btn-secondary text-sm" disabled={submitting || applying}>
+                {step === 1 && !usedTemplate ? t('Ohne Vorlage weiter') : t('Weiter')}
+              </button>
+            )}
             {uploadingCover && (
               <button
                 type="button"

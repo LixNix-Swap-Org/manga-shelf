@@ -3659,5 +3659,33 @@
   "Basis": "Général",
   "Edition": "Édition",
   "Reihe bearbeiten": "Modifier la série",
-  "Abschnitte": "Sections"
+  "Abschnitte": "Sections",
+  "Finden": "Rechercher",
+  "Edition & Regal": "Édition et étagère",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "La série a été créée, mais pas les tomes : {reason}. Réessayez avec « Créer les tomes ».",
+  "Bände anlegen": "Créer les tomes",
+  "Schritte": "Étapes",
+  "Schritt {n}: {title}": "Étape {n} : {title}",
+  "Ohne Vorlage weiter": "Continuer sans modèle",
+  "Weiter": "Suivant",
+  "Erschienene Bände": "Tomes parus",
+  "z.B. 12": "p. ex. 12",
+  "Band 1 bis": "Tome 1 à",
+  "übernehmen": "appliquer",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Touchez les tomes que vous possédez. Avec Maj, un clic marque tous les tomes depuis le dernier.",
+  "Vorhandene Bände": "Tomes possédés",
+  "Band {n}": "Tome {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Créer les autres tomes comme « Manquant »",
+  "Ohne Auswahl werden keine Bände angelegt.": "Sans sélection, aucun tome n'est créé.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Indiquez combien de tomes sont parus pour toucher ceux que vous possédez. Sans nombre, la série est créée sans tomes.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} tome possédé(s)",
+    "many": "{n} tomes possédé(s)",
+    "other": "{n} tomes possédé(s)"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} tome comme « Manquant »",
+    "many": "{n} tomes comme « Manquant »",
+    "other": "{n} tomes comme « Manquant »"
+  }
 }

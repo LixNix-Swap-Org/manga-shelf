@@ -3555,5 +3555,31 @@
   "Basis": "Temel",
   "Edition": "Baskı",
   "Reihe bearbeiten": "Seriyi düzenle",
-  "Abschnitte": "Bölümler"
+  "Abschnitte": "Bölümler",
+  "Finden": "Bul",
+  "Edition & Regal": "Baskı ve raf",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "Seri oluşturuldu ama ciltler oluşturulamadı: {reason}. „Ciltleri oluştur“ ile yeniden deneyin.",
+  "Bände anlegen": "Ciltleri oluştur",
+  "Schritte": "Adımlar",
+  "Schritt {n}: {title}": "Adım {n}: {title}",
+  "Ohne Vorlage weiter": "Şablonsuz devam et",
+  "Weiter": "İleri",
+  "Erschienene Bände": "Çıkan cilt sayısı",
+  "z.B. 12": "örn. 12",
+  "Band 1 bis": "Cilt 1'den",
+  "übernehmen": "uygula",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Sahip olduğun ciltlere dokun. Shift ile tıklamak sondan itibaren tüm ciltleri işaretler.",
+  "Vorhandene Bände": "Sahip olunan ciltler",
+  "Band {n}": "Cilt {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Kalan ciltleri „Eksik“ olarak oluştur",
+  "Ohne Auswahl werden keine Bände angelegt.": "Seçim yapılmazsa cilt oluşturulmaz.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Sahip olduklarına dokunmak için kaç cilt çıktığını gir. Sayı girilmezse seri cilt olmadan oluşturulur.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} cilt mevcut",
+    "other": "{n} cilt mevcut"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} cilt „Eksik“ olarak",
+    "other": "{n} cilt „Eksik“ olarak"
+  }
 }

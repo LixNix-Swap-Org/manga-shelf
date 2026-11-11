@@ -3763,5 +3763,35 @@
   "Basis": "Основное",
   "Edition": "Издание",
   "Reihe bearbeiten": "Изменить серию",
-  "Abschnitte": "Разделы"
+  "Abschnitte": "Разделы",
+  "Finden": "Найти",
+  "Edition & Regal": "Издание и полка",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "Серия создана, а тома нет: {reason}. Повторите с помощью «Создать тома».",
+  "Bände anlegen": "Создать тома",
+  "Schritte": "Шаги",
+  "Schritt {n}: {title}": "Шаг {n}: {title}",
+  "Ohne Vorlage weiter": "Продолжить без шаблона",
+  "Weiter": "Далее",
+  "Erschienene Bände": "Вышло томов",
+  "z.B. 12": "напр. 12",
+  "Band 1 bis": "Тома с 1 по",
+  "übernehmen": "применить",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Нажмите на тома, которые у вас есть. Щелчок с Shift отмечает все тома с последнего.",
+  "Vorhandene Bände": "Имеющиеся тома",
+  "Band {n}": "Том {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Создать остальные тома как «Нет»",
+  "Ohne Auswahl werden keine Bände angelegt.": "Без выбора тома не создаются.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Укажите, сколько томов вышло, чтобы отметить имеющиеся. Без числа серия создаётся без томов.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} том в наличии",
+    "few": "{n} тома в наличии",
+    "many": "{n} томов в наличии",
+    "other": "{n} тома в наличии"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} том как «Нет»",
+    "few": "{n} тома как «Нет»",
+    "many": "{n} томов как «Нет»",
+    "other": "{n} тома как «Нет»"
+  }
 }

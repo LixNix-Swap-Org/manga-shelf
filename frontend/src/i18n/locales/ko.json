@@ -3451,5 +3451,29 @@
   "Basis": "기본",
   "Edition": "에디션",
   "Reihe bearbeiten": "시리즈 편집",
-  "Abschnitte": "섹션"
+  "Abschnitte": "섹션",
+  "Finden": "찾기",
+  "Edition & Regal": "에디션 및 책장",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "시리즈는 만들어졌지만 권은 만들어지지 않았습니다: {reason}. „권 만들기“로 다시 시도하세요.",
+  "Bände anlegen": "권 만들기",
+  "Schritte": "단계",
+  "Schritt {n}: {title}": "{n}단계: {title}",
+  "Ohne Vorlage weiter": "템플릿 없이 계속",
+  "Weiter": "다음",
+  "Erschienene Bände": "발매된 권 수",
+  "z.B. 12": "예: 12",
+  "Band 1 bis": "1권부터",
+  "übernehmen": "적용",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "가지고 있는 권을 탭하세요. Shift 키를 누른 채 클릭하면 마지막 권부터 모두 선택됩니다.",
+  "Vorhandene Bände": "가지고 있는 권",
+  "Band {n}": "{n}권",
+  "Übrige Bände als „Fehlt“ anlegen": "나머지 권을 „없음“으로 만들기",
+  "Ohne Auswahl werden keine Bände angelegt.": "선택하지 않으면 권이 만들어지지 않습니다.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "발매된 권 수를 입력하면 가진 권을 탭할 수 있습니다. 입력하지 않으면 권 없이 시리즈가 만들어집니다.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "other": "{n}권 보유"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "other": "{n}권 „없음“으로"
+  }
 }

@@ -3659,5 +3659,33 @@
   "Basis": "Básico",
   "Edition": "Edición",
   "Reihe bearbeiten": "Editar serie",
-  "Abschnitte": "Secciones"
+  "Abschnitte": "Secciones",
+  "Finden": "Buscar",
+  "Edition & Regal": "Edición y estantería",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "La serie se creó, pero los tomos no: {reason}. Vuelve a intentarlo con «Crear tomos».",
+  "Bände anlegen": "Crear tomos",
+  "Schritte": "Pasos",
+  "Schritt {n}: {title}": "Paso {n}: {title}",
+  "Ohne Vorlage weiter": "Continuar sin plantilla",
+  "Weiter": "Siguiente",
+  "Erschienene Bände": "Tomos publicados",
+  "z.B. 12": "p. ej. 12",
+  "Band 1 bis": "Tomo 1 a",
+  "übernehmen": "aplicar",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Toca los tomos que tienes. Con Mayús, un clic marca todos los tomos desde el último.",
+  "Vorhandene Bände": "Tomos que tienes",
+  "Band {n}": "Tomo {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Crear los demás tomos como «Falta»",
+  "Ohne Auswahl werden keine Bände angelegt.": "Sin selección no se crea ningún tomo.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Indica cuántos tomos se han publicado para marcar los que tienes. Sin número, la serie se crea sin tomos.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} tomo en tu colección",
+    "many": "{n} tomos en tu colección",
+    "other": "{n} tomos en tu colección"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} tomo como «Falta»",
+    "many": "{n} tomos como «Falta»",
+    "other": "{n} tomos como «Falta»"
+  }
 }

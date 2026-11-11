@@ -3659,5 +3659,33 @@
   "Basis": "Base",
   "Edition": "Edizione",
   "Reihe bearbeiten": "Modifica serie",
-  "Abschnitte": "Sezioni"
+  "Abschnitte": "Sezioni",
+  "Finden": "Cerca",
+  "Edition & Regal": "Edizione e scaffale",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "La serie è stata creata, ma i volumi no: {reason}. Riprova con «Crea volumi».",
+  "Bände anlegen": "Crea volumi",
+  "Schritte": "Passaggi",
+  "Schritt {n}: {title}": "Passaggio {n}: {title}",
+  "Ohne Vorlage weiter": "Continua senza modello",
+  "Weiter": "Avanti",
+  "Erschienene Bände": "Volumi usciti",
+  "z.B. 12": "es. 12",
+  "Band 1 bis": "Volume 1 fino a",
+  "übernehmen": "applica",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Tocca i volumi che possiedi. Con Maiusc, un clic segna tutti i volumi dall'ultimo.",
+  "Vorhandene Bände": "Volumi posseduti",
+  "Band {n}": "Volume {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Crea gli altri volumi come «Mancante»",
+  "Ohne Auswahl werden keine Bände angelegt.": "Senza selezione non viene creato nessun volume.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Indica quanti volumi sono usciti per toccare quelli che possiedi. Senza numero la serie viene creata senza volumi.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} volume posseduti",
+    "many": "{n} volumi posseduti",
+    "other": "{n} volumi posseduti"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} volume come «Mancante»",
+    "many": "{n} volumi come «Mancante»",
+    "other": "{n} volumi come «Mancante»"
+  }
 }

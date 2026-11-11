@@ -3451,5 +3451,29 @@
   "Basis": "基本",
   "Edition": "エディション",
   "Reihe bearbeiten": "シリーズを編集",
-  "Abschnitte": "セクション"
+  "Abschnitte": "セクション",
+  "Finden": "検索",
+  "Edition & Regal": "エディションと棚",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "シリーズは作成されましたが、巻は作成されませんでした：{reason}。「巻を作成」でもう一度お試しください。",
+  "Bände anlegen": "巻を作成",
+  "Schritte": "ステップ",
+  "Schritt {n}: {title}": "ステップ {n}：{title}",
+  "Ohne Vorlage weiter": "テンプレートなしで続行",
+  "Weiter": "次へ",
+  "Erschienene Bände": "発売済みの巻数",
+  "z.B. 12": "例：12",
+  "Band 1 bis": "1巻から",
+  "übernehmen": "適用",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "持っている巻をタップしてください。Shift キーを押しながらクリックすると、前回から全巻を選択します。",
+  "Vorhandene Bände": "所持している巻",
+  "Band {n}": "{n}巻",
+  "Übrige Bände als „Fehlt“ anlegen": "残りの巻を「不足」として作成",
+  "Ohne Auswahl werden keine Bände angelegt.": "選択しない場合、巻は作成されません。",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "発売済みの巻数を入力すると、持っている巻をタップできます。入力しない場合、シリーズは巻なしで作成されます。",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "other": "{n} 巻 所持"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "other": "{n} 巻 を「不足」として"
+  }
 }

@@ -70,7 +70,7 @@ async function heroProblems(page) {
   }, HERO_ACTIONS);
 }
 
-// a dialog on a landscape phone: header and close button reachable at the scroll top, the overlay itself scrolls
+// a dialog on a landscape phone: header and close button reachable at the scroll top, the overlay itself scrolls when the box is taller
 async function dialogProblems(page, dialogSelector, heading) {
   return page.evaluate((sel, title) => {
     const overlay = document.querySelector(sel);
@@ -84,7 +84,9 @@ async function dialogProblems(page, dialogSelector, heading) {
       const r = el.getBoundingClientRect();
       if (r.top < 0 || r.bottom > innerHeight) problems.push(`${name} outside the viewport (${Math.round(r.top)}-${Math.round(r.bottom)} of ${innerHeight})`);
     }
-    if (!(overlay.scrollHeight > overlay.clientHeight)) problems.push('the overlay does not scroll');
+    // a box taller than the screen must scroll inside the overlay (a short step of "Neuer Manga" simply fits)
+    const box = overlay.firstElementChild;
+    if (box && box.getBoundingClientRect().height > overlay.clientHeight && !(overlay.scrollHeight > overlay.clientHeight)) problems.push('the overlay does not scroll');
     return problems;
   }, dialogSelector, heading);
 }

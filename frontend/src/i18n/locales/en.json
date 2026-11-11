@@ -3555,5 +3555,31 @@
   "Basis": "Basics",
   "Edition": "Edition",
   "Reihe bearbeiten": "Edit series",
-  "Abschnitte": "Sections"
+  "Abschnitte": "Sections",
+  "Finden": "Find",
+  "Edition & Regal": "Edition & shelf",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "The series was created, but the volumes were not: {reason}. Try again with “Create volumes”.",
+  "Bände anlegen": "Create volumes",
+  "Schritte": "Steps",
+  "Schritt {n}: {title}": "Step {n}: {title}",
+  "Ohne Vorlage weiter": "Continue without a match",
+  "Weiter": "Next",
+  "Erschienene Bände": "Volumes released",
+  "z.B. 12": "e.g. 12",
+  "Band 1 bis": "Volume 1 to",
+  "übernehmen": "apply",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Tap the volumes you own. Shift-click marks every volume since the last one.",
+  "Vorhandene Bände": "Owned volumes",
+  "Band {n}": "Volume {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Create the other volumes as “Missing”",
+  "Ohne Auswahl werden keine Bände angelegt.": "Without a selection no volumes are created.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Enter how many volumes have been released to tap the ones you own. Without a number the series is created without volumes.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} volume owned",
+    "other": "{n} volumes owned"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} volume as “Missing”",
+    "other": "{n} volumes as “Missing”"
+  }
 }

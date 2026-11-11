@@ -3659,5 +3659,33 @@
   "Basis": "Básico",
   "Edition": "Edição",
   "Reihe bearbeiten": "Editar série",
-  "Abschnitte": "Seções"
+  "Abschnitte": "Seções",
+  "Finden": "Buscar",
+  "Edition & Regal": "Edição e estante",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "A série foi criada, mas os volumes não: {reason}. Tente novamente com “Criar volumes”.",
+  "Bände anlegen": "Criar volumes",
+  "Schritte": "Etapas",
+  "Schritt {n}: {title}": "Etapa {n}: {title}",
+  "Ohne Vorlage weiter": "Continuar sem modelo",
+  "Weiter": "Avançar",
+  "Erschienene Bände": "Volumes lançados",
+  "z.B. 12": "ex. 12",
+  "Band 1 bis": "Volume 1 até",
+  "übernehmen": "aplicar",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Toque nos volumes que você tem. Com Shift, um clique marca todos os volumes desde o último.",
+  "Vorhandene Bände": "Volumes que você tem",
+  "Band {n}": "Volume {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Criar os demais volumes como “Falta”",
+  "Ohne Auswahl werden keine Bände angelegt.": "Sem seleção nenhum volume é criado.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Informe quantos volumes foram lançados para tocar nos que você tem. Sem número, a série é criada sem volumes.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} volume na coleção",
+    "many": "{n} volumes na coleção",
+    "other": "{n} volumes na coleção"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} volume como “Falta”",
+    "many": "{n} volumes como “Falta”",
+    "other": "{n} volumes como “Falta”"
+  }
 }

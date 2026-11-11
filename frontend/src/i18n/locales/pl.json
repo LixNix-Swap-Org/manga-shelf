@@ -3763,5 +3763,35 @@
   "Basis": "Podstawy",
   "Edition": "Wydanie",
   "Reihe bearbeiten": "Edytuj serię",
-  "Abschnitte": "Sekcje"
+  "Abschnitte": "Sekcje",
+  "Finden": "Szukaj",
+  "Edition & Regal": "Wydanie i półka",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "Seria została utworzona, ale tomy nie: {reason}. Spróbuj ponownie przyciskiem „Utwórz tomy”.",
+  "Bände anlegen": "Utwórz tomy",
+  "Schritte": "Kroki",
+  "Schritt {n}: {title}": "Krok {n}: {title}",
+  "Ohne Vorlage weiter": "Dalej bez szablonu",
+  "Weiter": "Dalej",
+  "Erschienene Bände": "Wydane tomy",
+  "z.B. 12": "np. 12",
+  "Band 1 bis": "Tom 1 do",
+  "übernehmen": "zastosuj",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Stuknij tomy, które masz. Kliknięcie z Shift zaznacza wszystkie tomy od ostatniego.",
+  "Vorhandene Bände": "Posiadane tomy",
+  "Band {n}": "Tom {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Utwórz pozostałe tomy jako „Brak”",
+  "Ohne Auswahl werden keine Bände angelegt.": "Bez wyboru nie zostaną utworzone żadne tomy.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Podaj, ile tomów wydano, aby stuknąć te, które masz. Bez liczby seria zostanie utworzona bez tomów.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} tom w kolekcji",
+    "few": "{n} tomy w kolekcji",
+    "many": "{n} tomów w kolekcji",
+    "other": "{n} tomu w kolekcji"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} tom jako „Brak”",
+    "few": "{n} tomy jako „Brak”",
+    "many": "{n} tomów jako „Brak”",
+    "other": "{n} tomu jako „Brak”"
+  }
 }

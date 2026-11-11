@@ -3555,5 +3555,31 @@
   "Basis": "Basis",
   "Edition": "Editie",
   "Reihe bearbeiten": "Reeks bewerken",
-  "Abschnitte": "Onderdelen"
+  "Abschnitte": "Onderdelen",
+  "Finden": "Zoeken",
+  "Edition & Regal": "Editie en plank",
+  "Die Reihe wurde angelegt, die Bände aber nicht: {reason}. Mit „Bände anlegen“ erneut versuchen.": "De reeks is aangemaakt, maar de delen niet: {reason}. Probeer het opnieuw met „Delen aanmaken”.",
+  "Bände anlegen": "Delen aanmaken",
+  "Schritte": "Stappen",
+  "Schritt {n}: {title}": "Stap {n}: {title}",
+  "Ohne Vorlage weiter": "Zonder sjabloon verder",
+  "Weiter": "Volgende",
+  "Erschienene Bände": "Verschenen delen",
+  "z.B. 12": "bijv. 12",
+  "Band 1 bis": "Deel 1 tot",
+  "übernehmen": "overnemen",
+  "Tippe die Bände an, die du hast. Mit gedrückter Umschalttaste markiert ein Klick alle Bände seit dem letzten.": "Tik de delen aan die je hebt. Met Shift markeert een klik alle delen sinds de vorige.",
+  "Vorhandene Bände": "Delen in bezit",
+  "Band {n}": "Deel {n}",
+  "Übrige Bände als „Fehlt“ anlegen": "Overige delen als „Ontbreekt” aanmaken",
+  "Ohne Auswahl werden keine Bände angelegt.": "Zonder selectie worden geen delen aangemaakt.",
+  "Trage ein, wie viele Bände erschienen sind, um die vorhandenen anzutippen. Ohne Angabe wird die Reihe ohne Bände angelegt.": "Vul in hoeveel delen er zijn verschenen om die in je bezit aan te tikken. Zonder aantal wordt de reeks zonder delen aangemaakt.",
+  "{n} Band vorhanden|{n} Bände vorhanden": {
+    "one": "{n} deel in bezit",
+    "other": "{n} delen in bezit"
+  },
+  "{n} Band als „Fehlt“|{n} Bände als „Fehlt“": {
+    "one": "{n} deel als „Ontbreekt”",
+    "other": "{n} delen als „Ontbreekt”"
+  }
 }

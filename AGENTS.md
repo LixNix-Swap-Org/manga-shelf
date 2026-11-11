@@ -420,6 +420,7 @@ manga-shelf/
 │       │   ├── storageKeys.js    # localStorage keys that clearOfflineData deletes (anime cache)
 │       │   ├── shelfScope.js     # the shelf filter of the toolbar (per server and account: readShelfFilter/writeShelfFilter, shelfQuery as ?shelf_id=) and the shared GET /api/shelves store (loadShelves, invalidateShelves after a change or a 404)
 │       │   ├── viewState.js      # view states of the tab (scroll positions, page count), clearViewState
+│       │   ├── volumePicker.js   # pickerCount, volumeRuns, pickRange for the volume step of "Neuer Manga"
 │       │   ├── volumeHelpers.js  # display names, type/edition logic, progress, gap map, publisher names (setPublisherNames)
 │       │   ├── volumeFormHelpers.js # buildVolumeForm, applyLookupToForm (autofill rules)
 │       │   ├── lookupPrefill.js  # hitToForm and lookupSourceLabels, shared by the add dialog and the online results (one mapping of a lookup hit onto the add form)
@@ -527,7 +528,8 @@ manga-shelf/
 │           │   └── MpEditionModal.jsx # choose, sync, enrich an edition
 │           ├── system/           # parts of the system page: SystemSection.jsx (Section, Facts), UpdateSection.jsx (card "Updates": banner button, version picker, download and check, confirm, restart wait, last result), VersionPicker.jsx, PasswordConfirm.jsx (submitLabel, icon, blocked), RollbackPanel.jsx ("Zurück zu v…": button or steps, DataLossNotice), UpdateInstructions.jsx (instructionSteps per install kind, downgrade steps), updateModel.js (compareVersions, releaseLabel, restartKind, errorText, adminNotes, ROLLBACK_REASON_TEXT)
 │           └── modals/           # dialogs of the dashboard
-│               ├── AddMangaModal.jsx # create a series (Manga Passion + AniList/MAL in parallel, Manga Passion only for de; edition fields, work_key of a picked AniList/MAL hit; scan prefill, wishlist; with a second shelf the section "Aus deinen Regalen" (GET /mangas/copy-candidates, POST /mangas/copy))
+│               ├── AddMangaModal.jsx # create a series in three steps (Finden: title, Auto-Fill, hits, "Aus deinen Regalen"; Edition & Regal: the series fields; Bände: AddVolumesStep, wishlist, scanned volume; every step stays mounted and "Manga anlegen" works from each; picked volumes go to POST /volumes/batch in runs after the series exists) (Manga Passion + AniList/MAL in parallel, Manga Passion only for de; edition fields, work_key of a picked AniList/MAL hit; scan prefill, wishlist; with a second shelf the section "Aus deinen Regalen" (GET /mangas/copy-candidates, POST /mangas/copy))
+│               ├── AddVolumesStep.jsx # step "Bände" of "Neuer Manga": count, Alle/Keine/"Band 1 bis X", tap = owned, Shift-click range, the rest as "Fehlt" on request (helpers in utils/volumePicker.js)
 │               ├── AccountModal.jsx # account: password + API keys + language with the default visibility of anime ratings and, in the apps, the release-day reminder switch (useTabList)
 │               ├── ChangePasswordModal.jsx # only a re-export of AccountModal
 │               ├── ApiKeyCard.jsx # card per provider (useApiKeys); personal AniList card with ListSync (toggle, state, "Jetzt abgleichen")
