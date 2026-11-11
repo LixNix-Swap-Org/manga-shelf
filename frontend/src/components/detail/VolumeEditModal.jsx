@@ -11,6 +11,7 @@ import DetailFields from './volumeEdit/DetailFields';
 import EditFooter from './volumeEdit/EditFooter';
 import OwnersField from './volumeEdit/OwnersField';
 import CopiesField from './volumeEdit/CopiesField';
+import LastChanged from './volumeEdit/LastChanged';
 import useVolumeEditForm from '../../hooks/useVolumeEditForm';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { t } from '../../i18n/index.js';
@@ -183,6 +184,7 @@ function VolumeEditDialog({
                   manga={manga}
                   mpLookup={mpLookup}
                 />
+                <LastChanged volume={activeVolume} />
               </div>
 
               {formError && (

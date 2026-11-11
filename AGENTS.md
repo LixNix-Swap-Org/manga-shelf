@@ -760,6 +760,7 @@ New migrations are **appended** to the array in `migrationList()` in `core/schem
 | 52 | `check_user_roles` | triggers `trg_check_users_role_ins/upd` refuse `users.role` outside admin, editor, visitor, guest (stored outliers are only logged) |
 | 53 | `add_saved_filters` | table `saved_filters` (table 24): the saved filter combinations per person, on the server instead of the browser |
 | 54 | `add_show_todo` | column `users.show_todo` (default 1): whether the shelf shows "Zu erledigen" to this account (Konto & Sprache) |
+| 55 | `add_volume_changed_by` | columns `volumes.updated_by` (users, ON DELETE SET NULL) and `volumes.updated_at`: who last changed a volume through the app and when (core/lib/volumeChanges.js); reading marks do not count |
 
 ### Performance indexes
 * `idx_volumes_manga_id` on `volumes (manga_id)`, `idx_volumes_status` on `volumes (status)`, `idx_volumes_isbn` on `volumes (isbn)` (deliberately not UNIQUE), `idx_volumes_manga_number` on `volumes (manga_id, type, number_sort)`.

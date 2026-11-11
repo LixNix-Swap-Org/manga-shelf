@@ -3625,5 +3625,8 @@
   "Andere Regale": "Diğer raflar",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Üyesi olmadığın raflar. Yalnızca adı, yöneticiyi ve seri sayısını görürsün, içeriği değil.",
   "Verwalter: {names}": "Yönetici: {names}",
-  "ohne Verwalter": "yönetici yok"
+  "ohne Verwalter": "yönetici yok",
+  "Zuletzt geändert von {name} am {date}": "Son değiştiren: {name}, {date}",
+  "Zuletzt geändert von {name}": "Son değiştiren: {name}",
+  "Zuletzt geändert am {date}": "Son değişiklik: {date}"
 }

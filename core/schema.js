@@ -1448,6 +1448,17 @@ function migrationList(log = silentLog) {
                 const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
                 if (!cols.has('show_todo')) d.exec('ALTER TABLE users ADD COLUMN show_todo INTEGER NOT NULL DEFAULT 1;');
             }
+        },
+        {
+            version: 55,
+            name: 'add_volume_changed_by',
+            up: (d) => {
+                // "Zuletzt geändert von" on a volume: who last changed it through the app and when (NULL = unknown, older
+                // data or a change without an account such as a sync); set by touchVolumes (core/lib/volumeChanges.js)
+                const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
+                if (!cols.has('updated_by')) d.exec('ALTER TABLE volumes ADD COLUMN updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL;');
+                if (!cols.has('updated_at')) d.exec('ALTER TABLE volumes ADD COLUMN updated_at DATETIME;');
+            }
         }
     ];
 }

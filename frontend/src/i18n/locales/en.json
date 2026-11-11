@@ -3625,5 +3625,8 @@
   "Andere Regale": "Other shelves",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Shelves you are not a member of. You only see the name, manager and number of series, not the content.",
   "Verwalter: {names}": "Manager: {names}",
-  "ohne Verwalter": "no manager"
+  "ohne Verwalter": "no manager",
+  "Zuletzt geändert von {name} am {date}": "Last changed by {name} on {date}",
+  "Zuletzt geändert von {name}": "Last changed by {name}",
+  "Zuletzt geändert am {date}": "Last changed on {date}"
 }

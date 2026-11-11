@@ -1,5 +1,6 @@
 // Volumes: create (single and batch), edit, delete, bulk edit (POST /volumes, /volumes/batch, /volumes/bulk, PUT/DELETE /volumes/:id).
 const { RELINKED_COLUMNS } = require('../lib/catalogMaintenance');
+const { touchVolumes } = require('../lib/volumeChanges');
 const { normalizePublisher } = require('../lib/publishers');
 const { normalizeIsbn } = require('../lib/isbn');
 const {
@@ -244,6 +245,7 @@ function create(ctx, { body }) {
         newVolumeId = Number(result.lastInsertRowid);
         syncOwnersWithStatus(ctx.db, newVolumeId, ctx.user.id);
         if (st.read) markRead(ctx.db, newVolumeId, ctx.user.id);
+        touchVolumes(ctx, newVolumeId);
     });
 
     return { body: { success: true, id: newVolumeId } };
@@ -305,6 +307,7 @@ function createBatch(ctx, { body }) {
             const volumeId = Number(insertStmt.run(mId, String(i), st.value, price, pub, cond, rDate, year).lastInsertRowid);
             syncOwnersWithStatus(ctx.db, volumeId, ownerId);
             if (st.read) markRead(ctx.db, volumeId, ownerId ?? ctx.user.id);
+            touchVolumes(ctx, volumeId);
             created++;
         }
     });
@@ -413,6 +416,7 @@ function update(ctx, { params, body }) {
         catalogWrite.commit(ctx, 'volume', vol);
         syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
         if (markAsRead && status === OWNED_STATUS) markRead(ctx.db, vol.id, ctx.user.id);
+        touchVolumes(ctx, vol.id);
     });
 
     return { body: { success: true } };
@@ -422,7 +426,10 @@ function update(ctx, { params, body }) {
 function catalogReset(ctx, { params, body }) {
     const fields = catalogWrite.readResetFields(body, 'volume');
     let local = null;
-    ctx.db.transaction(() => { local = catalogWrite.reset(ctx, 'volume', Number(params.id), fields); });
+    ctx.db.transaction(() => {
+        local = catalogWrite.reset(ctx, 'volume', Number(params.id), fields);
+        if (local !== null) touchVolumes(ctx, Number(params.id));
+    });
     if (local === null) throw notFound('Band');
     return { body: { success: true, local_fields: local } };
 }
@@ -639,6 +646,8 @@ function bulk(ctx, { body }) {
                 if (owners) applyOwnerOps(ctx, vol.id, owners);
             }
             if (read && !applyReadOp(ctx, vol.id, read)) readSkipped.push(vol.id);
+            // reading marks are each person's own; a change of fields or owners is a change of the volume
+            if (owners || Object.keys(set.value).length) touchVolumes(ctx, vol.id);
         }
     });
 
@@ -710,6 +719,7 @@ function revertBulk(ctx, token) {
         }
     };
     const volumeColumns = new Set(ctx.db.prepare('PRAGMA table_info(volumes)').all().map((c) => c.name));
+    const userExists = ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?');
     volumeColumns.delete('number_sort');
     for (const column of RELINKED_COLUMNS.volumes) volumeColumns.delete(column);
 
@@ -736,6 +746,7 @@ function revertBulk(ctx, token) {
                             catalogWrite.commit(ctx, 'volume', stored);
                         }
                         putOwners(snap.id, snap.owners, shelfId);
+                        touchVolumes(ctx, snap.id);
                     }
                     if (snap.read_user) {
                         removeRead(ctx.db, snap.id, snap.read_user);
@@ -760,7 +771,9 @@ function revertBulk(ctx, token) {
                 continue;
             }
             const columns = Object.keys(row).filter((k) => volumeColumns.has(k));
-            ctx.db.prepare(`INSERT INTO volumes (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(...columns.map((k) => row[k]));
+            // "Zuletzt geändert von" may name an account deleted meanwhile
+            const value = (k) => (k === 'updated_by' && row[k] && !userExists.get(row[k]) ? null : row[k]);
+            ctx.db.prepare(`INSERT INTO volumes (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(...columns.map(value));
             putOwners(snap.id, trashed.owners, shelfId);
             restoreReads(ctx, snap.id, members(trashed.reads, shelfId));
             forgetTrashedVolume(ctx, snap.id);

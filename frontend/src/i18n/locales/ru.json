@@ -3839,5 +3839,8 @@
   "Andere Regale": "Другие полки",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Полки, участником которых ты не являешься. Видны только название, управляющий и число серий, но не содержимое.",
   "Verwalter: {names}": "Управляющий: {names}",
-  "ohne Verwalter": "без управляющего"
+  "ohne Verwalter": "без управляющего",
+  "Zuletzt geändert von {name} am {date}": "Последнее изменение: {name}, {date}",
+  "Zuletzt geändert von {name}": "Последнее изменение: {name}",
+  "Zuletzt geändert am {date}": "Последнее изменение: {date}"
 }

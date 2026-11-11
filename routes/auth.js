@@ -464,6 +464,7 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
         for (const volumeId of shared) purchaseDateFromRemainingOwners(db, volumeId);
         for (const volumeId of ownerless) syncStatusWithOwners(db, volumeId);
         db.prepare('UPDATE mangas SET updated_by = NULL WHERE updated_by = ?').run(userId);
+        db.prepare('UPDATE volumes SET updated_by = NULL WHERE updated_by = ?').run(userId);
         // anime progress and API keys go with the user (ON DELETE CASCADE)
         db.prepare('UPDATE animes SET updated_by = NULL WHERE updated_by = ?').run(userId);
         revokeFeedTokens(db, userId);

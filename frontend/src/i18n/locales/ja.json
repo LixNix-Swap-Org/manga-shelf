@@ -3518,5 +3518,8 @@
   "Andere Regale": "その他の本棚",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "あなたがメンバーでない本棚です。名前、管理者、シリーズ数のみ表示され、中身は見えません。",
   "Verwalter: {names}": "管理者：{names}",
-  "ohne Verwalter": "管理者なし"
+  "ohne Verwalter": "管理者なし",
+  "Zuletzt geändert von {name} am {date}": "最終更新: {name}（{date}）",
+  "Zuletzt geändert von {name}": "最終更新: {name}",
+  "Zuletzt geändert am {date}": "最終更新: {date}"
 }

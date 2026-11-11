@@ -3518,5 +3518,8 @@
   "Andere Regale": "다른 책장",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "내가 멤버가 아닌 책장입니다. 이름, 관리자, 시리즈 수만 보이고 내용은 보이지 않습니다.",
   "Verwalter: {names}": "관리자: {names}",
-  "ohne Verwalter": "관리자 없음"
+  "ohne Verwalter": "관리자 없음",
+  "Zuletzt geändert von {name} am {date}": "마지막 수정: {name} ({date})",
+  "Zuletzt geändert von {name}": "마지막 수정: {name}",
+  "Zuletzt geändert am {date}": "마지막 수정: {date}"
 }

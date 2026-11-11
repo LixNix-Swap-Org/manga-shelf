@@ -136,8 +136,11 @@ function restoreVolumeRows(ctx, volumes, owners, reads, shelfId) {
     const member = ctx.db.prepare('SELECT 1 AS ok FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
     const isMember = (userId) => Boolean(member.get(shelfId, userId));
     const restoredIds = new Set();
+    const userExists = ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?');
     for (const v of volumes) {
-        insertRow(ctx, 'volumes', volumeCols, v);
+        // "Zuletzt geändert von" (migration 55) may name an account deleted meanwhile
+        const updatedBy = v.updated_by && userExists.get(v.updated_by) ? v.updated_by : null;
+        insertRow(ctx, 'volumes', volumeCols, { ...v, updated_by: updatedBy });
         restoredIds.add(v.id);
     }
     const vanished = new Map();

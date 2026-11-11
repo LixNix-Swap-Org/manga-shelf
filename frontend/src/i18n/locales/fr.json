@@ -3732,5 +3732,8 @@
   "Andere Regale": "Autres étagères",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Étagères dont tu n’es pas membre. Tu ne vois que le nom, le gestionnaire et le nombre de séries, pas le contenu.",
   "Verwalter: {names}": "Gestionnaire : {names}",
-  "ohne Verwalter": "sans gestionnaire"
+  "ohne Verwalter": "sans gestionnaire",
+  "Zuletzt geändert von {name} am {date}": "Dernière modification par {name} le {date}",
+  "Zuletzt geändert von {name}": "Dernière modification par {name}",
+  "Zuletzt geändert am {date}": "Dernière modification le {date}"
 }

@@ -6,6 +6,7 @@ const { badRequest, forbidden, notFound, msg } = require('../errors');
 const { isBlank, parsePrice, parseDate, parseCondition } = require('../lib/validate');
 const { zonedToday } = require('../radar');
 const { copiesByVolume } = require('../lib/copies');
+const { touchVolumes } = require('../lib/volumeChanges');
 
 const MAX_NAME = 64;
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -72,6 +73,7 @@ function updateCopy(ctx, { params, body }) {
             ctx.db.prepare("UPDATE volumes SET purchase_date = ? WHERE id = ? AND (purchase_date IS NULL OR TRIM(purchase_date) = '')")
                 .run(set.purchase_date, volumeId);
         }
+        touchVolumes(ctx, volumeId);
     }
     const copies = copiesByVolume(ctx.db, 'c.volume_id = ?', [volumeId]).get(volumeId) || [];
     return { body: { success: true, copy: copies.find(c => c.id === copy.id) || null, copies } };

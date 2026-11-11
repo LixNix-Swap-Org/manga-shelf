@@ -3732,5 +3732,8 @@
   "Andere Regale": "Altri scaffali",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Scaffali di cui non sei membro. Vedi solo il nome, il gestore e il numero di serie, non il contenuto.",
   "Verwalter: {names}": "Gestore: {names}",
-  "ohne Verwalter": "senza gestore"
+  "ohne Verwalter": "senza gestore",
+  "Zuletzt geändert von {name} am {date}": "Ultima modifica di {name} il {date}",
+  "Zuletzt geändert von {name}": "Ultima modifica di {name}",
+  "Zuletzt geändert am {date}": "Ultima modifica il {date}"
 }

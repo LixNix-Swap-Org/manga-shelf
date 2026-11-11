@@ -78,9 +78,13 @@ const INTERNAL_VOLUME_COLUMNS = new Set(['number_sort', 'catalog_volume_id']);
 
 /** volumes.* without the internal columns, in table order (the API shape of a volume). */
 function volumeColumns(ctx) {
-    return ctx.db.prepare('PRAGMA table_info(volumes)').all()
+    const info = ctx.db.prepare('PRAGMA table_info(volumes)').all();
+    const columns = new Set(info.map(c => c.name));
+    // "Zuletzt geändert von" (migration 55): the name of the account, null once it is deleted
+    return info
         .filter(c => !INTERNAL_VOLUME_COLUMNS.has(c.name))
         .map(c => `v."${c.name.replace(/"/g, '""')}"`)
+        .concat(columns.has('updated_by') ? ['(SELECT u.username FROM users u WHERE u.id = v.updated_by) AS updated_by_name'] : [])
         .join(', ');
 }
 

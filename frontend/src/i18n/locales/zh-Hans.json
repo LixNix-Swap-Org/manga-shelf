@@ -3518,5 +3518,8 @@
   "Andere Regale": "其他书架",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "你不是成员的书架。你只能看到名称、管理者和系列数量，看不到内容。",
   "Verwalter: {names}": "管理者：{names}",
-  "ohne Verwalter": "无管理者"
+  "ohne Verwalter": "无管理者",
+  "Zuletzt geändert von {name} am {date}": "最后由 {name} 于 {date} 修改",
+  "Zuletzt geändert von {name}": "最后由 {name} 修改",
+  "Zuletzt geändert am {date}": "最后修改于 {date}"
 }

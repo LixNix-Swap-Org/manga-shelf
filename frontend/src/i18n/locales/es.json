@@ -3732,5 +3732,8 @@
   "Andere Regale": "Otras estanterías",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Estanterías de las que no eres miembro. Solo ves el nombre, el gestor y el número de series, no el contenido.",
   "Verwalter: {names}": "Gestor: {names}",
-  "ohne Verwalter": "sin gestor"
+  "ohne Verwalter": "sin gestor",
+  "Zuletzt geändert von {name} am {date}": "Último cambio por {name} el {date}",
+  "Zuletzt geändert von {name}": "Último cambio por {name}",
+  "Zuletzt geändert am {date}": "Último cambio el {date}"
 }

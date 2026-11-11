@@ -3839,5 +3839,8 @@
   "Andere Regale": "Inne półki",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Półki, których nie jesteś członkiem. Widzisz tylko nazwę, zarządcę i liczbę serii, nie zawartość.",
   "Verwalter: {names}": "Zarządca: {names}",
-  "ohne Verwalter": "bez zarządcy"
+  "ohne Verwalter": "bez zarządcy",
+  "Zuletzt geändert von {name} am {date}": "Ostatnio zmienione przez {name} dnia {date}",
+  "Zuletzt geändert von {name}": "Ostatnio zmienione przez {name}",
+  "Zuletzt geändert am {date}": "Ostatnio zmienione dnia {date}"
 }

@@ -3625,5 +3625,8 @@
   "Andere Regale": "Andere planken",
   "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Planken waarvan je geen lid bent. Je ziet alleen de naam, beheerder en het aantal reeksen, niet de inhoud.",
   "Verwalter: {names}": "Beheerder: {names}",
-  "ohne Verwalter": "geen beheerder"
+  "ohne Verwalter": "geen beheerder",
+  "Zuletzt geändert von {name} am {date}": "Laatst gewijzigd door {name} op {date}",
+  "Zuletzt geändert von {name}": "Laatst gewijzigd door {name}",
+  "Zuletzt geändert am {date}": "Laatst gewijzigd op {date}"
 }

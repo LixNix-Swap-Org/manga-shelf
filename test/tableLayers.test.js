@@ -28,6 +28,7 @@ const ACCOUNT_REFERENCES = {
     'volume_copies.owner_user_id': 'SET NULL',
     'volume_copies.lent_to_user_id': 'SET NULL',
     'volume_reads.user_id': 'CASCADE',
+    'volumes.updated_by': 'SET NULL',
     'chapter_progress.user_id': 'CASCADE',
     'anime_progress.user_id': 'CASCADE',
     'anime_tags.user_id': 'CASCADE',
