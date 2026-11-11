@@ -3815,5 +3815,8 @@
     "many": "{n} dodatków, np. etui lub tomy specjalne",
     "other": "{n} dodatków, np. etui lub tomy specjalne"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Na życzenie półka zaznaczy luki, a można je dodać naraz jako „Brak”."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Na życzenie półka zaznaczy luki, a można je dodać naraz jako „Brak”.",
+  "„Zu erledigen“ in der Sammlung zeigen": "Pokazuj „Do zrobienia” w kolekcji",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Lista zbiera luki, tomy z innych półek i zamówienia przedpremierowe, które powinny już wyjść. Wyłączona znika tylko dla ciebie; uwagi przy seriach zostają.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "Nieprawidłowa wartość dla „Do zrobienia” (true lub false)"
 }

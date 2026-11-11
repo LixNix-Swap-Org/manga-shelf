@@ -24,7 +24,8 @@ export function rememberAccountDefaults(user) {
   if (!user || typeof user !== 'object') return;
   const visibility = ANIME_VISIBILITIES.includes(user.default_anime_visibility) ? user.default_anime_visibility : null;
   const shareAnime = typeof user.share_anime_activity === 'boolean' ? user.share_anime_activity : null;
-  writeCache(null, KEY, { animeVisibility: visibility, shareAnime });
+  const showTodo = typeof user.show_todo === 'boolean' ? user.show_todo : null;
+  writeCache(null, KEY, { animeVisibility: visibility, shareAnime, showTodo });
   emit();
 }
 
@@ -50,7 +51,8 @@ function load(fresh) {
 
 /**
  * `{ animeVisibility, shareAnime, loaded }`: the default visibility of new anime ratings (users.default_anime_visibility)
- * and whether others see the own anime list by name (users.share_anime_activity), null while unknown. Asked once per session; `fresh` asks again (the account dialog), `enabled: false` asks nothing.
+ * , whether others see the own anime list by name (users.share_anime_activity) and whether the shelf shows "Zu erledigen"
+ * (users.show_todo), null while unknown. Asked once per session; `fresh` asks again (the account dialog), `enabled: false` asks nothing.
  */
 export default function useAccountDefaults({ enabled = true, fresh = false } = {}) {
   const [state, setState] = useState(() => {
@@ -68,5 +70,5 @@ export default function useAccountDefaults({ enabled = true, fresh = false } = {
     if (enabled) load(fresh);
   }, [enabled, fresh]);
 
-  return { animeVisibility: state.defaults?.animeVisibility ?? null, shareAnime: state.defaults?.shareAnime ?? null, loaded: state.loaded };
+  return { animeVisibility: state.defaults?.animeVisibility ?? null, shareAnime: state.defaults?.shareAnime ?? null, showTodo: state.defaults?.showTodo ?? null, loaded: state.loaded };
 }

@@ -1439,6 +1439,15 @@ function migrationList(log = silentLog) {
                     CREATE INDEX IF NOT EXISTS idx_saved_filters_user ON saved_filters (user_id, id);
                 `);
             }
+        },
+        {
+            version: 54,
+            name: 'add_show_todo',
+            up: (d) => {
+                // whether the shelf shows the list "Zu erledigen" to this account; 1 = shown (each person decides)
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!cols.has('show_todo')) d.exec('ALTER TABLE users ADD COLUMN show_todo INTEGER NOT NULL DEFAULT 1;');
+            }
         }
     ];
 }

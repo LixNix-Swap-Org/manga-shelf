@@ -3601,5 +3601,8 @@
     "one": "{n} extra zoals een verzamelbox of speciaal deel",
     "other": "{n} extra’s zoals verzamelboxen of speciale delen"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Desgewenst markeert de kast de gaten en kun je ze in één keer als ‘Ontbreekt’ toevoegen."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Desgewenst markeert de kast de gaten en kun je ze in één keer als ‘Ontbreekt’ toevoegen.",
+  "„Zu erledigen“ in der Sammlung zeigen": "‘Te doen’ in de collectie tonen",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "De lijst verzamelt gaten, delen in andere kasten en voorbestellingen die al uit zouden moeten zijn. Uitgeschakeld verdwijnt hij alleen voor jou; de meldingen bij de reeksen blijven.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "Ongeldige waarde voor ‘Te doen’ (true of false)"
 }

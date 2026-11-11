@@ -3601,5 +3601,8 @@
     "one": "kutu ya da özel cilt gibi {n} ekstra",
     "other": "kutu ya da özel cilt gibi {n} ekstra"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "İstersen raf eksikleri işaretler ve hepsi bir kerede “Eksik” olarak eklenebilir."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "İstersen raf eksikleri işaretler ve hepsi bir kerede “Eksik” olarak eklenebilir.",
+  "„Zu erledigen“ in der Sammlung zeigen": "Koleksiyonda “Yapılacaklar”ı göster",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Liste eksikleri, başka raflardaki ciltleri ve çıkmış olması gereken ön siparişleri toplar. Kapatılınca yalnızca senin için kaybolur; serilerdeki uyarılar kalır.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "“Yapılacaklar” için geçersiz değer (true veya false)"
 }

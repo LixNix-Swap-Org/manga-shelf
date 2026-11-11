@@ -3815,5 +3815,8 @@
     "many": "{n} дополнений, например боксы или спецтома",
     "other": "{n} дополнений, например боксы или спецтома"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "При желании полка отметит пропуски, и их можно сразу добавить как «Нет»."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "При желании полка отметит пропуски, и их можно сразу добавить как «Нет».",
+  "„Zu erledigen“ in der Sammlung zeigen": "Показывать «Нужно сделать» в коллекции",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Список собирает пропуски, тома с других полок и предзаказы, которые уже должны были выйти. Если выключить, он исчезнет только для вас; пометки у серий останутся.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "Недопустимое значение для «Нужно сделать» (true или false)"
 }

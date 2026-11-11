@@ -3708,5 +3708,8 @@
     "many": "{n} extras como estuches o tomos especiales",
     "other": "{n} extras como estuches o tomos especiales"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Si quieres, la estantería marca los huecos y puedes añadirlos todos como «Falta»."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Si quieres, la estantería marca los huecos y puedes añadirlos todos como «Falta».",
+  "„Zu erledigen“ in der Sammlung zeigen": "Mostrar «Pendiente» en la colección",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "La lista reúne huecos, tomos de otras estanterías y reservas que ya deberían haber salido. Desactivada, solo desaparece para ti; los avisos de las series se mantienen.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "Valor no válido para «Pendiente» (true o false)"
 }

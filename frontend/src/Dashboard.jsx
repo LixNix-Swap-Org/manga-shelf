@@ -45,6 +45,7 @@ import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { invalidateShelves } from './utils/shelfScope';
 import { notify } from './utils/notify';
 import { takeReopenAccount } from './i18n/preference.js';
+import useAccountDefaults from './hooks/useAccountDefaults';
 import { t } from './i18n/index.js';
 
 // dialogs are loaded on first use and mounted only while open
@@ -135,6 +136,9 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const {
     networkOffline, setNetworkOffline, isOfflineMode, offlineCopyAt, refreshingCopy, refreshError, handleRefreshOfflineCopy
   } = useOfflineStatus({ user, onOnlineRef });
+  // "Zu erledigen" can be switched off per account (Konto & Sprache); unknown counts as on
+  const accountDefaults = useAccountDefaults({ enabled: !isOfflineMode && Boolean(user) });
+  const showTodo = accountDefaults.showTodo !== false;
 
   // the badges of the other views follow a delete and a restore from the trash toast
   const afterDeleteRef = useRef(null);
@@ -703,7 +707,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
               isOfflineMode={isOfflineMode}
             />
             <ContinueReading userId={user?.id} enabled={!isOfflineMode} canMark={canEdit} onChanged={fetchMangas} />
-            <TodoList enabled={!isOfflineMode && Boolean(user)} shelfId={scopedShelfId} reloadKey={dataAt} onCount={setTodoCount} />
+            <TodoList enabled={showTodo && !isOfflineMode && Boolean(user)} shelfId={scopedShelfId} reloadKey={dataAt} onCount={setTodoCount} />
 
         {/* Filter & Sort Toolbar */}
         <CollectionToolbar

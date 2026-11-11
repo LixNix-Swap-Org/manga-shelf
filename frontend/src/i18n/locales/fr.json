@@ -3708,5 +3708,8 @@
     "many": "{n} extras comme des coffrets ou des tomes spéciaux",
     "other": "{n} extras comme des coffrets ou des tomes spéciaux"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Si tu veux, l’étagère marque les trous, et tu peux tous les ajouter comme « Manquant »."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Si tu veux, l’étagère marque les trous, et tu peux tous les ajouter comme « Manquant ».",
+  "„Zu erledigen“ in der Sammlung zeigen": "Afficher « À faire » dans la collection",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "La liste regroupe les trous, les tomes d’autres étagères et les précommandes qui devraient être sorties. Désactivée, elle disparaît seulement pour toi ; les avis sur les séries restent.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "Valeur invalide pour « À faire » (true ou false)"
 }

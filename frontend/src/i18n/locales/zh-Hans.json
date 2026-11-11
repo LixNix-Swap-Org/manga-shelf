@@ -3494,5 +3494,8 @@
   "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
     "other": "{n} 件附加品，如书盒或特别卷"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "可在书架上标出缺卷，并一次性添加为“缺少”。"
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "可在书架上标出缺卷，并一次性添加为“缺少”。",
+  "„Zu erledigen“ in der Sammlung zeigen": "在收藏中显示“待办”",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "列表汇总缺卷、其他书架上的卷，以及应已发售的预购。关闭后仅对你隐藏；系列上的提示仍然保留。",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "“待办”的值无效（true 或 false）"
 }

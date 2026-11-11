@@ -4064,6 +4064,8 @@
   "Jede Note zählt ohne Namen im Community-Schnitt mit, auch mit „Nur ich“.",
   "Meine Anime-Liste mit Namen zeigen",
   "Andere sehen dann, was du schaust, planst und gesehen hast. Ausgeschaltet sieht das niemand außer dir, auch Admins nicht; deine Noten zählen trotzdem ohne Namen im Schnitt mit.",
+  "„Zu erledigen“ in der Sammlung zeigen",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.",
   "@aria-label: Hauptnavigation",
   "Sammlung",
   "@aria-label: Einkauf – Einkaufsliste, 10 fehlend",

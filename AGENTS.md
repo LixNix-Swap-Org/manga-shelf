@@ -626,6 +626,7 @@ The database lives in `<DATA_DIR>/manga.db` (default `./data`). `core/schema.js`
    * `id` (INTEGER, PK), `username` (TEXT, UNIQUE, NOT NULL; additionally the unique index `idx_users_username_nocase` on `username COLLATE NOCASE`, see migration 14), `password_hash`, `role` (`admin`, `editor`, `visitor`, `guest`; default `editor`), `created_at`.
    * `locale` (TEXT, NULL, migration 26): UI language of the account (`core/lib/locales.js` `UI_LOCALES`); NULL = like the device. `default_language` (TEXT NOT NULL DEFAULT `'de'`, migration 26): default language of the editions in the collection (wave I18N-D). New accounts: `locale` NULL.
    * `share_anime_activity` (INTEGER NOT NULL DEFAULT 1, migration 48): 0 hides the account's anime list by name from every other account, admins included (`progress_users`, the detail's `progress`, `per_user` of the statistics, the name on public ratings; `access.sharedAnimeRows`); its rows still count without a name in `community`. Set with `PUT /api/auth/profile`, part of `/auth/me`.
+   * `show_todo` (INTEGER NOT NULL DEFAULT 1, migration 54): 0 hides the list "Zu erledigen" on the shelf for this account only (`PUT /api/auth/profile`, part of `/auth/me`; the frontend reads it through `useAccountDefaults`). GET /api/todo itself still answers.
    * `default_anime_visibility` (TEXT NOT NULL DEFAULT `'public'`, migration 33): visibility of the account's new anime ratings (`public` | `anonymous` | `private`), set with `PUT /api/auth/profile`, part of `/auth/me`; `writeProgress` applies it (Case L).
    * `password_changed_at` (INTEGER, ms, migration 9) is also the **session version**: every JWT carries it as `pv` and is valid only while it is unchanged. New values are strictly increasing (`max(now, old + 1)`); a password change, an admin reset, a restore and "Alle Sitzungen beenden" raise it.
 2. **`mangas`**
@@ -758,6 +759,7 @@ New migrations are **appended** to the array in `migrationList()` in `core/schem
 | 51 | `edition_data_on_catalog` | `catalog_series.mp_edition_data` (the stored Manga Passion edition, the newest of the rows of that entry); `mangas.manga_passion_edition_data` is cleared and no longer written (the column goes in a later migration) |
 | 52 | `check_user_roles` | triggers `trg_check_users_role_ins/upd` refuse `users.role` outside admin, editor, visitor, guest (stored outliers are only logged) |
 | 53 | `add_saved_filters` | table `saved_filters` (table 24): the saved filter combinations per person, on the server instead of the browser |
+| 54 | `add_show_todo` | column `users.show_todo` (default 1): whether the shelf shows "Zu erledigen" to this account (Konto & Sprache) |
 
 ### Performance indexes
 * `idx_volumes_manga_id` on `volumes (manga_id)`, `idx_volumes_status` on `volumes (status)`, `idx_volumes_isbn` on `volumes (isbn)` (deliberately not UNIQUE), `idx_volumes_manga_number` on `volumes (manga_id, type, number_sort)`.

@@ -3708,5 +3708,8 @@
     "many": "{n} extras como caixas ou volumes especiais",
     "other": "{n} extras como caixas ou volumes especiais"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Se quiser, a estante marca as lacunas e você pode adicioná-las de uma vez como “Falta”."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Se quiser, a estante marca as lacunas e você pode adicioná-las de uma vez como “Falta”.",
+  "„Zu erledigen“ in der Sammlung zeigen": "Mostrar “A fazer” na coleção",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "A lista reúne lacunas, volumes em outras estantes e pré-vendas que já deveriam ter saído. Desligada, ela some só para você; os avisos nas séries continuam.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "Valor inválido para “A fazer” (true ou false)"
 }

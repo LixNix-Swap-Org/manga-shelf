@@ -345,7 +345,7 @@ test('app login: X-Client: app or client: app add the token, other clients get t
 test('bearer: an Authorization header authenticates reads and writes like the cookie', async () => {
     const token = await appLogin('ed');
     const app = withBearer(token);
-    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor', locale: null, default_language: 'de', default_anime_visibility: 'public', share_anime_activity: true });
+    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor', locale: null, default_language: 'de', default_anime_visibility: 'public', share_anime_activity: true, show_todo: true });
     const created = await app('POST', '/mangas', { title: 'Bearer Reihe' });
     assert.equal(created.status, 200);
     assert.equal((await withBearer(await appLogin('vis'))('POST', '/mangas', { title: 'X' })).body.code, 'READ_ONLY');
@@ -467,4 +467,17 @@ test('restore: sessions issued before it end even when the username still exists
     assert.equal((await alex('GET', '/users')).status, 401);
     const fresh = await loggedIn('alex');
     assert.equal((await fresh('GET', '/auth/me')).body.user.role, 'admin');
+});
+
+test('profile: "Zu erledigen" can be switched off and on per account', async () => {
+    const app = await loggedIn('ed');
+    assert.equal((await app('GET', '/auth/me')).body.user.show_todo, true, 'on by default');
+    const off = await app('PUT', '/auth/profile', { show_todo: false });
+    assert.equal(off.status, 200);
+    assert.equal(off.body.user.show_todo, false);
+    assert.equal((await app('GET', '/auth/me')).body.user.show_todo, false);
+    assert.equal((await (await loggedIn('vis'))('GET', '/auth/me')).body.user.show_todo, true, 'only for this account');
+    const bad = await app('PUT', '/auth/profile', { show_todo: 'nein' });
+    assert.equal(bad.status, 400);
+    assert.equal((await app('PUT', '/auth/profile', { show_todo: true })).body.user.show_todo, true);
 });

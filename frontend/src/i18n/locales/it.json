@@ -3708,5 +3708,8 @@
     "many": "{n} extra come cofanetti o volumi speciali",
     "other": "{n} extra come cofanetti o volumi speciali"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Se vuoi, lo scaffale segna le lacune e puoi aggiungerle tutte come «Manca»."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "Se vuoi, lo scaffale segna le lacune e puoi aggiungerle tutte come «Manca».",
+  "„Zu erledigen“ in der Sammlung zeigen": "Mostra «Da fare» nella collezione",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "L’elenco raccoglie lacune, volumi in altri scaffali e preordini che dovrebbero essere usciti. Disattivato, scompare solo per te; gli avvisi sulle serie restano.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "Valore non valido per «Da fare» (true o false)"
 }

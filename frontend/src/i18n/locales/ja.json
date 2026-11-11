@@ -3494,5 +3494,8 @@
   "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
     "other": "収納ボックスや特別巻などのおまけ{n}点"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "必要なら棚に欠番を表示し、まとめて「未所持」として追加できます。"
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "必要なら棚に欠番を表示し、まとめて「未所持」として追加できます。",
+  "„Zu erledigen“ in der Sammlung zeigen": "コレクションに「やること」を表示",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "欠番、他の棚にある巻、発売済みのはずの予約をまとめて表示します。オフにすると自分だけ非表示になり、シリーズの通知は残ります。",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "「やること」の値が無効です（true または false）"
 }

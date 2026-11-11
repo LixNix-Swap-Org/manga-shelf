@@ -3494,5 +3494,8 @@
   "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
     "other": "케이스나 특별판 같은 엑스트라 {n}개"
   },
-  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "원하면 책장에 누락을 표시하고 한 번에 ‘없음’으로 추가할 수 있습니다."
+  "Auf Wunsch markiert das Regal die Lücken, und sie lassen sich auf einmal als „Fehlt“ anlegen.": "원하면 책장에 누락을 표시하고 한 번에 ‘없음’으로 추가할 수 있습니다.",
+  "„Zu erledigen“ in der Sammlung zeigen": "컬렉션에 ‘할 일’ 표시",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "빠진 권, 다른 책장에 있는 권, 이미 나왔어야 할 예약을 모아 보여 줍니다. 끄면 나에게만 사라지고 시리즈의 알림은 그대로입니다.",
+  "Ungültige Angabe zu „Zu erledigen“ (true oder false)": "‘할 일’ 값이 잘못되었습니다 (true 또는 false)"
 }
