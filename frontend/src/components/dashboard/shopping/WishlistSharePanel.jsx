@@ -80,12 +80,13 @@ export default function WishlistSharePanel() {
             <>
               <label htmlFor={`${ids}-url`} className="block text-slate-400">{t('Link zur Wunschliste')}</label>
               <div className="flex flex-wrap gap-2">
+                {/* on a phone the link gets its own row, the buttons the next one */}
                 <input
                   id={`${ids}-url`}
                   readOnly
                   value={address}
                   onFocus={(e) => e.target.select()}
-                  className="input-field text-base sm:text-xs flex-1 min-w-0 font-mono"
+                  className="input-field text-base sm:text-xs basis-full sm:basis-0 flex-1 min-w-0 font-mono"
                 />
                 <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={copy}>
                   <Copy className="w-3.5 h-3.5" aria-hidden="true" /> {t('Kopieren')}
