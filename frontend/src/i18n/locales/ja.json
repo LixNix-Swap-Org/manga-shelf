@@ -3553,5 +3553,25 @@
   },
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "other": "{title}：第{volumes}巻を{name}さんに{n}か月貸しています"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "ほしいものリストをリンクで共有（アカウントなしで閲覧可）",
+  "Meine Wunschliste teilen": "ほしいものリストを共有",
+  "Teilen-Link konnte nicht geladen werden": "共有リンクを読み込めませんでした",
+  "Teilen-Link konnte nicht geändert werden": "共有リンクを変更できませんでした",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "新しいリンクを作成しました – 古いリンクは使えません",
+  "Link zur Wunschliste erzeugt": "ほしいものリストのリンクを作成しました",
+  "Wunschliste wird nicht mehr geteilt": "ほしいものリストの共有を停止しました",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "コピーできません – 欄のリンクを選択してコピーしてください。",
+  "Meine Manga-Wunschliste": "私のマンガほしいものリスト",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "アカウントなしで見られる、自分のほしいものだけのリンクです（誕生日前の家族や友人向けなど）。タイトル・出版社・優先度を表示し、価格・本棚・他の人の希望は表示しません。リンクを知っている人は誰でも見られます。",
+  "Link erzeugen": "リンクを作成",
+  "Link zur Wunschliste": "ほしいものリストのリンク",
+  "Ansehen": "表示",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "リンクを表示できません（サーバーの鍵が変わりました）。新しく作成してください。",
+  "Zuletzt angesehen {time}.": "最終閲覧 {time}。",
+  "Noch nicht angesehen.": "まだ閲覧されていません。",
+  "Neuen Link erzeugen?": "新しいリンクを作成しますか？",
+  "Der alte Link hört sofort auf zu funktionieren.": "古いリンクはすぐに使えなくなります。",
+  "Neuen Link erzeugen": "新しいリンクを作成",
+  "Nicht mehr teilen": "共有をやめる"
 }

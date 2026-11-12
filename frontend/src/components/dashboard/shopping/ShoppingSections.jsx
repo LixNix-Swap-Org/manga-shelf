@@ -7,7 +7,9 @@ import { editionCurrency } from '../../../utils/editions';
 import { groupByPublisher, itemText, publisherLabel } from '../../../utils/shareList';
 import { PRIORITY_LABELS, priorityBadgeClass, wishersText, droppableWish } from '../../../utils/priority';
 import CoverImage from '../../common/CoverImage';
-import { BookOpen, BuildingComplex, Heart } from 'lucide-react';
+import { BookOpen, BuildingComplex, Heart, Share2 } from 'lucide-react';
+import { isLocalMode } from '../../../utils/api';
+import WishlistSharePanel from './WishlistSharePanel';
 import { t } from '../../../i18n/index.js';
 
 // MangaDetail's back link returns here instead of the shelf
@@ -77,6 +79,8 @@ export function ListProgress({ shown, total, onMore, sentinelRef }) {
 export function WishedSeriesSection({ series: allSeries, canRemove, removing, onRemove }) {
   // wishes per person (migration 57): everybody's by default, "Nur meine" narrows to the own wishlist
   const [onlyMine, setOnlyMine] = useState(false);
+  // the link is served by the server: a collection on this device has none
+  const [shareOpen, setShareOpen] = useState(false);
   const hasOwn = allSeries.some((s) => s.my_wish !== null && s.my_wish !== undefined);
   const series = onlyMine ? allSeries.filter((s) => s.my_wish !== null && s.my_wish !== undefined) : allSeries;
   return (
@@ -86,20 +90,36 @@ export function WishedSeriesSection({ series: allSeries, canRemove, removing, on
           <Heart className="w-4 h-4 text-rose-400" aria-hidden="true" />
           {t('Gewünschte Reihen')} <span className="text-xs font-normal text-slate-400">({series.length})</span>
         </h3>
-        {(hasOwn || onlyMine) && (
-          <button
-            type="button"
-            id="btn-shop-only-my-wishes"
-            onClick={() => setOnlyMine((v) => !v)}
-            aria-pressed={onlyMine}
-            className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition-colors ${
-              onlyMine ? 'bg-rose-500/20 text-rose-200 border-rose-500/50' : 'text-slate-400 border-slate-700 hover:text-slate-200'
-            }`}
-          >
-            {t('Nur meine Wünsche')}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {(hasOwn || onlyMine) && (
+            <button
+              type="button"
+              id="btn-shop-only-my-wishes"
+              onClick={() => setOnlyMine((v) => !v)}
+              aria-pressed={onlyMine}
+              className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition-colors ${
+                onlyMine ? 'bg-rose-500/20 text-rose-200 border-rose-500/50' : 'text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              {t('Nur meine Wünsche')}
+            </button>
+          )}
+          {hasOwn && !isLocalMode() && (
+            <button
+              type="button"
+              id="btn-wishlist-share"
+              onClick={() => setShareOpen((v) => !v)}
+              aria-expanded={shareOpen}
+              aria-controls="wishlist-share"
+              className="text-xs px-3 py-1.5 rounded-xl border font-semibold transition-colors inline-flex items-center gap-1.5 text-slate-300 border-slate-700 hover:text-slate-100"
+              title={t('Meine Wunschliste als Link teilen, zum Ansehen ohne Konto')}
+            >
+              <Share2 className="w-3.5 h-3.5 text-rose-300" aria-hidden="true" /> {t('Meine Wunschliste teilen')}
+            </button>
+          )}
+        </div>
       </div>
+      {shareOpen && <WishlistSharePanel />}
       <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {series.map((s) => (
           <li key={s.id} className="glass-card rounded-2xl p-3 border border-rose-500/25 flex gap-3 bg-slate-900/60">

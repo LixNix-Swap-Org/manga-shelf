@@ -3773,5 +3773,25 @@
     "one": "{title}: volumes {volumes} emprestados a {name} há {n} mês",
     "many": "{title}: volumes {volumes} emprestados a {name} há {n} meses",
     "other": "{title}: volumes {volumes} emprestados a {name} há {n} meses"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Compartilhar minha lista de desejos por link, visível sem conta",
+  "Meine Wunschliste teilen": "Compartilhar minha lista de desejos",
+  "Teilen-Link konnte nicht geladen werden": "Não foi possível carregar o link de compartilhamento",
+  "Teilen-Link konnte nicht geändert werden": "Não foi possível alterar o link de compartilhamento",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Novo link criado – o antigo não funciona mais",
+  "Link zur Wunschliste erzeugt": "Link da lista de desejos criado",
+  "Wunschliste wird nicht mehr geteilt": "A lista de desejos não é mais compartilhada",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Não foi possível copiar – selecione o link no campo e copie.",
+  "Meine Manga-Wunschliste": "Minha lista de desejos de mangá",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Um link para os seus próprios desejos, visível sem conta – por exemplo para família e amigos antes de um aniversário. Mostra título, editora e prioridade, sem preços, estantes ou desejos de outras pessoas. Quem tiver o link pode ver a lista.",
+  "Link erzeugen": "Criar link",
+  "Link zur Wunschliste": "Link da lista de desejos",
+  "Ansehen": "Ver",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "O link não pode mais ser exibido (a chave do servidor mudou). Crie um novo.",
+  "Zuletzt angesehen {time}.": "Visto pela última vez {time}.",
+  "Noch nicht angesehen.": "Ainda não visto.",
+  "Neuen Link erzeugen?": "Criar um novo link?",
+  "Der alte Link hört sofort auf zu funktionieren.": "O link antigo para de funcionar imediatamente.",
+  "Neuen Link erzeugen": "Criar novo link",
+  "Nicht mehr teilen": "Parar de compartilhar"
 }

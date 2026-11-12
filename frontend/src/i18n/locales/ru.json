@@ -3883,5 +3883,25 @@
     "few": "{title}: тома {volumes} у {name} уже {n} месяца",
     "many": "{title}: тома {volumes} у {name} уже {n} месяцев",
     "other": "{title}: тома {volumes} у {name} уже {n} месяца"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Поделиться списком желаний по ссылке, без учётной записи",
+  "Meine Wunschliste teilen": "Поделиться списком желаний",
+  "Teilen-Link konnte nicht geladen werden": "Не удалось загрузить ссылку",
+  "Teilen-Link konnte nicht geändert werden": "Не удалось изменить ссылку",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Создана новая ссылка – старая больше не работает",
+  "Link zur Wunschliste erzeugt": "Ссылка на список желаний создана",
+  "Wunschliste wird nicht mehr geteilt": "Список желаний больше не доступен по ссылке",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Не удалось скопировать – выделите ссылку в поле и скопируйте её.",
+  "Meine Manga-Wunschliste": "Мой список желаемой манги",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Ссылка на ваши собственные желания, которую можно открыть без учётной записи – например, для семьи и друзей перед днём рождения. Показывает название, издательство и приоритет, без цен, полок и желаний других. Список видит каждый, у кого есть ссылка.",
+  "Link erzeugen": "Создать ссылку",
+  "Link zur Wunschliste": "Ссылка на список желаний",
+  "Ansehen": "Открыть",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "Ссылку больше нельзя показать (сменился ключ сервера). Создайте новую.",
+  "Zuletzt angesehen {time}.": "Последний просмотр {time}.",
+  "Noch nicht angesehen.": "Ещё не открывали.",
+  "Neuen Link erzeugen?": "Создать новую ссылку?",
+  "Der alte Link hört sofort auf zu funktionieren.": "Старая ссылка сразу перестанет работать.",
+  "Neuen Link erzeugen": "Создать новую ссылку",
+  "Nicht mehr teilen": "Больше не делиться"
 }

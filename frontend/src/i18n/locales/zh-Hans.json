@@ -3553,5 +3553,25 @@
   },
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "other": "{title}：第 {volumes} 卷已借给 {name} {n} 个月"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "以链接分享我的心愿单，无需账户即可查看",
+  "Meine Wunschliste teilen": "分享我的心愿单",
+  "Teilen-Link konnte nicht geladen werden": "无法加载分享链接",
+  "Teilen-Link konnte nicht geändert werden": "无法更改分享链接",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "已创建新链接 – 旧链接已失效",
+  "Link zur Wunschliste erzeugt": "已创建心愿单链接",
+  "Wunschliste wird nicht mehr geteilt": "心愿单已停止分享",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "无法复制 – 请选中输入框中的链接后复制。",
+  "Meine Manga-Wunschliste": "我的漫画心愿单",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "一个无需账户即可查看你自己心愿的链接 – 比如生日前发给家人和朋友。只显示标题、出版社和优先级，不显示价格、书架或他人的心愿。拥有链接的人都能看到此列表。",
+  "Link erzeugen": "创建链接",
+  "Link zur Wunschliste": "心愿单链接",
+  "Ansehen": "查看",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "无法再显示该链接（服务器密钥已更改）。请重新创建。",
+  "Zuletzt angesehen {time}.": "上次查看 {time}。",
+  "Noch nicht angesehen.": "尚未被查看。",
+  "Neuen Link erzeugen?": "创建新链接？",
+  "Der alte Link hört sofort auf zu funktionieren.": "旧链接会立即失效。",
+  "Neuen Link erzeugen": "创建新链接",
+  "Nicht mehr teilen": "停止分享"
 }

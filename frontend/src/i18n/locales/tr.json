@@ -3663,5 +3663,25 @@
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: {volumes}. ciltler {n} aydır {name} adlı kişide",
     "other": "{title}: {volumes}. ciltler {n} aydır {name} adlı kişide"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "İstek listemi bağlantıyla paylaş, hesapsız görüntülenebilir",
+  "Meine Wunschliste teilen": "İstek listemi paylaş",
+  "Teilen-Link konnte nicht geladen werden": "Paylaşım bağlantısı yüklenemedi",
+  "Teilen-Link konnte nicht geändert werden": "Paylaşım bağlantısı değiştirilemedi",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Yeni bağlantı oluşturuldu – eskisi artık çalışmıyor",
+  "Link zur Wunschliste erzeugt": "İstek listesi bağlantısı oluşturuldu",
+  "Wunschliste wird nicht mehr geteilt": "İstek listesi artık paylaşılmıyor",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Kopyalanamadı – lütfen alandaki bağlantıyı seçip kopyalayın.",
+  "Meine Manga-Wunschliste": "Manga istek listem",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Hesap olmadan görüntülenebilen, kendi isteklerine bir bağlantı – örneğin doğum günü öncesi aile ve arkadaşlar için. Başlık, yayınevi ve önceliği gösterir; fiyatlar, raflar veya başkalarının istekleri görünmez. Bağlantıya sahip olan herkes listeyi görebilir.",
+  "Link erzeugen": "Bağlantı oluştur",
+  "Link zur Wunschliste": "İstek listesi bağlantısı",
+  "Ansehen": "Görüntüle",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "Bağlantı artık gösterilemiyor (sunucu anahtarı değişti). Lütfen yenisini oluşturun.",
+  "Zuletzt angesehen {time}.": "Son görüntülenme {time}.",
+  "Noch nicht angesehen.": "Henüz görüntülenmedi.",
+  "Neuen Link erzeugen?": "Yeni bağlantı oluşturulsun mu?",
+  "Der alte Link hört sofort auf zu funktionieren.": "Eski bağlantı hemen çalışmayı bırakır.",
+  "Neuen Link erzeugen": "Yeni bağlantı oluştur",
+  "Nicht mehr teilen": "Paylaşmayı durdur"
 }

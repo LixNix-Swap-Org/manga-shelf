@@ -3773,5 +3773,25 @@
     "one": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois",
     "many": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois",
     "other": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Partager ma liste d’envies par un lien, visible sans compte",
+  "Meine Wunschliste teilen": "Partager ma liste d’envies",
+  "Teilen-Link konnte nicht geladen werden": "Impossible de charger le lien de partage",
+  "Teilen-Link konnte nicht geändert werden": "Impossible de modifier le lien de partage",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Nouveau lien créé – l’ancien ne fonctionne plus",
+  "Link zur Wunschliste erzeugt": "Lien vers la liste d’envies créé",
+  "Wunschliste wird nicht mehr geteilt": "La liste d’envies n’est plus partagée",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Copie impossible – sélectionnez le lien dans le champ et copiez-le.",
+  "Meine Manga-Wunschliste": "Ma liste d’envies manga",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Un lien vers vos propres envies, consultable sans compte – par exemple pour la famille et les amis avant un anniversaire. Il montre titre, éditeur et priorité, sans prix, étagères ni envies des autres. Toute personne ayant le lien peut voir la liste.",
+  "Link erzeugen": "Créer le lien",
+  "Link zur Wunschliste": "Lien vers la liste d’envies",
+  "Ansehen": "Voir",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "Le lien ne peut plus être affiché (la clé du serveur a changé). Veuillez en créer un nouveau.",
+  "Zuletzt angesehen {time}.": "Consulté pour la dernière fois {time}.",
+  "Noch nicht angesehen.": "Pas encore consulté.",
+  "Neuen Link erzeugen?": "Créer un nouveau lien ?",
+  "Der alte Link hört sofort auf zu funktionieren.": "L’ancien lien cesse immédiatement de fonctionner.",
+  "Neuen Link erzeugen": "Créer un nouveau lien",
+  "Nicht mehr teilen": "Ne plus partager"
 }

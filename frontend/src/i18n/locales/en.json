@@ -3663,5 +3663,25 @@
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: volumes {volumes} lent to {name} for {n} month",
     "other": "{title}: volumes {volumes} lent to {name} for {n} months"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Share my wishlist as a link, viewable without an account",
+  "Meine Wunschliste teilen": "Share my wishlist",
+  "Teilen-Link konnte nicht geladen werden": "Could not load the share link",
+  "Teilen-Link konnte nicht geändert werden": "Could not change the share link",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "New link created – the old one no longer works",
+  "Link zur Wunschliste erzeugt": "Wishlist link created",
+  "Wunschliste wird nicht mehr geteilt": "Wishlist is no longer shared",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Copying not possible – please select the link in the field and copy it.",
+  "Meine Manga-Wunschliste": "My manga wishlist",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "A link to your own wishes that can be viewed without an account – for family and friends before a birthday, say. It shows title, publisher and priority, no prices, shelves or other people’s wishes. Anyone with the link can see the list.",
+  "Link erzeugen": "Create link",
+  "Link zur Wunschliste": "Wishlist link",
+  "Ansehen": "View",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "The link can no longer be shown (the server key has changed). Please create a new one.",
+  "Zuletzt angesehen {time}.": "Last viewed {time}.",
+  "Noch nicht angesehen.": "Not viewed yet.",
+  "Neuen Link erzeugen?": "Create a new link?",
+  "Der alte Link hört sofort auf zu funktionieren.": "The old link stops working immediately.",
+  "Neuen Link erzeugen": "Create new link",
+  "Nicht mehr teilen": "Stop sharing"
 }

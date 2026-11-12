@@ -3773,5 +3773,25 @@
     "one": "{title}: tomos {volumes} prestados a {name} desde hace {n} mes",
     "many": "{title}: tomos {volumes} prestados a {name} desde hace {n} meses",
     "other": "{title}: tomos {volumes} prestados a {name} desde hace {n} meses"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Compartir mi lista de deseos con un enlace, visible sin cuenta",
+  "Meine Wunschliste teilen": "Compartir mi lista de deseos",
+  "Teilen-Link konnte nicht geladen werden": "No se pudo cargar el enlace para compartir",
+  "Teilen-Link konnte nicht geändert werden": "No se pudo cambiar el enlace para compartir",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Nuevo enlace creado: el anterior ya no funciona",
+  "Link zur Wunschliste erzeugt": "Enlace a la lista de deseos creado",
+  "Wunschliste wird nicht mehr geteilt": "La lista de deseos ya no se comparte",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "No se puede copiar: selecciona el enlace en el campo y cópialo.",
+  "Meine Manga-Wunschliste": "Mi lista de deseos de manga",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Un enlace a tus propios deseos que se puede ver sin cuenta, por ejemplo para familia y amigos antes de un cumpleaños. Muestra título, editorial y prioridad, sin precios, estanterías ni deseos de otros. Quien tenga el enlace puede ver la lista.",
+  "Link erzeugen": "Crear enlace",
+  "Link zur Wunschliste": "Enlace a la lista de deseos",
+  "Ansehen": "Ver",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "El enlace ya no se puede mostrar (la clave del servidor ha cambiado). Crea uno nuevo.",
+  "Zuletzt angesehen {time}.": "Visto por última vez {time}.",
+  "Noch nicht angesehen.": "Aún no se ha visto.",
+  "Neuen Link erzeugen?": "¿Crear un nuevo enlace?",
+  "Der alte Link hört sofort auf zu funktionieren.": "El enlace anterior deja de funcionar de inmediato.",
+  "Neuen Link erzeugen": "Crear nuevo enlace",
+  "Nicht mehr teilen": "Dejar de compartir"
 }

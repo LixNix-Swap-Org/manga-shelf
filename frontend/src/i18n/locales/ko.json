@@ -3553,5 +3553,25 @@
   },
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "other": "{title}: {volumes}권을 {name}님에게 {n}개월째 빌려주었습니다"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "내 위시리스트를 링크로 공유 (계정 없이 보기 가능)",
+  "Meine Wunschliste teilen": "내 위시리스트 공유",
+  "Teilen-Link konnte nicht geladen werden": "공유 링크를 불러올 수 없습니다",
+  "Teilen-Link konnte nicht geändert werden": "공유 링크를 변경할 수 없습니다",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "새 링크를 만들었습니다 – 이전 링크는 더 이상 작동하지 않습니다",
+  "Link zur Wunschliste erzeugt": "위시리스트 링크를 만들었습니다",
+  "Wunschliste wird nicht mehr geteilt": "위시리스트 공유를 중단했습니다",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "복사할 수 없습니다 – 입력란의 링크를 선택해 복사하세요.",
+  "Meine Manga-Wunschliste": "내 만화 위시리스트",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "계정 없이 볼 수 있는 내 위시 링크입니다 – 예를 들어 생일 전에 가족과 친구에게. 제목, 출판사, 우선순위만 보이고 가격, 책장, 다른 사람의 위시는 보이지 않습니다. 링크가 있는 사람은 누구나 목록을 볼 수 있습니다.",
+  "Link erzeugen": "링크 만들기",
+  "Link zur Wunschliste": "위시리스트 링크",
+  "Ansehen": "보기",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "링크를 더 이상 표시할 수 없습니다 (서버 키가 변경됨). 새로 만드세요.",
+  "Zuletzt angesehen {time}.": "마지막 조회 {time}.",
+  "Noch nicht angesehen.": "아직 조회되지 않았습니다.",
+  "Neuen Link erzeugen?": "새 링크를 만들까요?",
+  "Der alte Link hört sofort auf zu funktionieren.": "이전 링크는 즉시 작동하지 않게 됩니다.",
+  "Neuen Link erzeugen": "새 링크 만들기",
+  "Nicht mehr teilen": "공유 중지"
 }

@@ -3773,5 +3773,25 @@
     "one": "{title}: volumi {volumes} prestati a {name} da {n} mese",
     "many": "{title}: volumi {volumes} prestati a {name} da {n} mesi",
     "other": "{title}: volumi {volumes} prestati a {name} da {n} mesi"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Condividi la mia lista dei desideri con un link, visibile senza account",
+  "Meine Wunschliste teilen": "Condividi la mia lista dei desideri",
+  "Teilen-Link konnte nicht geladen werden": "Impossibile caricare il link di condivisione",
+  "Teilen-Link konnte nicht geändert werden": "Impossibile modificare il link di condivisione",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Nuovo link creato – il vecchio non funziona più",
+  "Link zur Wunschliste erzeugt": "Link alla lista dei desideri creato",
+  "Wunschliste wird nicht mehr geteilt": "La lista dei desideri non è più condivisa",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Impossibile copiare – seleziona il link nel campo e copialo.",
+  "Meine Manga-Wunschliste": "La mia lista dei desideri manga",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Un link ai tuoi desideri, visibile senza account – ad esempio per familiari e amici prima di un compleanno. Mostra titolo, editore e priorità, niente prezzi, scaffali o desideri altrui. Chi ha il link può vedere la lista.",
+  "Link erzeugen": "Crea link",
+  "Link zur Wunschliste": "Link alla lista dei desideri",
+  "Ansehen": "Visualizza",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "Il link non può più essere mostrato (la chiave del server è cambiata). Creane uno nuovo.",
+  "Zuletzt angesehen {time}.": "Visto l’ultima volta {time}.",
+  "Noch nicht angesehen.": "Non ancora visto.",
+  "Neuen Link erzeugen?": "Creare un nuovo link?",
+  "Der alte Link hört sofort auf zu funktionieren.": "Il vecchio link smette subito di funzionare.",
+  "Neuen Link erzeugen": "Crea nuovo link",
+  "Nicht mehr teilen": "Smetti di condividere"
 }

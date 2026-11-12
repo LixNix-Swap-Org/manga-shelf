@@ -3663,5 +3663,25 @@
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: delen {volumes} al {n} maand uitgeleend aan {name}",
     "other": "{title}: delen {volumes} al {n} maanden uitgeleend aan {name}"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Mijn verlanglijst delen als link, te bekijken zonder account",
+  "Meine Wunschliste teilen": "Mijn verlanglijst delen",
+  "Teilen-Link konnte nicht geladen werden": "Deellink kon niet worden geladen",
+  "Teilen-Link konnte nicht geändert werden": "Deellink kon niet worden gewijzigd",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Nieuwe link gemaakt – de oude werkt niet meer",
+  "Link zur Wunschliste erzeugt": "Link naar verlanglijst gemaakt",
+  "Wunschliste wird nicht mehr geteilt": "Verlanglijst wordt niet meer gedeeld",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Kopiëren niet mogelijk – selecteer de link in het veld en kopieer hem.",
+  "Meine Manga-Wunschliste": "Mijn manga-verlanglijst",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Een link naar je eigen wensen, te bekijken zonder account – bijvoorbeeld voor familie en vrienden voor een verjaardag. Hij toont titel, uitgever en prioriteit, geen prijzen, planken of wensen van anderen. Iedereen met de link kan de lijst zien.",
+  "Link erzeugen": "Link maken",
+  "Link zur Wunschliste": "Link naar verlanglijst",
+  "Ansehen": "Bekijken",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "De link kan niet meer worden getoond (de serversleutel is gewijzigd). Maak een nieuwe.",
+  "Zuletzt angesehen {time}.": "Laatst bekeken {time}.",
+  "Noch nicht angesehen.": "Nog niet bekeken.",
+  "Neuen Link erzeugen?": "Nieuwe link maken?",
+  "Der alte Link hört sofort auf zu funktionieren.": "De oude link werkt meteen niet meer.",
+  "Neuen Link erzeugen": "Nieuwe link maken",
+  "Nicht mehr teilen": "Niet meer delen"
 }

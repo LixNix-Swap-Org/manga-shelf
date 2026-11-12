@@ -3883,5 +3883,25 @@
     "few": "{title}: tomy {volumes} pożyczone {name} od {n} miesięcy",
     "many": "{title}: tomy {volumes} pożyczone {name} od {n} miesięcy",
     "other": "{title}: tomy {volumes} pożyczone {name} od {n} miesiąca"
-  }
+  },
+  "Meine Wunschliste als Link teilen, zum Ansehen ohne Konto": "Udostępnij moją listę życzeń linkiem, do oglądania bez konta",
+  "Meine Wunschliste teilen": "Udostępnij moją listę życzeń",
+  "Teilen-Link konnte nicht geladen werden": "Nie udało się wczytać linku do udostępniania",
+  "Teilen-Link konnte nicht geändert werden": "Nie udało się zmienić linku do udostępniania",
+  "Neuer Link erzeugt – der alte funktioniert nicht mehr": "Utworzono nowy link – stary już nie działa",
+  "Link zur Wunschliste erzeugt": "Utworzono link do listy życzeń",
+  "Wunschliste wird nicht mehr geteilt": "Lista życzeń nie jest już udostępniana",
+  "Kopieren nicht möglich – bitte den Link im Feld markieren und kopieren.": "Nie można skopiować – zaznacz link w polu i skopiuj go.",
+  "Meine Manga-Wunschliste": "Moja lista życzeń mangi",
+  "Ein Link zu deinen eigenen Wünschen, zum Ansehen ohne Konto – etwa für Familie und Freunde vor dem Geburtstag. Er zeigt Titel, Verlag und Priorität, keine Preise, Regale oder Wünsche anderer. Wer den Link hat, kann die Liste sehen.": "Link do twoich własnych życzeń, do oglądania bez konta – np. dla rodziny i znajomych przed urodzinami. Pokazuje tytuł, wydawcę i priorytet, bez cen, półek ani życzeń innych osób. Każdy, kto ma link, może zobaczyć listę.",
+  "Link erzeugen": "Utwórz link",
+  "Link zur Wunschliste": "Link do listy życzeń",
+  "Ansehen": "Zobacz",
+  "Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel hat sich geändert). Bitte neu erzeugen.": "Nie można już wyświetlić linku (zmienił się klucz serwera). Utwórz nowy.",
+  "Zuletzt angesehen {time}.": "Ostatnio oglądano {time}.",
+  "Noch nicht angesehen.": "Jeszcze nie oglądano.",
+  "Neuen Link erzeugen?": "Utworzyć nowy link?",
+  "Der alte Link hört sofort auf zu funktionieren.": "Stary link od razu przestanie działać.",
+  "Neuen Link erzeugen": "Utwórz nowy link",
+  "Nicht mehr teilen": "Przestań udostępniać"
 }
