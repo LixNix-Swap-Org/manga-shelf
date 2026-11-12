@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
-import { BookOpen, BuildingComplex, CircleCheck, Coins, Heart, PenLine, Trash, Tv, Upload, X } from 'lucide-react';
+import { BookOpen, BuildingComplex, CircleCheck, Coins, PenLine, Trash, Tv, Upload, X } from 'lucide-react';
 import { assetImgProps } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
 import { getChapterProgress } from '../../utils/volumeHelpers';
 import FilePickerButton from '../common/FilePickerButton';
 import { langFor } from '../common/lang';
-import { isWishedSeries, priorityBadgeClass, wishLabel } from '../../utils/priority';
+import WishControl from './WishControl';
 import { authorShelfPath, splitAuthors } from '../../utils/seriesMeta';
 import CollectingControl from './CollectingControl';
 import EditionSwitcher from './EditionSwitcher';
@@ -79,6 +79,8 @@ export default function MangaHeroCard({
   uploadingCover,
   onCancelCoverUpload,
   onCollectingSaved,
+  canWish = false,
+  onWishSaved,
   tagSuggestions = null,
   onEditionsChanged,
   onShowInfo
@@ -273,12 +275,7 @@ export default function MangaHeroCard({
                 </span>
                 <WebtoonPill format={manga.format} size="md" />
                 <CollectingControl manga={manga} canEdit={canEdit} isOffline={isOffline} onSaved={onCollectingSaved} />
-                {isWishedSeries(manga) && (
-                  <span id="detail-wish-pill" className={`px-3 py-1 rounded-xl border font-semibold flex items-center gap-1.5 ${priorityBadgeClass(manga.wish_priority)}`}>
-                    <Heart className="w-3.5 h-3.5" aria-hidden="true" />
-                    {wishLabel(manga)}
-                  </span>
-                )}
+                <WishControl manga={manga} canWish={canWish} onSaved={onWishSaved} />
                 <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold">
                   {webtoon
                     ? tr('Gesamt: {total}', { total: manga.total_chapters > 0 ? tn('{n} Kapitel', '{n} Kapitel', manga.total_chapters) : tr('Unbekannt') })

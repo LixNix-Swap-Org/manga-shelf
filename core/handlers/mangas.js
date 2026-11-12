@@ -12,6 +12,7 @@ const access = require('../lib/access');
 const catalogWrite = require('../lib/catalogWrite');
 const { moveMangaToTrash } = require('../lib/trash');
 const { normalizeTags, splitTags } = require('../lib/tags');
+const { setWish, adoptColumnWish } = require('../lib/wishes');
 
 // Manga Passion reports an unknown run state as 'Unbekannt'
 const MANGA_STATUS_ALIASES = { Unbekannt: 'Laufend' };
@@ -266,7 +267,10 @@ function create(ctx, { body }) {
         ctx.user.id,
         shelfId
     );
-    return { body: { success: true, id: Number(result.lastInsertRowid) } };
+    const id = Number(result.lastInsertRowid);
+    // a wish given with the new series is the creator's own (migration 57)
+    adoptColumnWish(ctx.db, id, ctx.user.id);
+    return { body: { success: true, id } };
 }
 
 function detail(ctx, { params }) {
@@ -302,7 +306,8 @@ function update(ctx, { params, body }) {
     const format = pick('format') || 'print';
 
     // the edition fields go to the catalog or stay local to this shelf (core/lib/catalogWrite.js)
-    ctx.db.transaction(() => catalogWrite.track(ctx, 'series', manga.id, () => ctx.db.prepare(`
+    ctx.db.transaction(() => {
+        catalogWrite.track(ctx, 'series', manga.id, () => ctx.db.prepare(`
         UPDATE mangas SET title = ?, alt_title = ?, author = ?, publisher = ?,
         language = ?, region = ?, currency = ?, status = ?, tags = ?, total_volumes = ?,
         description = ?, cover_image = ?,
@@ -329,7 +334,10 @@ function update(ctx, { params, body }) {
         pick('total_chapters') ?? null,
         ctx.user.id,
         params.id
-    )));
+        ));
+        // wish_priority of the form is the caller's own wish (migration 57); the series keeps the highest of all wishes
+        if (fields.wish_priority !== undefined) setWish(ctx.db, manga.id, ctx.user.id, fields.wish_priority);
+    });
     return { body: { success: true } };
 }
 

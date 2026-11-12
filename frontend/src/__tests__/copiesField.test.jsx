@@ -16,6 +16,34 @@ const copy = (over = {}) => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe('CopiesField', () => {
+  it('"Weiteres Exemplar" adds a copy for an owner; a copy of several is numbered and can be removed alone', async () => {
+    const two = [copy(), copy({ id: 13, price: null, purchase_date: null, condition: null })];
+    const fetchMock = vi.fn(async (url, init = {}) => {
+      if (init.method === 'POST') {
+        expect(String(url)).toContain('/api/volumes/5/copies');
+        return fakeResponse(200, { success: true, copy: two[1], copies: two });
+      }
+      expect(String(url)).toContain('/api/volumes/5/copies/10');
+      expect(init.method).toBe('DELETE');
+      return fakeResponse(200, { success: true, copies: [two[1]] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onChanged = vi.fn();
+    render(<CopiesField volumeId={5} mangaId={2} currentUser={anna} canEdit copies={[copy()]} onChanged={onChanged} />);
+    expect(screen.queryByRole('button', { name: /^Entfernen/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Weiteres Exemplar' }));
+    await waitFor(() => expect(document.querySelectorAll('[data-copy]')).toHaveLength(2));
+    expect(document.querySelectorAll('[data-copy]')[1].textContent).toContain('anna · Exemplar 2');
+    fireEvent.click(screen.getByRole('button', { name: 'Entfernen – Exemplar von anna · Exemplar 1' }));
+    await waitFor(() => expect(document.querySelectorAll('[data-copy]')).toHaveLength(1));
+    expect(onChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers no further copy to someone without an own copy', () => {
+    render(<CopiesField volumeId={5} mangaId={2} currentUser={anna} canEdit copies={[copy({ owner_user_id: 2, owner: 'ben' })]} />);
+    expect(screen.queryByRole('button', { name: 'Weiteres Exemplar' })).toBeNull();
+  });
+
   it('lists every copy with its purchase, the household and who borrowed it; only changeable copies get "Bearbeiten"', () => {
     render(
       <CopiesField

@@ -1,9 +1,11 @@
 // Shelves = collections with members (owner / editor / viewer): GET/POST /shelves, GET/PUT/DELETE /shelves/:id,
 // members under /shelves/:id/members, PUT /mangas/:id/shelf to move a series and GET /mangas/:id/shelf-move to preview it.
 const { HttpError, msg, badRequest, notFound, conflict, forbidden } = require('../errors');
+const { syncSeriesWish, syncUserWishes } = require('../lib/wishes');
 const { parsePositiveInt } = require('../lib/validate');
 const { qstr } = require('../lib/query');
 const access = require('../lib/access');
+const { findUserByName } = require('../lib/usernames');
 const { syncStatusWithOwners, purchaseDateFromRemainingOwners } = require('../lib/owners');
 const { rememberUndo } = require('./volumes');
 
@@ -159,7 +161,7 @@ function addMember(ctx, { params, body }) {
         const userId = parsePositiveInt(body.user_id);
         user = userId && ctx.db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
     } else if (typeof body.username === 'string' && body.username.trim()) {
-        user = ctx.db.prepare('SELECT id, username, role FROM users WHERE username = ? COLLATE NOCASE').get(body.username.trim());
+        user = findUserByName(ctx.db, body.username, 'id, username, role');
     } else {
         throw badRequest('Benutzername fehlt');
     }
@@ -169,6 +171,8 @@ function addMember(ctx, { params, body }) {
         throw conflict('Der Benutzer hat dieses Regal schon', 'SHELF_MEMBER_EXISTS');
     }
     ctx.db.prepare('INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(id, user.id, role);
+    // wishes kept from an earlier membership count again (migration 57)
+    syncUserWishes(ctx.db, user.id, id);
     return { status: 201, body: { members: membersOf(ctx, id) } };
 }
 
@@ -205,6 +209,8 @@ function forgetMarks(ctx, shelfId, userId) {
     const snapshot = snapshotCopies(ctx, `owner_user_id = ? AND volume_id IN (${inShelf})`, [userId, shelfId]);
     ctx.db.prepare(`DELETE FROM volume_copies WHERE owner_user_id = ? AND volume_id IN (${inShelf})`).run(userId, shelfId);
     settleVolumes(ctx, snapshot.volumes.map(v => v.id));
+    // their wishes there stay but no longer count (migration 57); a return brings them back
+    syncUserWishes(ctx.db, userId, shelfId);
     return snapshot;
 }
 
@@ -331,6 +337,8 @@ function moveSeries(ctx, mangaId, target) {
     ctx.db.prepare('UPDATE trash SET shelf_id = ? WHERE manga_id = ?').run(target, mangaId);
     ctx.db.prepare(`DELETE FROM volume_copies WHERE ${lost}`).run(mangaId, target);
     settleVolumes(ctx, snapshot.volumes.map(v => v.id));
+    // only wishes of members of the new shelf count (migration 57)
+    syncSeriesWish(ctx.db, mangaId);
     return { snapshot, removed };
 }
 
@@ -370,6 +378,7 @@ function undoMember(ctx, prev) {
     const role = access.isReadOnlyAccount(user.role) ? 'viewer' : prev.role;
     const restored = ctx.db.transaction(() => {
         ctx.db.prepare('INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(prev.shelfId, prev.userId, role);
+        syncUserWishes(ctx.db, prev.userId, prev.shelfId);
         // the empty shelf that leaving made goes again while nothing happened in it
         const personal = prev.personal && ctx.db.prepare(`
             SELECT 1 FROM shelves s WHERE s.id = ? AND s.is_default = 0

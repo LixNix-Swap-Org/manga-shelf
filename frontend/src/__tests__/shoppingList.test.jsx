@@ -740,28 +740,53 @@ describe('ShoppingListView wished series', () => {
     expect(document.getElementById('shop-wished-series')).toBeTruthy();
   });
 
-  it('"Von der Wunschliste" clears wish_priority, hides the card and reloads list and collection', async () => {
-    const fetchMock = vi.fn(async () => response(200, { success: true }));
+  it('"Von meiner Wunschliste" clears the own wish, hides the card and reloads list and collection', async () => {
+    const fetchMock = vi.fn(async () => response(200, { success: true, my_wish: null, wish_priority: null, wishes: [] }));
     vi.stubGlobal('fetch', fetchMock);
     const p = props({ shoppingData: withWished([wished()]) });
     renderView(p);
-    fireEvent.click(screen.getByRole('button', { name: 'Vinland Saga von der Wunschliste nehmen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vinland Saga von meiner Wunschliste nehmen' }));
     await flush();
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('/api/mangas/40');
+    expect(url).toBe('/api/mangas/40/wish');
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(init.body)).toEqual({ wish_priority: null });
+    expect(JSON.parse(init.body)).toEqual({ priority: null });
     expect(document.getElementById('shop-wished-series')).toBeNull();
     expect(p.fetchShoppingList).toHaveBeenCalled();
     expect(p.fetchMangas).toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
+  it('names who wishes a series; "Nur meine Wünsche" narrows to the own wishes; another\'s wish has no remove button', () => {
+    const mine = wished({ id: 41, title: 'Meins', my_wish: 2, wishes: [{ user_id: 1, username: 'anna', priority: 2, mine: true }] });
+    const theirs = wished({ id: 42, title: 'Fremd', my_wish: null, wishes: [{ user_id: 2, username: 'Felix', priority: 3, mine: false }] });
+    renderView(props({ shoppingData: withWished([mine, theirs]) }));
+    const wishers = [...document.querySelectorAll('[data-wishers]')].map((n) => n.textContent);
+    expect(wishers).toEqual(expect.arrayContaining(['Gewünscht von anna (mittel)', 'Gewünscht von Felix (hoch)']));
+    expect(screen.getByRole('button', { name: 'Meins von meiner Wunschliste nehmen' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Fremd von meiner Wunschliste nehmen' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Nur meine Wünsche' }));
+    expect(screen.queryByText('Fremd')).toBeNull();
+    expect(screen.getByText('Meins')).toBeTruthy();
+  });
+
+  it('a household wish nobody holds as their own gets "Haushalts-Wunsch entfernen"', async () => {
+    const fetchMock = vi.fn(async () => response(200, { success: true, my_wish: null, wish_priority: null, wishes: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const old = wished({ id: 43, title: 'Alt', my_wish: null, wishes: [{ user_id: null, username: null, priority: 2, mine: false }] });
+    renderView(props({ shoppingData: withWished([old]) }));
+    expect(document.querySelector('[data-wishers]').textContent).toBe('Gewünscht von Haushalt (mittel)');
+    fireEvent.click(screen.getByRole('button', { name: 'Haushalts-Wunsch für Alt entfernen' }));
+    await flush();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ priority: null, household: true });
+    vi.unstubAllGlobals();
+  });
+
   it('visitors and offline mode get no remove button', () => {
     const view = renderView(props({ shoppingData: withWished([wished()]), canEdit: false }));
-    expect(screen.queryByRole('button', { name: /von der Wunschliste nehmen/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /von meiner Wunschliste nehmen/ })).toBeNull();
     view.rerenderWith({ ...view.props, canEdit: true, isOfflineMode: true });
-    expect(screen.queryByRole('button', { name: /von der Wunschliste nehmen/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /von meiner Wunschliste nehmen/ })).toBeNull();
   });
 });
 

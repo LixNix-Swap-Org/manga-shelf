@@ -9,6 +9,7 @@ import imageCheck from '../../../core/lib/imageCheck.js';
 import owners from '../../../core/lib/owners.js';
 import marks from '../../../core/lib/marks.js';
 import copies from '../../../core/lib/copies.js';
+import wishes from '../../../core/lib/wishes.js';
 import { t } from '../i18n/index.js';
 import { serverText } from '../i18n/serverText.js';
 
@@ -148,7 +149,8 @@ function insertRow(conn, table, columns, row) {
 // and the device has only its own shelf 1, which the trigger gives every series without shelf_id
 // The catalog links (migration 41) are the server's ids: the device's triggers link its own catalog.
 const SKIP_MANGA = new Set(['volumes', 'reader_stats', 'updated_by', 'owned_volumes', 'wished', 'total_value', 'full_value', 'shelf_id', 'catalog_series_id']);
-const SKIP_VOLUME = new Set(['number_sort', 'owners', 'copies', 'owned_by_me', 'read_users', 'read_by', 'is_read', 'catalog_volume_id']);
+// "Zuletzt geändert von" (migration 55) names server accounts the device does not have
+const SKIP_VOLUME = new Set(['number_sort', 'owners', 'copies', 'owned_by_me', 'read_users', 'read_by', 'is_read', 'catalog_volume_id', 'updated_by', 'updated_by_name']);
 const scalars = (row, skip) => Object.fromEntries(Object.entries(row).filter(([k, v]) => !skip.has(k) && (v === null || typeof v !== 'object')));
 const hasText = (v) => typeof v === 'string' && v.trim() !== '';
 
@@ -165,6 +167,10 @@ export function fillFromSnapshot(conn, snapshot) {
   const volumeCols = columnsOf(conn, 'volumes');
   for (const manga of Object.values(snapshot.details || {})) {
     insertRow(conn, 'mangas', mangaCols, scalars(manga, SKIP_MANGA));
+    // the device knows only this user (migration 57): their own wish stays theirs; a series only others wish keeps
+    // that wish as the household's
+    if (manga.my_wish !== null && manga.my_wish !== undefined) wishes.setWish(conn, manga.id, me.id, manga.my_wish);
+    else wishes.adoptColumnWish(conn, manga.id, null);
     if (manga.chapters_read > 0) marks.setChapterProgress(conn, manga.id, me.id, manga.chapters_read);
     for (const v of manga.volumes || []) {
       const vol = scalars(v, SKIP_VOLUME);
@@ -183,6 +189,15 @@ export function fillFromSnapshot(conn, snapshot) {
           created_at: hasText(o.created_at) ? o.created_at : null,
           ...(ownCopy?.lent_to ? { lent_to_name: ownCopy.lent_to, lent_at: ownCopy.lent_at ?? null } : {})
         });
+      }
+      // further own copies (migration 56) come along
+      if (copies.hasCopy(conn, v.id, me.id)) {
+        for (const c of (v.copies || []).filter((c) => c.owner_user_id === me.id).slice(1)) {
+          copies.addExtraCopy(conn, v.id, me.id, {
+            price: c.price, purchase_date: c.purchase_date, condition: c.condition,
+            ...(c.lent_to ? { lent_to_name: c.lent_to, lent_at: c.lent_at ?? null } : {})
+          });
+        }
       }
       // the volume insert gave an owned volume a household copy; without an own copy it counts as missing, as before copies
       if (!copies.hasCopy(conn, v.id, me.id)) copies.dropHouseholdCopies(conn, v.id);

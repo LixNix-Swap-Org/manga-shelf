@@ -1,6 +1,7 @@
 // Series list, series detail and the offline snapshot: the read shapes of GET /mangas, /mangas/:id, /offline-snapshot.
 const { regularNumberedSql, volumeOrderSql } = require('./lib/volumeNumber');
 const access = require('./lib/access');
+const { wishesBySeries } = require('./lib/wishes');
 const catalogWrite = require('./lib/catalogWrite');
 const { copiesByVolume, attachCopies } = require('./lib/copies');
 
@@ -78,9 +79,13 @@ const INTERNAL_VOLUME_COLUMNS = new Set(['number_sort', 'catalog_volume_id']);
 
 /** volumes.* without the internal columns, in table order (the API shape of a volume). */
 function volumeColumns(ctx) {
-    return ctx.db.prepare('PRAGMA table_info(volumes)').all()
+    const info = ctx.db.prepare('PRAGMA table_info(volumes)').all();
+    const columns = new Set(info.map(c => c.name));
+    // "Zuletzt geändert von" (migration 55): the name of the account, null once it is deleted
+    return info
         .filter(c => !INTERNAL_VOLUME_COLUMNS.has(c.name))
         .map(c => `v."${c.name.replace(/"/g, '""')}"`)
+        .concat(columns.has('updated_by') ? ['(SELECT u.username FROM users u WHERE u.id = v.updated_by) AS updated_by_name'] : [])
         .join(', ');
 }
 
@@ -267,8 +272,20 @@ function loadMangaDetail(ctx, mangaId, userId) {
     const flags = manga.catalog_series_id === null || manga.catalog_series_id === undefined ? null
         : catalogWrite.seriesFlags(ctx)(manga.catalog_series_id);
     // every copy of a volume: price, date and condition per copy, and who borrowed it (migration 47)
-    return attachCopies(buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters, flags),
+    const detail = attachCopies(buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, scoped, userId, loadEditions(ctx, manga), chapters, flags),
         copiesByVolume(ctx.db, 'v.manga_id = ?', [mangaId]));
+    return attachWishes(detail, wishesBySeries(ctx.db, detail.id).get(detail.id), userId);
+}
+
+/**
+ * The wishes of a series (migration 57), seen by everyone in its shelf: `wishes` [{ user_id (null: the household's),
+ * username, priority }], `my_wish` (the caller's priority, null when they wish nothing) and `household_wish`.
+ */
+function attachWishes(detail, wishes = [], userId) {
+    detail.wishes = (wishes || []).map(w => ({ ...w, mine: w.user_id === userId }));
+    detail.my_wish = detail.wishes.find(w => w.user_id === userId)?.priority ?? null;
+    detail.household_wish = detail.wishes.find(w => w.user_id === null)?.priority ?? null;
+    return detail;
 }
 
 function assertSameConnection(ctx, generation) {
@@ -315,12 +332,14 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
         const ownersByVolume = groupBy(ownersStmt.all(from, to), 'volume_id');
         const chaptersByManga = groupBy(chaptersStmt.all(from, to), 'manga_id');
         const copies = copiesByVolume(ctx.db, 'v.manga_id BETWEEN ? AND ?', [from, to]);
+        const wishes = wishesBySeries(ctx.db, block.map(m => m.id));
         for (const m of block) {
             const volumes = volumesByManga.get(m.id) || [];
             details[m.id] = attachCopies(buildMangaDetail(m, volumes, readsByVolume, ownersByVolume,
                 usersOfSeries(users, members, m, user.id, volumes, readsByVolume, ownersByVolume), user.id,
                 editionsOf(m, editionsByWork.get(m.work_key) || []), chaptersByManga.get(m.id) || [],
                 m.catalog_series_id === null ? null : flagsOf(m.catalog_series_id)), copies);
+            attachWishes(details[m.id], wishes.get(m.id), user.id);
         }
     }
     assertSameConnection(ctx, generation);

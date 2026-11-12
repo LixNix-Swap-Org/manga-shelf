@@ -7,7 +7,8 @@ const { migrateLegacyReadStatus } = require('./lib/owners');
 const { parseLanguage, DEFAULT_LANGUAGE } = require('./lib/language');
 const { backfillCatalog, CATALOG_TRIGGERS_SQL, ANIME_LINK_TRIGGERS_SQL, CATALOG_TRIGGERS_V3_SQL, MARK_SERIES_LOCAL, MARK_VOLUMES_LOCAL, ADOPT_SERIES_SQL, ADOPT_VOLUME_SQL } = require('./lib/catalog');
 const { MARK_VIEWS_SQL, MARK_VIEWS, MARK_FOLLOW_TRIGGERS_SQL, MARK_FOLLOW_TRIGGERS, marksOnCatalog, chaptersOnCatalog } = require('./lib/marks');
-const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, OWNERS_VIEW_LENT_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
+const { SERIES_WISHES_SQL, WISH_TRIGGERS_SQL } = require('./lib/wishes');
+const { COPIES_TABLE_SQL, OWNERS_VIEW_SQL, OWNERS_VIEW_LENT_SQL, OWNERS_VIEW_FIRST_SQL, COPY_TRIGGERS, COPY_TRIGGERS_SQL, copiesInPlace } = require('./lib/copies');
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -1447,6 +1448,48 @@ function migrationList(log = silentLog) {
                 // whether the shelf shows the list "Zu erledigen" to this account; 1 = shown (each person decides)
                 const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
                 if (!cols.has('show_todo')) d.exec('ALTER TABLE users ADD COLUMN show_todo INTEGER NOT NULL DEFAULT 1;');
+            }
+        },
+        {
+            version: 55,
+            name: 'add_volume_changed_by',
+            up: (d) => {
+                // "Zuletzt geändert von" on a volume: who last changed it through the app and when (NULL = unknown, older
+                // data or a change without an account such as a sync); set by touchVolumes (core/lib/volumeChanges.js)
+                const cols = new Set(d.prepare('PRAGMA table_info(volumes)').all().map(c => c.name));
+                if (!cols.has('updated_by')) d.exec('ALTER TABLE volumes ADD COLUMN updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL;');
+                if (!cols.has('updated_at')) d.exec('ALTER TABLE volumes ADD COLUMN updated_at DATETIME;');
+            }
+        },
+        {
+            version: 56,
+            name: 'allow_more_copies',
+            up: (d) => {
+                // a person may own a second copy of the same volume ("Weiteres Exemplar"): the unique index goes, a plain one
+                // keeps the lookups fast. volume_owners stays one row per person (their first copy), so counts, the owner
+                // chips and every reader of the view see people, not copies; the copies list shows each copy.
+                d.exec(`
+                    DROP INDEX IF EXISTS ux_volume_copies_owner;
+                    CREATE INDEX IF NOT EXISTS idx_volume_copies_volume_owner ON volume_copies (volume_id, owner_user_id);
+                    DROP VIEW IF EXISTS volume_owners;
+                    ${OWNERS_VIEW_FIRST_SQL}
+                `);
+            }
+        },
+        {
+            version: 57,
+            name: 'add_series_wishes',
+            up: (d) => {
+                // wishes per person (core/lib/wishes.js); the shared wish of a series becomes its household wish, since
+                // nobody knows who set it. mangas.wish_priority stays as the highest wish, kept by the triggers.
+                d.exec(SERIES_WISHES_SQL);
+                d.exec(WISH_TRIGGERS_SQL);
+                // part of the series detail and the shopping list (their ETags)
+                d.exec(dataVersionTriggersSql('series_wishes', 'collection'));
+                d.exec(`INSERT INTO series_wishes (manga_id, user_id, priority)
+                        SELECT id, NULL, MAX(0, MIN(3, CAST(wish_priority AS INTEGER))) FROM mangas
+                        WHERE wish_priority IS NOT NULL
+                          AND NOT EXISTS (SELECT 1 FROM series_wishes w WHERE w.manga_id = mangas.id)`);
             }
         }
     ];

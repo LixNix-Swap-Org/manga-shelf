@@ -1,10 +1,11 @@
 // Parts of the shopping list: print sheet, load progress and the wished series (split from ShoppingListView.jsx).
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { formatCount, formatMoney, formatNumber } from '../../../utils/format';
 import { editionCurrency } from '../../../utils/editions';
 import { groupByPublisher, itemText, publisherLabel } from '../../../utils/shareList';
-import { PRIORITY_LABELS, priorityBadgeClass } from '../../../utils/priority';
+import { PRIORITY_LABELS, priorityBadgeClass, wishersText, droppableWish } from '../../../utils/priority';
 import CoverImage from '../../common/CoverImage';
 import { BookOpen, BuildingComplex, Heart } from 'lucide-react';
 import { t } from '../../../i18n/index.js';
@@ -73,13 +74,32 @@ export function ListProgress({ shown, total, onMore, sentinelRef }) {
 }
 
 /** Wished series: a card per series with cover, publisher, priority, what is already known to be missing. */
-export function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
+export function WishedSeriesSection({ series: allSeries, canRemove, removing, onRemove }) {
+  // wishes per person (migration 57): everybody's by default, "Nur meine" narrows to the own wishlist
+  const [onlyMine, setOnlyMine] = useState(false);
+  const hasOwn = allSeries.some((s) => s.my_wish !== null && s.my_wish !== undefined);
+  const series = onlyMine ? allSeries.filter((s) => s.my_wish !== null && s.my_wish !== undefined) : allSeries;
   return (
     <section id="shop-wished-series" aria-labelledby="shop-wished-heading" className="space-y-3">
-      <h3 id="shop-wished-heading" className="text-sm font-bold text-slate-200 flex items-center gap-2">
-        <Heart className="w-4 h-4 text-rose-400" aria-hidden="true" />
-        {t('Gewünschte Reihen')} <span className="text-xs font-normal text-slate-400">({series.length})</span>
-      </h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="shop-wished-heading" className="text-sm font-bold text-slate-200 flex items-center gap-2">
+          <Heart className="w-4 h-4 text-rose-400" aria-hidden="true" />
+          {t('Gewünschte Reihen')} <span className="text-xs font-normal text-slate-400">({series.length})</span>
+        </h3>
+        {(hasOwn || onlyMine) && (
+          <button
+            type="button"
+            id="btn-shop-only-my-wishes"
+            onClick={() => setOnlyMine((v) => !v)}
+            aria-pressed={onlyMine}
+            className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition-colors ${
+              onlyMine ? 'bg-rose-500/20 text-rose-200 border-rose-500/50' : 'text-slate-400 border-slate-700 hover:text-slate-200'
+            }`}
+          >
+            {t('Nur meine Wünsche')}
+          </button>
+        )}
+      </div>
       <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {series.map((s) => (
           <li key={s.id} className="glass-card rounded-2xl p-3 border border-rose-500/25 flex gap-3 bg-slate-900/60">
@@ -105,6 +125,11 @@ export function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
                       : t('Noch keine Bände bekannt')}
                   </span>
                 </div>
+                {wishersText(s.wishes) && (
+                  <p className="text-[11px] text-rose-200/90 mt-1 break-words" data-wishers>
+                    {t('Gewünscht von {names}', { names: wishersText(s.wishes) })}
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2 mt-2.5">
                 <Link
@@ -115,16 +140,18 @@ export function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
                 >
                   {t('Zur Reihe')}
                 </Link>
-                {canRemove && (
+                {canRemove && droppableWish(s) && (
                   <button
                     type="button"
-                    onClick={() => onRemove(s)}
+                    onClick={() => onRemove(s, { household: droppableWish(s) === 'household' })}
                     disabled={removing.has(s.id)}
                     aria-busy={removing.has(s.id) || undefined}
-                    aria-label={t('{title} von der Wunschliste nehmen', { title: s.title })}
+                    aria-label={droppableWish(s) === 'household'
+                      ? t('Haushalts-Wunsch für {title} entfernen', { title: s.title })
+                      : t('{title} von meiner Wunschliste nehmen', { title: s.title })}
                     className="px-2.5 py-1.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500/50 text-xs font-semibold disabled:opacity-50"
                   >
-                    {t('Von der Wunschliste')}
+                    {droppableWish(s) === 'household' ? t('Haushalts-Wunsch entfernen') : t('Von meiner Wunschliste')}
                   </button>
                 )}
               </div>

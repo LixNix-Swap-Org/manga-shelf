@@ -8,6 +8,7 @@ const { badRequest, notFound } = require('../errors');
 const { isBlank, parsePrice, parseFlag, isValidDate, parseDate, parseCondition } = require('../lib/validate');
 const { FIELD_ERRORS, DATE_ERROR } = require('./volumes');
 const { readLending } = require('./copies');
+const { touchVolumes } = require('../lib/volumeChanges');
 
 function toggleOwner(ctx, { params, body }) {
     const volumeId = parseInt(params.id, 10);
@@ -76,6 +77,7 @@ function toggleOwner(ctx, { params, body }) {
             removeCopy(ctx.db, volumeId, targetUserId);
         }
         status = syncStatusWithOwners(ctx.db, volumeId);
+        touchVolumes(ctx, volumeId);
         if (removedOwner && status === OWNED_STATUS) purchaseDateFromRemainingOwners(ctx.db, volumeId);
         // stats, CSV and the edit form read volumes.purchase_date: the first purchase fills it, never overwrites it
         const becameOwned = wantOwned && !hadOwners && vol.status !== OWNED_STATUS && !isLegacyReadStatus(vol.status);

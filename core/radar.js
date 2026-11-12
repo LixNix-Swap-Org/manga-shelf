@@ -163,7 +163,9 @@ function buildShoppingList(missingVols, wishedSeries = []) {
         known_missing_count: s.known_missing_count || 0,
         known_missing_cost: round2(s.known_missing_cost || 0),
         language: s.language ?? null,
-        currency: s.currency || DEFAULT_CURRENCY
+        currency: s.currency || DEFAULT_CURRENCY,
+        wishes: s.wishes || [],
+        my_wish: s.my_wish ?? null
     }));
     const wishedCounts = new Map();
     for (const s of wished) wishedCounts.set(s.publisher, (wishedCounts.get(s.publisher) || 0) + 1);

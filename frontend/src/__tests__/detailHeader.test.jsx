@@ -362,11 +362,28 @@ describe('MangaHeroCard: wishlist', () => {
     expect(document.getElementById('detail-wish-pill').textContent).toBe('Wunschliste');
   });
 
+  it('names who wishes the series and lets anybody put it on their own list', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true, my_wish: 2, wish_priority: 3, wishes: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onWishSaved = vi.fn();
+    render(<MangaHeroCard {...props({ canEdit: false, canWish: true, onWishSaved, manga: {
+      id: 9, title: 'T', wish_priority: 3, wished: 1, owned_volumes: 0, my_wish: null,
+      wishes: [{ user_id: 2, username: 'Felix', priority: 3, mine: false }, { user_id: 3, username: 'Mia', priority: 0, mine: false }]
+    } })} />);
+    expect(document.getElementById('detail-wish-pill').textContent).toBe('Wunschliste · hoch· Felix (hoch), Mia');
+    fireEvent.click(screen.getByRole('button', { name: 'Auf meine Wunschliste' }));
+    await waitFor(() => expect(onWishSaved).toHaveBeenCalledWith({ wish_priority: 3, wishes: [], my_wish: 2 }));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/api/mangas/9/wish');
+    expect(JSON.parse(init.body)).toEqual({ priority: 2 });
+    vi.unstubAllGlobals();
+  });
+
   it('the edit form toggles the wish and offers the priority only when ticked', () => {
     const p = props({ editing: true, formData: { title: 'T', status: 'Laufend', cover_image: '', wish: false, wish_priority: '2' } });
     const { rerender } = render(<MangaHeroCard {...p} />);
     expect(screen.queryByLabelText('Priorität')).toBeNull();
-    fireEvent.click(screen.getByLabelText('Wunschliste'));
+    fireEvent.click(screen.getByLabelText('Auf meiner Wunschliste'));
     expect(p.setFormData).toHaveBeenCalledWith(expect.objectContaining({ wish: true, wish_priority: '2' }));
     rerender(<MangaHeroCard {...p} formData={{ ...p.formData, wish: true }} />);
     fireEvent.change(screen.getByLabelText('Priorität'), { target: { value: '1' } });

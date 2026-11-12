@@ -1,5 +1,6 @@
 // Volumes: create (single and batch), edit, delete, bulk edit (POST /volumes, /volumes/batch, /volumes/bulk, PUT/DELETE /volumes/:id).
 const { RELINKED_COLUMNS } = require('../lib/catalogMaintenance');
+const { touchVolumes } = require('../lib/volumeChanges');
 const { normalizePublisher } = require('../lib/publishers');
 const { normalizeIsbn } = require('../lib/isbn');
 const {
@@ -14,7 +15,7 @@ const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = r
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
 const { addRead, removeRead } = require('../lib/marks');
-const { hasOwner, removeCopy, followVolumeValue, setOwners } = require('../lib/copies');
+const { hasOwner, removeCopy, followVolumeValue, setOwners, extraCopies, restoreExtraCopies } = require('../lib/copies');
 const { parseLanguage } = require('../lib/language');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseSortAfter, parseYear, parsePriority, isValidDate, parseDate,
@@ -244,6 +245,7 @@ function create(ctx, { body }) {
         newVolumeId = Number(result.lastInsertRowid);
         syncOwnersWithStatus(ctx.db, newVolumeId, ctx.user.id);
         if (st.read) markRead(ctx.db, newVolumeId, ctx.user.id);
+        touchVolumes(ctx, newVolumeId);
     });
 
     return { body: { success: true, id: newVolumeId } };
@@ -305,6 +307,7 @@ function createBatch(ctx, { body }) {
             const volumeId = Number(insertStmt.run(mId, String(i), st.value, price, pub, cond, rDate, year).lastInsertRowid);
             syncOwnersWithStatus(ctx.db, volumeId, ownerId);
             if (st.read) markRead(ctx.db, volumeId, ownerId ?? ctx.user.id);
+            touchVolumes(ctx, volumeId);
             created++;
         }
     });
@@ -413,6 +416,7 @@ function update(ctx, { params, body }) {
         catalogWrite.commit(ctx, 'volume', vol);
         syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
         if (markAsRead && status === OWNED_STATUS) markRead(ctx.db, vol.id, ctx.user.id);
+        touchVolumes(ctx, vol.id);
     });
 
     return { body: { success: true } };
@@ -422,7 +426,10 @@ function update(ctx, { params, body }) {
 function catalogReset(ctx, { params, body }) {
     const fields = catalogWrite.readResetFields(body, 'volume');
     let local = null;
-    ctx.db.transaction(() => { local = catalogWrite.reset(ctx, 'volume', Number(params.id), fields); });
+    ctx.db.transaction(() => {
+        local = catalogWrite.reset(ctx, 'volume', Number(params.id), fields);
+        if (local !== null) touchVolumes(ctx, Number(params.id));
+    });
     if (local === null) throw notFound('Band');
     return { body: { success: true, local_fields: local } };
 }
@@ -492,7 +499,8 @@ const BULK_SNAPSHOT_COLUMNS = ['manga_id', ...BULK_SET_FIELDS];
 function bulkSnapshot(ctx, vol, { readUser, readOnly = false }) {
     const entry = readOnly
         ? { id: vol.id, deleted: false, read_only: true }
-        : { id: vol.id, deleted: false, volume: Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null])), owners: ownerRows(ctx, vol.id) };
+        : { id: vol.id, deleted: false, volume: Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null])), owners: ownerRows(ctx, vol.id),
+            extra_copies: extraCopies(ctx.db, vol.id) };
     if (readUser) {
         entry.read_user = readUser;
         entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM shelf_volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
@@ -639,6 +647,8 @@ function bulk(ctx, { body }) {
                 if (owners) applyOwnerOps(ctx, vol.id, owners);
             }
             if (read && !applyReadOp(ctx, vol.id, read)) readSkipped.push(vol.id);
+            // reading marks are each person's own; a change of fields or owners is a change of the volume
+            if (owners || Object.keys(set.value).length) touchVolumes(ctx, vol.id);
         }
     });
 
@@ -691,10 +701,12 @@ function revertBulk(ctx, token) {
     const member = ctx.db.prepare('SELECT 1 FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
     // marks come back for members of that shelf only (an account deleted meanwhile is a member of none)
     const members = (rows, shelfId) => (Array.isArray(rows) ? rows : []).filter((row) => member.get(shelfId, row.user_id));
-    const putOwners = (volumeId, owners, shelfId) => {
+    const putOwners = (volumeId, owners, shelfId, extras = []) => {
         const all = Array.isArray(owners) ? owners : [];
         const kept = members(all, shelfId);
         restoreOwners(ctx, volumeId, kept, { household: all.length === 0 });
+        // further copies of a person (migration 56) come back with their first one
+        restoreExtraCopies(ctx.db, (Array.isArray(extras) ? extras : []).filter((c) => c.volume_id === volumeId));
         if (kept.length < all.length) syncStatusWithOwners(ctx.db, volumeId);
     };
     const trashEntry = ctx.db.prepare("SELECT payload FROM trash WHERE id = ? AND kind = 'volume' AND ref_id = ?");
@@ -710,6 +722,7 @@ function revertBulk(ctx, token) {
         }
     };
     const volumeColumns = new Set(ctx.db.prepare('PRAGMA table_info(volumes)').all().map((c) => c.name));
+    const userExists = ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?');
     volumeColumns.delete('number_sort');
     for (const column of RELINKED_COLUMNS.volumes) volumeColumns.delete(column);
 
@@ -735,7 +748,8 @@ function revertBulk(ctx, token) {
                             ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => snap.volume[k] ?? null), snap.id);
                             catalogWrite.commit(ctx, 'volume', stored);
                         }
-                        putOwners(snap.id, snap.owners, shelfId);
+                        putOwners(snap.id, snap.owners, shelfId, snap.extra_copies);
+                        touchVolumes(ctx, snap.id);
                     }
                     if (snap.read_user) {
                         removeRead(ctx.db, snap.id, snap.read_user);
@@ -760,8 +774,10 @@ function revertBulk(ctx, token) {
                 continue;
             }
             const columns = Object.keys(row).filter((k) => volumeColumns.has(k));
-            ctx.db.prepare(`INSERT INTO volumes (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(...columns.map((k) => row[k]));
-            putOwners(snap.id, trashed.owners, shelfId);
+            // "Zuletzt geändert von" may name an account deleted meanwhile
+            const value = (k) => (k === 'updated_by' && row[k] && !userExists.get(row[k]) ? null : row[k]);
+            ctx.db.prepare(`INSERT INTO volumes (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`).run(...columns.map(value));
+            putOwners(snap.id, trashed.owners, shelfId, trashed.extra_copies);
             restoreReads(ctx, snap.id, members(trashed.reads, shelfId));
             forgetTrashedVolume(ctx, snap.id);
             restored.push(snap.id);
