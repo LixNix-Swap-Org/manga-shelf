@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
-import { createPortal, flushSync } from 'react-dom';
+import { flushSync } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
 import {
@@ -14,26 +14,23 @@ import { readApiError } from '../../hooks/useVolumeActions';
 import { apiFetch, readJson, sessionEndAnnounced, TIMEOUTS } from '../../utils/api';
 import { BEFORE_LOGOUT_EVENT } from '../../appShell';
 import { notify } from '../../utils/notify';
-import { formatCount, formatEuro, formatMoney, formatNumber } from '../../utils/format';
+import { formatCount, formatEuro, formatMoney } from '../../utils/format';
 import LanguagePill from '../common/LanguagePill';
 import OtherCurrencies from '../common/OtherCurrencies';
 import ShelfScopeBadge from '../common/ShelfScopeBadge';
 import { editionCurrency } from '../../utils/editions';
 import { createSearch, naturalCollator } from '../../utils/search';
-import { buildShareText, canShareText, groupByPublisher, itemText, publisherLabel, shareText, summaryText } from '../../utils/shareList';
-import {
-  PRIORITY_LABELS, priorityBadgeClass, filterWishedSeries, mergeWishedPublisherChips
-} from '../../utils/priority';
+import { buildShareText, canShareText, publisherLabel, shareText, summaryText } from '../../utils/shareList';
+import { PRIORITY_LABELS, filterWishedSeries, mergeWishedPublisherChips } from '../../utils/priority';
 import useProgressiveList from '../../hooks/useProgressiveList';
 import BarcodeScannerButton from '../common/BarcodeScannerButton';
 import CoverImage from '../common/CoverImage';
-import {
-  ShoppingCart, RefreshCw, Search, X, CircleCheck, CircleExclamationPoint, SearchX,
-  BookOpen, BuildingComplex, Check, WifiOff, ScanBarcode, Heart, Share2, Copy, Printer,
-  Users, Info, CircleQuestionMark, Clock, TriangleExclamationPoint, CirclePlus, PackageCheck
-} from 'lucide-react';
+import { ShoppingCart, RefreshCw, Search, X, CircleCheck, CircleExclamationPoint, SearchX, BuildingComplex, Check, WifiOff, ScanBarcode, Share2, Copy, Printer, TriangleExclamationPoint } from 'lucide-react';
 import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
+import ScanListPanel, { KIND_STYLE } from './shopping/ScanListPanel';
+import OthersOwnSection from './shopping/OthersOwnSection';
+import { FROM_SHOPPING, COVER_FALLBACK, PrintSheet, ListProgress, WishedSeriesSection } from './shopping/ShoppingSections';
 
 const PAGE_STEP = 50;
 // content-visibility skips layout and paint of off-screen cards
@@ -44,17 +41,9 @@ const UNDO_MS = 5000;
 const LOAD_SETTLE_MS = 400;
 // i18n
 const SESSION_EXPIRED_TEXT = 'Sitzung abgelaufen – bitte neu anmelden.';
-// MangaDetail's back link returns here instead of the shelf
-const FROM_SHOPPING = { from: '/?view=shopping' };
 // "Band 14" never breaks; longer names ("Band 1 (Special Edition)", "Special Fanbook") still wrap at their other spaces
 export const keepNumberWithWord = (text) => String(text ?? '').replace(/ (?=\d)/, '\u00a0');
 
-const KIND_STYLE = {
-  buy: [ShoppingCart, 'text-emerald-300'], claim: [PackageCheck, 'text-emerald-300'], add: [CirclePlus, 'text-emerald-300'],
-  owned: [CircleCheck, 'text-slate-400'], partner: [Users, 'text-sky-300'],
-  check: [Info, 'text-amber-300'], new: [BookOpen, 'text-sky-300'], unknown: [CircleQuestionMark, 'text-slate-400'],
-  offline: [WifiOff, 'text-amber-300'], pending: [Clock, 'text-slate-400']
-};
 
 const scanStore = () => {
   try { return window.localStorage; } catch (_) { return null; }
@@ -68,129 +57,6 @@ const withoutId = (set, id) => {
   return next;
 };
 
-const COVER_FALLBACK = (
-  <div className="w-16 h-24 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-700/60">
-    <BookOpen className="w-6 h-6" aria-hidden="true" />
-  </div>
-);
-
-const PRINT_SHEET_ID = 'shopping-print-sheet';
-const PRINT_CSS = `
-#${PRINT_SHEET_ID} { display: none; }
-@media print {
-  @page { margin: 15mm; }
-  html, body { background: #fff !important; }
-  body > *:not(#${PRINT_SHEET_ID}) { display: none !important; }
-  #${PRINT_SHEET_ID} { display: block !important; color: #000; font: 11pt/1.4 system-ui, sans-serif; }
-  #${PRINT_SHEET_ID} h1 { font-size: 16pt; font-weight: 700; margin: 0 0 2pt; }
-  #${PRINT_SHEET_ID} h2 { font-size: 12pt; font-weight: 700; margin: 12pt 0 4pt; padding-bottom: 2pt; border-bottom: 1px solid #888; break-after: avoid; }
-  #${PRINT_SHEET_ID} ul { list-style: none; margin: 0; padding: 0; }
-  #${PRINT_SHEET_ID} li { padding: 1.5pt 0; break-inside: avoid; }
-}`;
-
-/** Print-only copy of the visible list, grouped by publisher; the app around it is hidden while printing. */
-function PrintSheet({ items, wished, normalizePubName, filtered, summary }) {
-  return createPortal(
-    <div id={PRINT_SHEET_ID}>
-      {/* i18n-ignore: style sheet, no text */}
-      <style>{PRINT_CSS}</style>
-      <h1>{t('Einkaufsliste')}</h1>
-      <p>{summary}{filtered ? t(' · gefiltert') : ''}</p>
-      {groupByPublisher(items, normalizePubName).map((group) => (
-        <section key={group.publisher}>
-          <h2>{publisherLabel(group.publisher)}</h2>
-          <ul>
-            {group.items.map((item) => <li key={item.id}>☐ {itemText(item)}</li>)}
-          </ul>
-        </section>
-      ))}
-      {wished.length > 0 && (
-        <section>
-          <h2>{t('Gewünschte Reihen')}</h2>
-          <ul>
-            {wished.map((s) => <li key={s.id}>♡ {s.title}{s.publisher ? ` (${publisherLabel(s.publisher)})` : ''}</li>)}
-          </ul>
-        </section>
-      )}
-    </div>,
-    document.body
-  );
-}
-
-function ListProgress({ shown, total, onMore, sentinelRef }) {
-  return (
-    <div ref={sentinelRef} className="mt-4 flex flex-col items-center gap-2 text-xs text-slate-400">
-      <p>{t('Zeige {shown} von {total}', { shown: formatNumber(shown), total: formatNumber(total) })}</p>
-      <button type="button" onClick={onMore} className="btn-secondary text-xs py-1.5 px-3">
-        {t('Weitere anzeigen')}
-      </button>
-    </div>
-  );
-}
-
-/** Wished series: a card per series with cover, publisher, priority, what is already known to be missing. */
-function WishedSeriesSection({ series, canRemove, removing, onRemove }) {
-  return (
-    <section id="shop-wished-series" aria-labelledby="shop-wished-heading" className="space-y-3">
-      <h3 id="shop-wished-heading" className="text-sm font-bold text-slate-200 flex items-center gap-2">
-        <Heart className="w-4 h-4 text-rose-400" aria-hidden="true" />
-        {t('Gewünschte Reihen')} <span className="text-xs font-normal text-slate-400">({series.length})</span>
-      </h3>
-      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
-        {series.map((s) => (
-          <li key={s.id} className="glass-card rounded-2xl p-3 border border-rose-500/25 flex gap-3 bg-slate-900/60">
-            <CoverImage
-              src={s.cover_image}
-              className="w-16 h-24 object-cover rounded-xl shadow-md border border-slate-800 shrink-0"
-              fallback={COVER_FALLBACK}
-            />
-            <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-              <div>
-                <p className="text-xs font-bold text-white line-clamp-2 break-words hyphens-auto" title={s.title}>{s.title}</p>
-                <p className="text-[11px] text-slate-400 mt-1 truncate flex items-center gap-1">
-                  <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{publisherLabel(s.publisher)}</span>
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-lg border ${priorityBadgeClass(s.wish_priority)}`} title={t('Wunsch-Priorität')}>
-                    {s.wish_priority > 0 ? t(PRIORITY_LABELS[s.wish_priority]) : t('Wunsch')}
-                  </span>
-                  <span className="text-[11px] text-slate-300">
-                    {s.known_missing_count > 0
-                      ? t('{count} bekannt · {price}', { count: formatCount(s.known_missing_count, 'Band', 'Bände'), price: formatMoney(s.known_missing_cost, editionCurrency(s)) })
-                      : t('Noch keine Bände bekannt')}
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-2.5">
-                <Link
-                  to={`/manga/${s.id}`}
-                  state={FROM_SHOPPING}
-                  className="px-2.5 py-1.5 rounded-xl border border-brand-500/40 text-brand-300 hover:bg-brand-700 hover:text-white text-xs font-semibold"
-                  aria-label={t('Zur Reihe {title}', { title: s.title })}
-                >
-                  {t('Zur Reihe')}
-                </Link>
-                {canRemove && (
-                  <button
-                    type="button"
-                    onClick={() => onRemove(s)}
-                    disabled={removing.has(s.id)}
-                    aria-busy={removing.has(s.id) || undefined}
-                    aria-label={t('{title} von der Wunschliste nehmen', { title: s.title })}
-                    className="px-2.5 py-1.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:border-rose-500/50 text-xs font-semibold disabled:opacity-50"
-                  >
-                    {t('Von der Wunschliste')}
-                  </button>
-                )}
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 export default function ShoppingListView({
   shoppingData,
@@ -735,75 +601,19 @@ export default function ShoppingListView({
 
       {/* Scan list of the store visit */}
       {scanned.length > 0 && (
-        <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 space-y-3" id="shop-scan-list">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-bold text-white">{t('Gescannt ({count})', { count: scanned.length })}</p>
-            <div className="flex items-center gap-2">
-              {canEdit && buyable.length > 0 && (
-                <button
-                  type="button"
-                  onClick={bookAll}
-                  disabled={booking}
-                  className="btn-primary text-xs !bg-emerald-700 hover:!bg-emerald-800 disabled:opacity-50"
-                >
-                  {booking ? t('Wird gebucht...') : t('{count} als gekauft abhaken', { count: buyable.length })}
-                </button>
-              )}
-              <button type="button" onClick={clearScanned} className="btn-secondary text-xs px-3 py-1.5" disabled={booking}>{t('Leeren')}</button>
-            </div>
-          </div>
-          {canEdit && basket.length > 0 && (
-            <p className="text-xs text-slate-300" id="shop-scan-total">
-              {t('Summe: {total}', { total: basket.map((b) => formatMoney(b.total, b.currency)).join(' + ') })}
-            </p>
-          )}
-          {bookingNote && <p className="text-xs text-rose-300" role="status">{bookingNote}</p>}
-          <ul className="space-y-1.5">
-            {scanned.map((e) => {
-              const [icon, color] = KIND_STYLE[e.kind] || KIND_STYLE.unknown;
-              const Marker = e.done ? (e.queued ? Clock : Check) : (e.failed ? TriangleExclamationPoint : icon);
-              const recheck = !e.done && !booking && !isOfflineMode && (e.kind === 'offline' || e.offline);
-              return (
-                <li key={e.isbn} className={`text-xs flex items-start gap-2 ${color}`} data-kind={e.kind}>
-                  <span aria-hidden="true" className="shrink-0"><Marker className="w-3.5 h-3.5" /></span>
-                  <span className="min-w-0 flex-1">
-                    {/* i18n-ignore: scanHelpers builds the label with t() */}
-                    <span className={e.done ? 'line-through opacity-60' : ''}>{e.label}</span>
-                    {e.done && e.queued && <span className="ml-1 text-slate-400">{t('(vorgemerkt)')}</span>}
-                    {e.done && e.gone && <span className="ml-1 text-slate-400">{t('(nicht mehr auf der Liste)')}</span>}
-                    {e.booking && <span className="ml-1 text-slate-400">{t('(wird gebucht…)')}</span>}
-                    {e.kind === 'add' && !e.done && !e.booking && canEdit && <span className="ml-1 text-slate-400">{t('(wird beim Buchen angelegt)')}</span>}
-                    {!e.done && e.failed && <span className="ml-1 text-rose-300">{t('– nicht gebucht: {error}', { error: e.error })}</span>}
-                    {e.elsewhere && !e.done && (
-                      <span className="block text-amber-300" data-elsewhere>{elsewhereText(e.elsewhere)}</span>
-                    )}
-                  </span>
-                  {recheck && (
-                    <button
-                      type="button"
-                      onClick={() => handleBarcodeScan(e.isbn, { network: true })}
-                      className="shrink-0 text-[11px] text-brand-300 hover:text-white underline"
-                    >
-                      {t('Erneut prüfen')}
-                    </button>
-                  )}
-                  {!e.booking && (
-                    <button
-                      type="button"
-                      onClick={() => updateScanned((prev) => removeScanEntry(prev, e.isbn))}
-                      disabled={booking}
-                      className="hit-44 shrink-0 text-slate-400 hover:text-white rounded disabled:opacity-50"
-                      aria-label={t('Scan entfernen: {label}', { label: e.label })}
-                      title={t('Scan entfernen: {label}', { label: e.label })}
-                    >
-                      <X className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <ScanListPanel
+          scanned={scanned}
+          canEdit={canEdit}
+          buyable={buyable}
+          basket={basket}
+          booking={booking}
+          bookingNote={bookingNote}
+          isOfflineMode={isOfflineMode}
+          onBookAll={bookAll}
+          onClear={clearScanned}
+          onRecheck={(isbn) => handleBarcodeScan(isbn, { network: true })}
+          onRemove={(isbn) => updateScanned((prev) => removeScanEntry(prev, isbn))}
+        />
       )}
 
       {/* Shopping Summary Card */}
@@ -1148,42 +958,7 @@ export default function ShoppingListView({
 
       {/* Volumes that other users own in series I also collect */}
       {visibleOthers.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-sm font-bold text-slate-200 mb-1">{t('Bei anderen vorhanden')}</h3>
-          <p className="text-xs text-slate-400 mb-3">{t('Diese Bände besitzen andere Nutzer in Reihen, die du auch sammelst.')}</p>
-          <ul className="divide-y divide-slate-800/80 rounded-2xl border border-slate-800 bg-slate-950/60">
-            {otherPages.visible.map(item => {
-              const busy = claiming.has(item.id);
-              return (
-                <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs [content-visibility:auto] [contain-intrinsic-block-size:auto_48px]">
-                  <div className="min-w-0">
-                    <Link to={`/manga/${item.manga_id}`} state={FROM_SHOPPING} className="font-semibold text-slate-100 hover:text-brand-300 truncate block">
-                      {item.manga_title} {getVolumeDisplayTitle({ volume_number: item.volume_number, type: item.type, notes: item.notes })}
-                    </Link>
-                    <span className="text-slate-400">{t('Besitzt: {owners}', { owners: item.owned_by_others })}</span>
-                    {claimErrors[item.id] && <span className="block text-rose-300" role="alert">{claimErrors[item.id]}</span>}
-                  </div>
-                  {canEdit && (
-                    <button
-                      type="button"
-                      onClick={() => handleClaim(item)}
-                      disabled={busy || isOfflineMode}
-                      aria-busy={busy || undefined}
-                      className="shrink-0 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-700 hover:text-white font-semibold disabled:opacity-50 disabled:hover:bg-transparent flex items-center gap-1"
-                      title={isOfflineMode ? t('Nur online möglich') : t('Ich besitze diesen Band auch')}
-                    >
-                      {busy && <RefreshCw className="w-3 h-3 animate-spin" aria-hidden="true" />}
-                      {t('Ich habe ihn auch')}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-          {otherPages.hasMore && (
-            <ListProgress shown={otherPages.shown} total={otherPages.total} onMore={otherPages.showMore} sentinelRef={otherPages.sentinelRef} />
-          )}
-        </div>
+        <OthersOwnSection pages={otherPages} claiming={claiming} claimErrors={claimErrors} canEdit={canEdit} isOfflineMode={isOfflineMode} onClaim={handleClaim} />
       )}
     </div>
   );

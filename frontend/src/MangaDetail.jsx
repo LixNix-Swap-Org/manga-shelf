@@ -1,6 +1,6 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, lazy, Suspense } from 'react';
-import { useParams, Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
-import { ArrowLeft, Layers, Plus, BookOpen, BookCheck, RotateCcw, TriangleExclamationPoint, Library } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, RotateCcw, TriangleExclamationPoint, Library } from 'lucide-react';
 import VolumeListView from './components/detail/VolumeListView';
 import VolumeShelfView from './components/detail/VolumeShelfView';
 import VolumeGridView from './components/detail/VolumeGridView';
@@ -17,6 +17,9 @@ import SeriesInfo from './components/detail/SeriesInfo';
 import useTabList from './hooks/useTabList';
 import ShelfSpine from './components/detail/ShelfSpine';
 import BulkActionBar from './components/detail/BulkActionBar';
+import VolumesHeader from './components/detail/VolumesHeader';
+import VolumesEmptyState from './components/detail/VolumesEmptyState';
+import DetailDialogs from './components/detail/DetailDialogs';
 import DetailBottomBar, { revealAboveKeyboard } from './components/detail/DetailBottomBar';
 import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './components/common/PageChrome';
 import useMangaData from './hooks/useMangaData';
@@ -31,85 +34,14 @@ import { PURCHASE_RECORDED_EVENT } from './appShell';
 import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
 import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
-import { viewSessionEnding } from './utils/viewState';
-import { inferVolumeType, regularVolumeNumber, normalizePubName, getSeriesProgress, getVolumeProgressCounts, getVolumeDisplayTitle, buildDisplayVolumeItems, hasUserRead } from './utils/volumeHelpers';
+import { useDetailScroll, findDuplicateEntries, backLinkTarget } from './components/detail/detailPage';
+import { inferVolumeType, normalizePubName, getSeriesProgress, getVolumeProgressCounts, buildDisplayVolumeItems, hasUserRead } from './utils/volumeHelpers';
 import { t } from './i18n/index.js';
 import { useShelfAccess } from './hooks/useShelfViewer';
 import { editionCurrency } from './utils/editions';
-import { rich } from './i18n/react.jsx';
 
-// dialogs are loaded on first use and mounted only while open
-const VolumeEditModal = lazy(() => import('./components/detail/VolumeEditModal'));
-const BatchAddModal = lazy(() => import('./components/detail/BatchAddModal'));
-const BatchReadModal = lazy(() => import('./components/detail/BatchReadModal'));
-const GapFillModal = lazy(() => import('./components/detail/GapFillModal'));
-const LightboxGallery = lazy(() => import('./components/detail/LightboxGallery'));
-const MpEditionModal = lazy(() => import('./components/detail/MpEditionModal'));
+export { DETAIL_SCROLL_KEY, findDuplicateEntries, backLinkTarget } from './components/detail/detailPage';
 
-export const DETAIL_SCROLL_KEY = 'mangashelf_detail_scroll';
-const MAX_SCROLL_ENTRIES = 30;
-
-function readScrollPositions() {
-  try {
-    const map = JSON.parse(window.sessionStorage.getItem(DETAIL_SCROLL_KEY));
-    return map && typeof map === 'object' ? map : {};
-  } catch (_) {
-    return {};
-  }
-}
-
-/**
- * A series opened by a link starts at the top (the shelf may have been scrolled far down); Back / Forward to a
- * history entry returns to where that entry was left. Positions are kept per entry for this tab.
- */
-function useDetailScroll(ready) {
-  const location = useLocation();
-  const navigationType = useNavigationType();
-  const handled = useRef(null);
-
-  useLayoutEffect(() => {
-    if (!ready || handled.current === location.key) return;
-    handled.current = location.key;
-    const target = navigationType === 'POP' ? Number(readScrollPositions()[location.key]) || 0 : 0;
-    if (window.scrollY !== target) window.scrollTo(0, target);
-  }, [ready, location.key, navigationType]);
-
-  useLayoutEffect(() => {
-    const entryKey = location.key;
-    let y = window.scrollY;
-    const onScroll = () => { y = window.scrollY; };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (viewSessionEnding()) return;
-      const map = readScrollPositions();
-      delete map[entryKey];
-      map[entryKey] = Math.round(y);
-      const keys = Object.keys(map);
-      for (const old of keys.slice(0, Math.max(0, keys.length - MAX_SCROLL_ENTRIES))) delete map[old];
-      try { window.sessionStorage.setItem(DETAIL_SCROLL_KEY, JSON.stringify(map)); } catch (_) { /* storage unavailable */ }
-    };
-  }, [location.key]);
-}
-
-/** Same type and number more than once; "Band 5" and "5" are the same regular volume (the server rejects that pair too). */
-export function findDuplicateEntries(volumes) {
-  const groups = new Map();
-  for (const v of volumes || []) {
-    const type = inferVolumeType(v);
-    const regular = type === 'volume' ? regularVolumeNumber(v) : null;
-    const key = `${type}:${regular !== null ? regular : String(v.volume_number ?? '').trim().toLowerCase()}`;
-    groups.set(key, [...(groups.get(key) || []), v]);
-  }
-  return [...groups.values()].filter(g => g.length > 1).map(g => ({ label: getVolumeDisplayTitle(g[0]), count: g.length }));
-}
-
-/** Where "Zurück zur Übersicht" leads: the in-app page that linked here (e.g. the shopping list), else the shelf. */
-export function backLinkTarget(state) {
-  const from = state?.from;
-  if (typeof from !== 'string' || !from.startsWith('/') || from.startsWith('//') || from.includes('\\')) return '/';
-  return from;
-}
 
 // phones: room for the context bar (3.5rem + inset) and, offline, the banner; a selection's bar sits above it
 const PAGE_CLASS = 'min-h-screen pb-20 overflow-x-clip max-sm:[&_#bulk-action-bar]:bottom-[calc(4.25rem+env(safe-area-inset-bottom))]';
@@ -649,39 +581,12 @@ export default function MangaDetail({ user, onUnauthorized }) {
         {detailTab === 'baende' && (
         <section aria-labelledby="volumes-heading" className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-2xl">
           
-          {/* Header & Controls */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-6 border-b border-slate-800">
-            <div>
-              <h2 id="volumes-heading" className="text-xl font-bold text-white flex items-center gap-2.5">
-                <Layers className="w-5 h-5 text-brand-400" />
-                {t('Bände-Checkliste')}
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                {rich('Klicke auf das Häkchen für Schnell-Status oder auf die Karte für {details}', { details: <b>{t('Preise & Detailangaben')}</b> })}
-              </p>
-            </div>
-
-            {/* Quick Actions */}
-            {baseCanEdit && (
-              <div className="flex flex-wrap items-center gap-2">
-                <button 
-                  onClick={() => setShowBatchReadModal(true)} 
-                  className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
-                  title={t('Mehrere Bände auf einmal als gelesen oder ungelesen markieren')}
-                >
-                  <BookCheck className="w-3.5 h-3.5 text-emerald-400" /> {t('Bis Band X als gelesen')}
-                </button>
-                {canEdit && (
-                  <button 
-                    onClick={() => setShowBatchModal(true)} 
-                    className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <VolumesHeader
+            canEdit={canEdit}
+            canBatchRead={Boolean(baseCanEdit)}
+            onBatchRead={() => setShowBatchReadModal(true)}
+            onBatchAdd={() => setShowBatchModal(true)}
+          />
 
           {/* Reading row: reader / ownership chip, "+ Band n gelesen", progress */}
           <ReaderBar
@@ -788,23 +693,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
 
           {/* Volumes Grid */}
           {displayVolumeItems.length === 0 ? (
-            <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60 my-4">
-              <BookOpen className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-              <p className="text-sm text-slate-400">
-                {volumes.length === 0 
-                  ? t('Noch keine Bände erfasst. Nutze untenstehendes Feld oder "Mehrere Bände", um loszulegen.') 
-                  : t('Keine Bände mit diesen Filtereinstellungen gefunden.')}
-              </p>
-              {volumes.length > 0 && hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={handleResetFilters}
-                  className="mt-3.5 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600/30 hover:bg-brand-600/50 text-brand-300 border border-brand-500/40 transition-all cursor-pointer shadow-sm"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> {t('Filter zurücksetzen')}
-                </button>
-              )}
-            </div>
+            <VolumesEmptyState hasVolumes={volumes.length > 0} hasActiveFilters={hasActiveFilters} onResetFilters={handleResetFilters} />
           ) : (
             <>
 
@@ -937,92 +826,40 @@ export default function MangaDetail({ user, onUnauthorized }) {
         onAddVolume={focusAddVolume}
       />
 
-      {/* MODALS & OVERLAYS */}
-      <Suspense fallback={null}>
-        {activeVolume && (
-          <VolumeEditModal
-            isOpen
-            activeVolume={editingVolume}
-            onClose={() => setActiveVolume(null)}
-            manga={manga}
-            mangaId={id}
-            canEdit={canEdit}
-            user={user}
-            onSuccess={fetchManga}
-          />
-        )}
-
-        {showBatchModal && (
-          <BatchAddModal
-            isOpen
-            onClose={() => setShowBatchModal(false)}
-            manga={manga}
-            mangaId={id}
-            volumes={manga?.volumes}
-            officialTotal={mpGapData?.total_official_volumes}
-            people={readers}
-            user={user}
-            onSuccess={fetchManga}
-          />
-        )}
-
-        {showBatchReadModal && (
-          <BatchReadModal
-            isOpen
-            onClose={() => setShowBatchReadModal(false)}
-            mangaId={id}
-            readers={readers}
-            selectedReaderId={selectedReaderId}
-            user={user}
-            onSuccess={fetchManga}
-          />
-        )}
-
-        {fillingGapNumber !== null && (
-          <GapFillModal
-            isOpen
-            gapNumber={fillingGapNumber}
-            onClose={() => setFillingGapNumber(null)}
-            manga={manga}
-            mangaId={id}
-            mpGapMap={mpGapMap}
-            canEdit={canEdit}
-            gapEditionUnconfirmed={gapEditionUnconfirmed}
-            onSuccess={async () => {
-              await fetchManga();
-              await fetchMpGaps();
-            }}
-          />
-        )}
-
-        {lightboxData && (
-          <LightboxGallery
-            lightboxData={lightboxData}
-            setLightboxData={setLightboxData}
-            onClose={() => setLightboxData(null)}
-            canEdit={canEdit}
-            onSuccess={fetchManga}
-          />
-        )}
-
-        {showMpEditionModal && mpEnabled && (
-          <MpEditionModal
-            isOpen
-            onClose={() => setShowMpEditionModal(false)}
-            manga={manga}
-            mpGapData={mpGapData}
-            mpGapLoading={mpGapLoading}
-            mpGapNotice={mpGapNotice}
-            canEdit={canEdit}
-            isOffline={isOffline}
-            fetchMpGaps={fetchMpGaps}
-            handleSyncTotalVolumes={handleSyncTotalVolumes}
-            handleBatchAutofillManga={handleBatchAutofillManga}
-            batchAutofilling={batchAutofilling}
-            handleSelectMpEdition={handleSelectMpEdition}
-          />
-        )}
-      </Suspense>
+      <DetailDialogs
+        mangaId={id}
+        activeVolume={activeVolume}
+        editingVolume={editingVolume}
+        setActiveVolume={setActiveVolume}
+        manga={manga}
+        canEdit={canEdit}
+        user={user}
+        fetchManga={fetchManga}
+        showBatchModal={showBatchModal}
+        setShowBatchModal={setShowBatchModal}
+        mpGapData={mpGapData}
+        readers={readers}
+        showBatchReadModal={showBatchReadModal}
+        setShowBatchReadModal={setShowBatchReadModal}
+        selectedReaderId={selectedReaderId}
+        fillingGapNumber={fillingGapNumber}
+        setFillingGapNumber={setFillingGapNumber}
+        mpGapMap={mpGapMap}
+        gapEditionUnconfirmed={gapEditionUnconfirmed}
+        fetchMpGaps={fetchMpGaps}
+        lightboxData={lightboxData}
+        setLightboxData={setLightboxData}
+        showMpEditionModal={showMpEditionModal}
+        mpEnabled={mpEnabled}
+        setShowMpEditionModal={setShowMpEditionModal}
+        mpGapLoading={mpGapLoading}
+        mpGapNotice={mpGapNotice}
+        isOffline={isOffline}
+        handleSyncTotalVolumes={handleSyncTotalVolumes}
+        handleBatchAutofillManga={handleBatchAutofillManga}
+        batchAutofilling={batchAutofilling}
+        handleSelectMpEdition={handleSelectMpEdition}
+      />
 
     </div>
   );
