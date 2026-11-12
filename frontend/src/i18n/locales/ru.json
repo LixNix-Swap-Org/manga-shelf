@@ -3863,5 +3863,13 @@
   "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Недопустимый приоритет желания (пусто или от 0 до 3)",
   "Haushalts-Wunsch für {title} entfernen": "Убрать желание семьи для {title}",
   "Haushalts-Wunsch entfernen": "Убрать желание семьи",
-  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Желание семьи для «{title}» убрано; другие ещё хотят"
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Желание семьи для «{title}» убрано; другие ещё хотят",
+  "Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.": "Дополнительные экземпляры учитываются в стоимости, но не в числе томов.",
+  "{n} weiteres Exemplar|{n} weitere Exemplare": {
+    "one": "{n} дополнительный экземпляр",
+    "few": "{n} дополнительных экземпляра",
+    "many": "{n} дополнительных экземпляров",
+    "other": "{n} дополнительного экземпляра"
+  },
+  "Ungültige weitere Exemplare": "Недопустимые дополнительные экземпляры"
 }

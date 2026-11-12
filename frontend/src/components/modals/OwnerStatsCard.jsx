@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { fmtEuro, countLabel, cssPct } from './statsFormat';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 
 function OwnerPublishers({ rows }) {
   return (
@@ -36,6 +36,7 @@ export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
     return next;
   });
   const anyShared = ownerStats.some(o => o.shared_count > 0);
+  const anyExtra = ownerStats.some(o => o.extra_copies > 0);
 
   return (
     <div id="stats-owners" className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
@@ -52,6 +53,7 @@ export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
                 <span className="text-slate-400 text-right">
                   {countLabel(o.volume_count, 'Band', 'Bände')} · {countLabel(o.series_count, 'Reihe', 'Reihen')} · {fmtEuro(o.total_value)}
                   {o.shared_count > 0 && <span className="text-amber-300"> · {t('{count} geteilt', { count: o.shared_count })}</span>}
+                  {o.extra_copies > 0 && <span className="text-sky-300"> · {tn('{n} weiteres Exemplar', '{n} weitere Exemplare', o.extra_copies)}</span>}
                 </span>
               </div>
               <div aria-hidden="true" className="h-2 rounded-full bg-slate-900 overflow-hidden border border-slate-800">
@@ -78,6 +80,9 @@ export default function OwnerStatsCard({ ownerStats, ownerPublishers = [] }) {
       </div>
       {anyShared && (
         <p className="text-[10px] text-slate-400 mt-3">{t('Geteilte Bände zählen bei jedem Besitzer voll; Wert = Listenpreis des Bands.')}</p>
+      )}
+      {anyExtra && (
+        <p className="text-[10px] text-slate-400 mt-1">{t('Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.')}</p>
       )}
     </div>
   );

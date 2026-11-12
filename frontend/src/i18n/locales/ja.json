@@ -3542,5 +3542,10 @@
   "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "希望の優先度が不正です（空または0〜3）",
   "Haushalts-Wunsch für {title} entfernen": "{title}の家庭の希望を外す",
   "Haushalts-Wunsch entfernen": "家庭の希望を外す",
-  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "「{title}」の家庭の希望を外しました（他の人はまだ希望しています）"
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "「{title}」の家庭の希望を外しました（他の人はまだ希望しています）",
+  "Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.": "追加の冊は金額に含まれ、巻数には含まれません。",
+  "{n} weiteres Exemplar|{n} weitere Exemplare": {
+    "other": "追加 {n} 冊"
+  },
+  "Ungültige weitere Exemplare": "追加の冊が無効です"
 }

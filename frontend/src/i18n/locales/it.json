@@ -3756,5 +3756,12 @@
   "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Priorità del desiderio non valida (vuota o da 0 a 3)",
   "Haushalts-Wunsch für {title} entfernen": "Rimuovi il desiderio della casa per {title}",
   "Haushalts-Wunsch entfernen": "Rimuovi desiderio della casa",
-  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Desiderio della casa per «{title}» rimosso; altri lo desiderano ancora"
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Desiderio della casa per «{title}» rimosso; altri lo desiderano ancora",
+  "Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.": "Le copie aggiuntive contano nel valore, non nel numero di volumi.",
+  "{n} weiteres Exemplar|{n} weitere Exemplare": {
+    "one": "{n} copia aggiuntiva",
+    "many": "{n} copie aggiuntive",
+    "other": "{n} copie aggiuntive"
+  },
+  "Ungültige weitere Exemplare": "Copie aggiuntive non valide"
 }

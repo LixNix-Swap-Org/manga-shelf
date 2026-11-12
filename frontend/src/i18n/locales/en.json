@@ -3649,5 +3649,11 @@
   "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Invalid wish priority (empty or 0 to 3)",
   "Haushalts-Wunsch für {title} entfernen": "Remove the household wish for {title}",
   "Haushalts-Wunsch entfernen": "Remove household wish",
-  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Household wish for “{title}” removed; others still wish for it"
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Household wish for “{title}” removed; others still wish for it",
+  "Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.": "Extra copies count toward the value, not the volume count.",
+  "{n} weiteres Exemplar|{n} weitere Exemplare": {
+    "one": "{n} extra copy",
+    "other": "{n} extra copies"
+  },
+  "Ungültige weitere Exemplare": "Invalid extra copies"
 }

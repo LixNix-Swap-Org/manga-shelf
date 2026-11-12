@@ -3542,5 +3542,10 @@
   "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "잘못된 위시 우선순위입니다 (비우거나 0~3)",
   "Haushalts-Wunsch für {title} entfernen": "{title}의 가정 위시 제거",
   "Haushalts-Wunsch entfernen": "가정 위시 제거",
-  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "„{title}“의 가정 위시를 제거했습니다. 다른 사람은 아직 원합니다"
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "„{title}“의 가정 위시를 제거했습니다. 다른 사람은 아직 원합니다",
+  "Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.": "추가 사본은 금액에는 포함되고 권수에는 포함되지 않습니다.",
+  "{n} weiteres Exemplar|{n} weitere Exemplare": {
+    "other": "추가 사본 {n}권"
+  },
+  "Ungültige weitere Exemplare": "추가 사본이 잘못되었습니다"
 }

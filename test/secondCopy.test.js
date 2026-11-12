@@ -121,3 +121,14 @@ test('undo of "Besitze ich" off brings every copy of the person back', async () 
     const bad = await editor('POST', `/volumes/${volumeId}/owners`, { owned: false, extra_copies: 'x' });
     assert.equal(bad.status, 400);
 });
+
+test('a second copy counts toward the person\'s value in the statistics, not their volume count', async () => {
+    const mine = async () => (await editor('GET', '/stats')).body.owner_stats.find((o) => o.user_id === ids.ed);
+    const { volumeId } = await ownedVolume('Statistik-Doppel');
+    const before = await mine();
+    assert.equal((await editor('POST', `/volumes/${volumeId}/copies`, {})).status, 200);
+    const after = await mine();
+    assert.equal(after.volume_count, before.volume_count);
+    assert.equal(after.extra_copies, before.extra_copies + 1);
+    assert.equal(after.total_value, before.total_value + 7, 'the extra copy counts with the list price');
+});

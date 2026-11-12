@@ -140,9 +140,10 @@ const TOP_SERIES_SQL = `
 const OWNER_STATS_SQL = `
     SELECT u.id as user_id, u.username,
            COALESCE(o.volume_count, 0) as volume_count,
-           COALESCE(o.total_value, 0) as total_value,
+           COALESCE(o.total_value, 0) + COALESCE(x.extra_value, 0) as total_value,
            COALESCE(o.series_count, 0) as series_count,
-           COALESCE(o.shared_count, 0) as shared_count
+           COALESCE(o.shared_count, 0) as shared_count,
+           COALESCE(x.extra_copies, 0) as extra_copies
     FROM users u
     LEFT JOIN (
         SELECT vo.user_id, count(*) AS volume_count, SUM(COALESCE(${EURO_PRICE}, 0)) AS total_value,
@@ -153,6 +154,16 @@ const OWNER_STATS_SQL = `
         JOIN (SELECT volume_id, count(*) AS owners FROM {volume_owners} GROUP BY volume_id) oc ON oc.volume_id = vo.volume_id
         GROUP BY vo.user_id
     ) o ON o.user_id = u.id
+    LEFT JOIN (
+        -- a person's further copies of a volume ("Weiteres Exemplar"): each counts with the volume's list price
+        SELECT c.owner_user_id AS user_id, count(*) AS extra_copies, SUM(COALESCE(${EURO_PRICE}, 0)) AS extra_value
+        FROM {volume_copies} c
+        JOIN {volumes} v ON v.id = c.volume_id AND v.status = 'Vorhanden'
+        JOIN {mangas} m ON m.id = v.manga_id
+        WHERE c.owner_user_id IS NOT NULL
+          AND EXISTS (SELECT 1 FROM {volume_copies} f WHERE f.volume_id = c.volume_id AND f.owner_user_id = c.owner_user_id AND f.id < c.id)
+        GROUP BY c.owner_user_id
+    ) x ON x.user_id = u.id
     ORDER BY u.id
 `;
 

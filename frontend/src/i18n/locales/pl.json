@@ -3863,5 +3863,13 @@
   "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Nieprawidłowy priorytet życzenia (puste lub od 0 do 3)",
   "Haushalts-Wunsch für {title} entfernen": "Usuń życzenie domowe dla {title}",
   "Haushalts-Wunsch entfernen": "Usuń życzenie domowe",
-  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Usunięto życzenie domowe dla „{title}”; inni nadal tego chcą"
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Usunięto życzenie domowe dla „{title}”; inni nadal tego chcą",
+  "Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.": "Dodatkowe egzemplarze liczą się do wartości, nie do liczby tomów.",
+  "{n} weiteres Exemplar|{n} weitere Exemplare": {
+    "one": "{n} dodatkowy egzemplarz",
+    "few": "{n} dodatkowe egzemplarze",
+    "many": "{n} dodatkowych egzemplarzy",
+    "other": "{n} dodatkowego egzemplarza"
+  },
+  "Ungültige weitere Exemplare": "Nieprawidłowe dodatkowe egzemplarze"
 }

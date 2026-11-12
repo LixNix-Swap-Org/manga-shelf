@@ -3756,5 +3756,12 @@
   "Ungültige Wunsch-Priorität (leer oder 0 bis 3)": "Prioridad de deseo no válida (vacía o de 0 a 3)",
   "Haushalts-Wunsch für {title} entfernen": "Quitar el deseo del hogar para {title}",
   "Haushalts-Wunsch entfernen": "Quitar deseo del hogar",
-  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Deseo del hogar para «{title}» quitado; otros aún lo desean"
+  "Haushalts-Wunsch für „{title}“ entfernt, andere wünschen sie sich noch": "Deseo del hogar para «{title}» quitado; otros aún lo desean",
+  "Weitere Exemplare zählen im Wert mit, nicht bei den Bänden.": "Los ejemplares adicionales cuentan en el valor, no en los tomos.",
+  "{n} weiteres Exemplar|{n} weitere Exemplare": {
+    "one": "{n} ejemplar adicional",
+    "many": "{n} ejemplares adicionales",
+    "other": "{n} ejemplares adicionales"
+  },
+  "Ungültige weitere Exemplare": "Ejemplares adicionales no válidos"
 }
