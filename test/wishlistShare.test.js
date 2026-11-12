@@ -68,3 +68,10 @@ test('a wrong token, a calendar token, a renewed or revoked link answer 404', as
     assert.equal((await lena('DELETE', '/wishlist/share-token')).status, 200);
     assert.equal((await page(renewed)).status, 404);
 });
+
+test('a password change ends the link, like a calendar address', async () => {
+    const made = await lena('POST', '/wishlist/share-token');
+    assert.equal((await page(tokenOf(made.body))).status, 200);
+    assert.equal((await lena('PUT', '/auth/password', { current_password: 'password123', new_password: 'password1234' })).status, 200);
+    assert.equal((await page(tokenOf(made.body))).status, 404);
+});

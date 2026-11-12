@@ -3820,5 +3820,6 @@
     "one": "Atividade do último dia",
     "many": "Atividade dos últimos {n} dias",
     "other": "Atividade dos últimos {n} dias"
-  }
+  },
+  "Das Datum des Verleihens liegt in der Zukunft": "A data do empréstimo está no futuro"
 }

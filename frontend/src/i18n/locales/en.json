@@ -3708,5 +3708,6 @@
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "one": "Activity of the last day",
     "other": "Activity of the last {n} days"
-  }
+  },
+  "Das Datum des Verleihens liegt in der Zukunft": "The lending date is in the future"
 }

@@ -3708,5 +3708,6 @@
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "one": "Activiteit van de afgelopen dag",
     "other": "Activiteit van de afgelopen {n} dagen"
-  }
+  },
+  "Das Datum des Verleihens liegt in der Zukunft": "De uitleendatum ligt in de toekomst"
 }

@@ -3708,5 +3708,6 @@
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "one": "Son {n} günün etkinliği",
     "other": "Son {n} günün etkinliği"
-  }
+  },
+  "Das Datum des Verleihens liegt in der Zukunft": "Ödünç verme tarihi gelecekte"
 }

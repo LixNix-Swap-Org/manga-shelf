@@ -3596,5 +3596,6 @@
   },
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "other": "过去 {n} 天的动态"
-  }
+  },
+  "Das Datum des Verleihens liegt in der Zukunft": "借出日期在未来"
 }

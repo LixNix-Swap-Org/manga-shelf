@@ -11,7 +11,10 @@ const { volumeOrderSql } = require('../lib/volumeNumber');
 const DEFAULT_DAYS = 30;
 const MAX_DAYS = 365;
 const LIMIT = 150;
-// a change within this many seconds of the volume being added or owned by the same person is that step, not another
+// the request that adds a row also stamps updated_at/updated_by: within these seconds of created_at it is the creator.
+// A later change (by anyone) overwrites that stamp, so the creator is no longer known and the entry has no name.
+const CREATE_STEP_SECONDS = 5;
+// a volume change within this many seconds of the same person's new copy of it is that step ("owned"), not another
 const SAME_STEP_SECONDS = 120;
 
 // one row per volume event: kind, at (UTC 'YYYY-MM-DD HH:MM:SS'), user_id, volume_id, manga_id
@@ -23,25 +26,25 @@ const VOLUME_EVENTS_SQL = `
     FROM {volume_copies} c WHERE c.owner_user_id IS NOT NULL AND datetime(c.created_at) >= ?
     UNION ALL
     SELECT 'added', datetime(v.created_at),
-           CASE WHEN v.updated_at IS NOT NULL AND abs(strftime('%s', v.updated_at) - strftime('%s', v.created_at)) <= ${SAME_STEP_SECONDS} THEN v.updated_by END,
+           CASE WHEN v.updated_at IS NOT NULL AND abs(strftime('%s', v.updated_at) - strftime('%s', v.created_at)) <= ${CREATE_STEP_SECONDS} THEN v.updated_by END,
            v.id
     FROM {volumes} v WHERE datetime(v.created_at) >= ?
     UNION ALL
     SELECT 'changed', datetime(v.updated_at), v.updated_by, v.id
     FROM {volumes} v WHERE v.updated_at IS NOT NULL AND datetime(v.updated_at) >= ?
-      AND (v.created_at IS NULL OR strftime('%s', v.updated_at) - strftime('%s', v.created_at) > ${SAME_STEP_SECONDS})
+      AND (v.created_at IS NULL OR strftime('%s', v.updated_at) - strftime('%s', v.created_at) > ${CREATE_STEP_SECONDS})
       AND NOT EXISTS (SELECT 1 FROM {volume_copies} c WHERE c.volume_id = v.id AND c.owner_user_id = v.updated_by
                       AND abs(strftime('%s', c.created_at) - strftime('%s', v.updated_at)) <= ${SAME_STEP_SECONDS})
 `;
 
 const SERIES_EVENTS_SQL = `
     SELECT 'series_added' AS kind, datetime(m.created_at) AS at, m.id AS manga_id,
-           CASE WHEN m.updated_at IS NOT NULL AND abs(strftime('%s', m.updated_at) - strftime('%s', m.created_at)) <= ${SAME_STEP_SECONDS} THEN m.updated_by END AS user_id
+           CASE WHEN m.updated_at IS NOT NULL AND abs(strftime('%s', m.updated_at) - strftime('%s', m.created_at)) <= ${CREATE_STEP_SECONDS} THEN m.updated_by END AS user_id
     FROM {mangas} m WHERE datetime(m.created_at) >= ?
     UNION ALL
     SELECT 'series_changed', datetime(m.updated_at), m.id, m.updated_by
     FROM {mangas} m WHERE m.updated_at IS NOT NULL AND m.updated_by IS NOT NULL AND datetime(m.updated_at) >= ?
-      AND (m.created_at IS NULL OR strftime('%s', m.updated_at) - strftime('%s', m.created_at) > ${SAME_STEP_SECONDS})
+      AND (m.created_at IS NULL OR strftime('%s', m.updated_at) - strftime('%s', m.created_at) > ${CREATE_STEP_SECONDS})
 `;
 
 const pad = (n) => String(n).padStart(2, '0');

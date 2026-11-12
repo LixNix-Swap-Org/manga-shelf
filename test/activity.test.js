@@ -50,6 +50,15 @@ test('reads, owned copies, new volumes and series, grouped per person, series an
     assert.deepEqual(times, [...times].sort().reverse());
 });
 
+test('a change by someone else after the creation is a change, never credited as the creation', async () => {
+    const { id } = (await lena('POST', '/mangas', { title: 'Wer legte an' })).body;
+    const db = require('../db').db;
+    db.prepare("UPDATE mangas SET created_at = datetime(created_at, '-1 minute'), updated_at = datetime(updated_at, '-1 minute') WHERE id = ?").run(id);
+    assert.equal((await admin('PUT', `/mangas/${id}`, { title: 'Wer legte an', description: 'admin' })).status, 200);
+    const mine = (await lena('GET', '/activity')).body.items.filter(i => i.manga_id === id).map(i => [i.kind, i.username]);
+    assert.deepEqual(mine.sort(), [['series_added', null], ['series_changed', 'admin']]);
+});
+
 test('only the caller\'s shelves, a foreign shelf is 404, days is clamped', async () => {
     const foreign = (await admin('POST', '/shelves', { name: 'Nur Admin' })).body.id;
     await admin('POST', '/mangas', { title: 'Geheim', shelf_id: foreign });

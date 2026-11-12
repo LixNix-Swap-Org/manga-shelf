@@ -132,3 +132,12 @@ test('a second copy counts toward the person\'s value in the statistics, not the
     assert.equal(after.extra_copies, before.extra_copies + 1);
     assert.equal(after.total_value, before.total_value + 7, 'the extra copy counts with the list price');
 });
+
+test('a lending date ahead of today is refused', async () => {
+    const { volumeId } = await ownedVolume('Verleih Zukunft');
+    const copy = (await editor('GET', `/volumes/${volumeId}`)).body?.copies?.[0]
+        ?? (await editor('POST', `/volumes/${volumeId}/copies`, {})).body.copy;
+    const res = await editor('PUT', `/volumes/${volumeId}/copies/${copy.id}`, { lent: { name: 'Mia', at: '2099-01-01' } });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, 'Das Datum des Verleihens liegt in der Zukunft');
+});

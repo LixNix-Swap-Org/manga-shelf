@@ -3932,5 +3932,6 @@
     "few": "Aktywność z ostatnich {n} dni",
     "many": "Aktywność z ostatnich {n} dni",
     "other": "Aktywność z ostatnich {n} dni"
-  }
+  },
+  "Das Datum des Verleihens liegt in der Zukunft": "Data wypożyczenia jest w przyszłości"
 }

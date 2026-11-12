@@ -3596,5 +3596,6 @@
   },
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "other": "최근 {n}일 활동"
-  }
+  },
+  "Das Datum des Verleihens liegt in der Zukunft": "대여 날짜가 미래입니다"
 }
