@@ -3597,5 +3597,9 @@
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "other": "过去 {n} 天的动态"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "借出日期在未来"
+  "Das Datum des Verleihens liegt in der Zukunft": "借出日期在未来",
+  "mit Band {volume}": "连同第 {volume} 卷",
+  "mit Bänden {volumes}": "连同第 {volumes} 卷",
+  "{name} hat „{title}“ {vols} angelegt": "{name} 新建了《{title}》，{vols}",
+  "„{title}“ {vols} angelegt": "已新建《{title}》，{vols}"
 }

@@ -34,14 +34,14 @@ test('reads, owned copies, new volumes and series, grouped per person, series an
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const mine = res.body.items.filter(i => i.manga_id === id);
     const brief = mine.map(i => [i.kind, i.username, i.volumes]).sort((a, b) => a[0].localeCompare(b[0]) || String(a[1]).localeCompare(String(b[1])));
-    // who added volume 3 is gone with its later change (volumes keep only the last one): added without a name
+    // who added volume 3 is gone with its later change (volumes keep only the last one): added without a name;
+    // volumes 1 and 2 are part of Lena's new series
     assert.deepEqual(brief, [
-        ['added', 'Lena', ['1', '2']],
         ['added', null, ['3']],
         ['changed', 'admin', ['3']],
         ['owned', 'Lena', ['1', '2', '3']],
         ['read', 'admin', ['1', '2']],
-        ['series_added', 'Lena', []]
+        ['series_added', 'Lena', ['1', '2']]
     ]);
     assert.ok(mine.every(i => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(i.at)));
     assert.equal(mine[0].title, 'Verlauf-Reihe');

@@ -3597,5 +3597,9 @@
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "other": "過去{n}日間のアクティビティ"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "貸し出し日が未来の日付です"
+  "Das Datum des Verleihens liegt in der Zukunft": "貸し出し日が未来の日付です",
+  "mit Band {volume}": "第{volume}巻と一緒に",
+  "mit Bänden {volumes}": "第{volumes}巻と一緒に",
+  "{name} hat „{title}“ {vols} angelegt": "{name}さんが「{title}」を{vols}登録しました",
+  "„{title}“ {vols} angelegt": "「{title}」を{vols}登録"
 }

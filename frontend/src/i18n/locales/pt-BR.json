@@ -3821,5 +3821,9 @@
     "many": "Atividade dos últimos {n} dias",
     "other": "Atividade dos últimos {n} dias"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "A data do empréstimo está no futuro"
+  "Das Datum des Verleihens liegt in der Zukunft": "A data do empréstimo está no futuro",
+  "mit Band {volume}": "com o volume {volume}",
+  "mit Bänden {volumes}": "com os volumes {volumes}",
+  "{name} hat „{title}“ {vols} angelegt": "{name} criou “{title}” {vols}",
+  "„{title}“ {vols} angelegt": "“{title}” criado {vols}"
 }

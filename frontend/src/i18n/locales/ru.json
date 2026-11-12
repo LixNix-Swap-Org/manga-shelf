@@ -3933,5 +3933,9 @@
     "many": "Активность за последние {n} дней",
     "other": "Активность за последние {n} дня"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "Дата выдачи в будущем"
+  "Das Datum des Verleihens liegt in der Zukunft": "Дата выдачи в будущем",
+  "mit Band {volume}": "с томом {volume}",
+  "mit Bänden {volumes}": "с томами {volumes}",
+  "{name} hat „{title}“ {vols} angelegt": "{name} добавил(а) «{title}» {vols}",
+  "„{title}“ {vols} angelegt": "Добавлено «{title}» {vols}"
 }

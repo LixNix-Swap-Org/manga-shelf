@@ -15,6 +15,8 @@ describe('activityText', () => {
     expect(activityText({ ...base, kind: 'added', username: null, count: 1, volumes: ['5'] })).toBe('Band 5 zu „Frieren“ hinzugefügt');
     expect(activityText({ ...base, kind: 'changed', count: 2, volumes: ['6', '7'] })).toBe('Lena hat Bände 6, 7 von „Frieren“ geändert');
     expect(activityText({ ...base, kind: 'series_added', count: 0, volumes: [] })).toBe('Lena hat „Frieren“ angelegt');
+    expect(activityText({ ...base, kind: 'series_added', count: 4, volumes: ['1', '2', '3', '4'] })).toBe('Lena hat „Frieren“ mit Bänden 1–4 angelegt');
+    expect(activityText({ ...base, kind: 'series_added', username: null, count: 1, volumes: ['1'] })).toBe('„Frieren“ mit Band 1 angelegt');
     expect(activityText({ ...base, kind: 'series_changed', count: 0, volumes: [] })).toBe('Lena hat „Frieren“ bearbeitet');
   });
 });

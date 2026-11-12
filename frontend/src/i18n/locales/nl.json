@@ -3709,5 +3709,9 @@
     "one": "Activiteit van de afgelopen dag",
     "other": "Activiteit van de afgelopen {n} dagen"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "De uitleendatum ligt in de toekomst"
+  "Das Datum des Verleihens liegt in der Zukunft": "De uitleendatum ligt in de toekomst",
+  "mit Band {volume}": "met deel {volume}",
+  "mit Bänden {volumes}": "met delen {volumes}",
+  "{name} hat „{title}“ {vols} angelegt": "{name} heeft ‘{title}’ {vols} aangemaakt",
+  "„{title}“ {vols} angelegt": "‘{title}’ {vols} aangemaakt"
 }

@@ -3933,5 +3933,9 @@
     "many": "Aktywność z ostatnich {n} dni",
     "other": "Aktywność z ostatnich {n} dni"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "Data wypożyczenia jest w przyszłości"
+  "Das Datum des Verleihens liegt in der Zukunft": "Data wypożyczenia jest w przyszłości",
+  "mit Band {volume}": "z tomem {volume}",
+  "mit Bänden {volumes}": "z tomami {volumes}",
+  "{name} hat „{title}“ {vols} angelegt": "{name} dodał(a) „{title}” {vols}",
+  "„{title}“ {vols} angelegt": "Dodano „{title}” {vols}"
 }

@@ -3709,5 +3709,9 @@
     "one": "Activity of the last day",
     "other": "Activity of the last {n} days"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "The lending date is in the future"
+  "Das Datum des Verleihens liegt in der Zukunft": "The lending date is in the future",
+  "mit Band {volume}": "with volume {volume}",
+  "mit Bänden {volumes}": "with volumes {volumes}",
+  "{name} hat „{title}“ {vols} angelegt": "{name} added “{title}” {vols}",
+  "„{title}“ {vols} angelegt": "“{title}” added {vols}"
 }

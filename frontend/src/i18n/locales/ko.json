@@ -3597,5 +3597,9 @@
   "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
     "other": "최근 {n}일 활동"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "대여 날짜가 미래입니다"
+  "Das Datum des Verleihens liegt in der Zukunft": "대여 날짜가 미래입니다",
+  "mit Band {volume}": "{volume}권과 함께",
+  "mit Bänden {volumes}": "{volumes}권과 함께",
+  "{name} hat „{title}“ {vols} angelegt": "{name}님이 「{title}」을(를) {vols} 추가했습니다",
+  "„{title}“ {vols} angelegt": "「{title}」 {vols} 추가됨"
 }

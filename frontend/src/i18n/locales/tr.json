@@ -3709,5 +3709,9 @@
     "one": "Son {n} günün etkinliği",
     "other": "Son {n} günün etkinliği"
   },
-  "Das Datum des Verleihens liegt in der Zukunft": "Ödünç verme tarihi gelecekte"
+  "Das Datum des Verleihens liegt in der Zukunft": "Ödünç verme tarihi gelecekte",
+  "mit Band {volume}": "{volume}. cilt ile",
+  "mit Bänden {volumes}": "{volumes}. ciltlerle",
+  "{name} hat „{title}“ {vols} angelegt": "{name}, “{title}” serisini {vols} ekledi",
+  "„{title}“ {vols} angelegt": "“{title}” {vols} eklendi"
 }

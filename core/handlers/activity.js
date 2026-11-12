@@ -2,7 +2,8 @@
 // carry (no log table): reading marks (volume_reads.read_at), copies that became someone's (volume_copies.created_at),
 // new volumes and series (created_at), and the last change of a volume or series (updated_at/updated_by, migration 55).
 // So it shows the latest state, not every step: a volume changed twice appears once, a removed copy or a deleted series
-// not at all. Entries of the same kind, person and series on the same day are one entry with all their volumes.
+// not at all. Entries of the same kind, person and series on the same day are one entry with all their volumes; a new
+// series takes in the volumes its creator added that day.
 //   ?shelf_id=   like the other lists    ?days=   1 to 365 (default 30)
 const access = require('../lib/access');
 const { qstr } = require('../lib/query');
@@ -111,8 +112,19 @@ function activity(realCtx, { query = {} } = {}) {
     }
     for (const e of seriesEvents) add(e.kind, e.at, e.user_id, e.manga_id, null);
 
+    // a new series and its first volumes by the same person on the same day are one entry ("… mit Bänden 1–4 angelegt")
+    for (const [key, g] of groups) {
+        if (g.kind !== 'added') continue;
+        const series = groups.get(`series_added${key.slice('added'.length)}`);
+        if (!series) continue;
+        g.volumes.forEach((n, i) => { if (!series.volumes.includes(n)) { series.volumes.push(n); series.sort.push(g.sort[i]); } });
+        if (g.at > series.at) series.at = g.at;
+        groups.delete(key);
+    }
+    // within the same second the later step first (newest first): changes, reads, ownership, new volumes, the new series
+    const STEP = { series_changed: 0, changed: 1, read: 2, owned: 3, added: 4, series_added: 5 };
     const items = [...groups.values()]
-        .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.title.localeCompare(b.title, 'de')))
+        .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : (STEP[a.kind] - STEP[b.kind]) || a.title.localeCompare(b.title, 'de')))
         .slice(0, LIMIT)
         .map(({ sort, volumes: list, ...g }) => {
             // volumes in shelf order ("Band 3–5"), not in the order they were marked

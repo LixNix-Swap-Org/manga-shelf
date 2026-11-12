@@ -35,6 +35,13 @@ export function activityText(item) {
     case 'changed':
       return name ? t('{name} hat {vols} von „{title}“ geändert', { name, vols, title }) : t('{vols} von „{title}“ geändert', { vols, title });
     case 'series_added':
+      if (item.count > 0) {
+        // "mit Band 1" / "mit Bänden 1–4" (dative)
+        const withVols = item.count === 1
+          ? t('mit Band {volume}', { volume: item.volumes[0] })
+          : t('mit Bänden {volumes}', { volumes: compactVolumes(item.volumes) });
+        return name ? t('{name} hat „{title}“ {vols} angelegt', { name, vols: withVols, title }) : t('„{title}“ {vols} angelegt', { vols: withVols, title });
+      }
       return name ? t('{name} hat „{title}“ angelegt', { name, title }) : t('„{title}“ angelegt', { title });
     default:
       return t('{name} hat „{title}“ bearbeitet', { name: name || t('Jemand'), title });
