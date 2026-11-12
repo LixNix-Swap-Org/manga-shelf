@@ -125,6 +125,21 @@ describe('scripts/seed.js', () => {
     }
   });
 
+  test('the demo library\'s wishes are household wishes, so the wishlist can show and remove them', () => {
+    const dataDir = path.join(dir, 'demo');
+    const res = runSeed(dataDir);
+    assert.equal(res.status, 0, res.stderr);
+    const db = new DatabaseSync(path.join(dataDir, 'manga.db'), { readOnly: true });
+    try {
+      const wished = db.prepare('SELECT id, wish_priority FROM mangas WHERE wish_priority IS NOT NULL ORDER BY id').all();
+      assert.ok(wished.length > 0);
+      const wishes = db.prepare('SELECT manga_id AS id, priority AS wish_priority FROM series_wishes WHERE user_id IS NULL ORDER BY manga_id').all();
+      assert.deepEqual(wishes.map(w => ({ ...w })), wished.map(w => ({ ...w })));
+    } finally {
+      db.close();
+    }
+  });
+
   test('refuses to touch a database that already has data', () => {
     const target = path.join(dir, 'a');
     const before = fs.readFileSync(path.join(target, USERS_FILE), 'utf8');
