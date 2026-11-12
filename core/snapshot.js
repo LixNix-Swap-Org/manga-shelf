@@ -259,7 +259,8 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
 
 /** Full series detail (volumes with read info, values, reader stats) as served by GET /mangas/:id; null if missing. */
 function loadMangaDetail(ctx, mangaId, userId) {
-    const manga = ctx.db.prepare(`SELECT *, (SELECT c.source_fields FROM catalog_series c WHERE c.id = mangas.catalog_series_id) AS catalog_source_fields FROM mangas WHERE id = ?`).get(mangaId);
+    const manga = ctx.db.prepare(`SELECT *, (SELECT c.source_fields FROM catalog_series c WHERE c.id = mangas.catalog_series_id) AS catalog_source_fields,
+        (SELECT u.username FROM users u WHERE u.id = mangas.updated_by) AS updated_by_name FROM mangas WHERE id = ?`).get(mangaId);
     if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) return null;
     const volumes = ctx.db.prepare(`SELECT ${volumeColumns(ctx)} FROM volumes v WHERE v.manga_id = ? ORDER BY ${volumeOrderSql('v')}, v.id ASC`).all(mangaId);
     const reads = ctx.db.prepare(`${READS_SELECT} JOIN volumes v ON vr.volume_id = v.id WHERE v.manga_id = ? ORDER BY vr.read_at, vr.user_id`).all(mangaId);

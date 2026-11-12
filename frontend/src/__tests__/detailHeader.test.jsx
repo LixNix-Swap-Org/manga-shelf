@@ -283,6 +283,12 @@ describe('MangaHeroCard', () => {
     expect(screen.getByText('Keine Beschreibung vorhanden.')).toBeTruthy();
   });
 
+  it('tab Infos names who last changed the series', () => {
+    const props = baseProps();
+    render(<SeriesInfo {...props} manga={{ ...props.manga, updated_by_name: 'Lena', updated_at: '2026-11-12 08:00:00' }} />);
+    expect(screen.getByTestId('series-last-changed').textContent).toMatch(/^Zuletzt geändert von Lena am /);
+  });
+
   it('offers Abgebrochen and keeps a legacy stored status selectable', () => {
     render(<MangaHeroCard {...baseProps({ editing: true, formData: { title: 'T', status: 'Eingestellt', cover_image: '' } })} />);
     const values = Array.from(document.querySelectorAll('select option')).map(o => o.value);

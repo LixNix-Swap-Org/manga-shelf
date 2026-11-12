@@ -10,10 +10,13 @@ const parseUtc = (value) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-/** "Zuletzt geändert von Max am 11.11.2026, 19:43" (migration 55); nothing for a volume no one changed since. */
-export default function LastChanged({ volume }) {
-  const name = volume?.updated_by_name;
-  const when = parseUtc(volume?.updated_at);
+/**
+ * "Zuletzt geändert von Max am 11.11.2026, 19:43" for a volume (migration 55) or a series (`item` with updated_by_name
+ * and updated_at); nothing when neither is known.
+ */
+export default function LastChanged({ item, testId = 'volume-last-changed' }) {
+  const name = item?.updated_by_name;
+  const when = parseUtc(item?.updated_at);
   if (!name && !when) return null;
   const date = when ? formatDateTime(when) : '';
   let text;
@@ -21,7 +24,7 @@ export default function LastChanged({ volume }) {
   else if (name) text = t('Zuletzt geändert von {name}', { name });
   else text = t('Zuletzt geändert am {date}', { date });
   return (
-    <p className="flex items-center gap-1.5 text-[11px] text-slate-400" data-testid="volume-last-changed">
+    <p className="flex items-center gap-1.5 text-[11px] text-slate-400" data-testid={testId}>
       <History className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
       <span>{text}</span>
     </p>
