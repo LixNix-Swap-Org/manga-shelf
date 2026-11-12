@@ -123,15 +123,15 @@ async function runTestSuite() {
     // TEST 3b: Own password dialog (dialog semantics, focus, Escape)
     console.log('\n--- TEST 3b: Change Password Dialog ---');
     await clickAccountEntry(page, '#btn-change-password');
-    await page.waitForSelector('[role="dialog"][aria-label="Passwort ändern"]', { timeout: 5000 });
+    await page.waitForSelector('[role="dialog"][aria-label="Einstellungen"]', { timeout: 5000 });
     const dialogInfo = await page.evaluate(() => {
-      const dlg = document.querySelector('[role="dialog"][aria-label="Passwort ändern"]');
+      const dlg = document.querySelector('[role="dialog"][aria-label="Einstellungen"]');
       return { modal: dlg?.getAttribute('aria-modal'), focusInside: Boolean(dlg && dlg.contains(document.activeElement)) };
     });
     assert.equal(dialogInfo.modal, 'true');
     assert.ok(dialogInfo.focusInside, 'focus did not move into the dialog');
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Passwort ändern"]'), { timeout: 5000 })
+    await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Einstellungen"]'), { timeout: 5000 })
       .catch(() => { throw new Error('Escape did not close the password dialog'); });
 
     // TEST 4: Restore undoes changes made after the backup

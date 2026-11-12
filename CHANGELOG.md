@@ -94,7 +94,10 @@
 - A new series without a chosen shelf lands in a shelf you own today, also after a shelf was handed over to you or away from you.
 
 ### Navigation
-- **Fewer buttons at the top:** the desktop header keeps search, "Neuer Manga", "Statistiken", "App installieren" and an account menu (the initial at the top right). The menu holds "Verwaltung", "Konto & Sprache" and logout.
+- **Fewer buttons at the top:** the desktop header keeps search, "Neuer Manga", "Statistiken", "App installieren" and an account menu (the initial at the top right). The menu holds "Verwaltung", "Einstellungen" and logout.
+- **Einstellungen:** the account dialog is called "Einstellungen" and has four tabs instead of "Passwort", "API-Schlüssel" and "Sprache". "Allgemein" holds the language of the app, the language of new editions, the switch for "Zu erledigen" and, in the apps, the release-day reminder. "Privatsphäre" holds the two anime settings and an overview "Wer sieht was" (collection, wishlist, anime list, ratings, notes). "Dienste" holds the API keys, the AniList sync, Crunchyroll and now also the calendar addresses of the radar and the anime calendar (they stay where they were, too). "Konto" shows who is signed in and holds the password, the QR code "Mit App verbinden" (still in the footer as well) and the devices. Without a server the tab "Konto" is left out.
+- **"Ansicht zurücksetzen"** (Einstellungen, Allgemein) puts sorting, filters, shelf size and "Lücken zeigen" of this device back to the defaults and reloads the page. Saved filters stay.
+- **"Auf anderen Geräten abmelden"** (Einstellungen, Konto; `POST /api/auth/logout-others`) ends the sign-in on every other device of the account. This device stays signed in, and the password and the calendar addresses stay as they are.
 - **Verwaltung:** one dialog with four sections (Konto, Personen & Regale, Daten, System) holds everything that stood side by side in the header: users, shelves, backups, CSV, cleanup, trash, publishers and the system page. Each entry opens the same dialog as before, for the same roles.
 - **One Radar tab:** "Release-Radar" and "Anime-Radar" are one tab "Radar" with "Manga-Termine" and "Anime-Folgen". The addresses `?view=radar` and `?view=episodes` keep working.
 - **Phones:** "Mehr" starts with Anime, followed by statistics, "Neuer Manga" (or Radar for readers) and Verwaltung.

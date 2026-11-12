@@ -17,7 +17,9 @@ function serve({ me, profile = () => fakeResponse(404, { error: 'Nicht gefunden'
   return fetchMock;
 }
 
-const openLanguage = () => render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab="language" />);
+const open = (tab) => render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} initialTab={tab} />);
+const openLanguage = () => open('privacy');
+const openGeneral = () => open('general');
 const field = () => screen.getByLabelText('Sichtbarkeit deiner Anime-Bewertungen');
 const shownLabel = (select) => select.options[select.selectedIndex].textContent;
 
@@ -84,7 +86,7 @@ describe('AccountModal: default visibility of anime ratings', () => {
 
   it('offline the field stays disabled and nothing is asked', () => {
     const fetchMock = serve({ me: () => fakeResponse(200, { user: { id: 2, default_anime_visibility: 'private' } }) });
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor', offline: true }} initialTab="language" />);
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor', offline: true }} initialTab="privacy" />);
     expect(field().disabled).toBe(true);
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/auth/me')).toBe(false);
   });
@@ -150,7 +152,7 @@ describe('AccountModal: "Zu erledigen" on or off', () => {
       me: () => fakeResponse(200, { user: { id: 2, default_anime_visibility: 'public', share_anime_activity: true, show_todo: true } }),
       profile: (body) => fakeResponse(200, { user: { id: 2, default_anime_visibility: 'public', share_anime_activity: true, show_todo: body.show_todo } })
     });
-    openLanguage();
+    openGeneral();
     await waitFor(() => expect(box().disabled).toBe(false));
     expect(box().checked).toBe(true);
     fireEvent.click(box());
@@ -164,7 +166,7 @@ describe('AccountModal: "Zu erledigen" on or off', () => {
 
   it('is on while an older server sends no setting', async () => {
     serve({ me: () => fakeResponse(200, { user: { id: 2, default_anime_visibility: 'public' } }) });
-    openLanguage();
+    openGeneral();
     await waitFor(() => expect(box().disabled).toBe(false));
     expect(box().checked).toBe(true);
   });

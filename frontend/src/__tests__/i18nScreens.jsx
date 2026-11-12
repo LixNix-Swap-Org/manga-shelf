@@ -61,9 +61,10 @@ export const SCREENS = [
   { name: 'stats-timeline', url: '/statistik/verlauf' },
   { name: 'stats-lent', url: '/statistik/verliehen' },
   { name: 'stats-anime', url: '/statistik/anime' },
-  { name: 'account-password', url: '/', session: { mangashelf_reopen_account: 'password' } },
-  { name: 'account-keys', url: '/', session: { mangashelf_reopen_account: 'keys' } },
-  { name: 'account-language', url: '/', session: { mangashelf_reopen_account: 'language' } },
+  { name: 'account-general', url: '/', session: { mangashelf_reopen_account: 'general' } },
+  { name: 'account-privacy', url: '/', session: { mangashelf_reopen_account: 'privacy' } },
+  { name: 'account-services', url: '/', session: { mangashelf_reopen_account: 'services' } },
+  { name: 'account-account', url: '/', session: { mangashelf_reopen_account: 'account' } },
   // single components that no App screen shows with the fixtures
   { name: 'offline-banner', element: () => <MemoryRouter><OfflineBanner lastSync={null} /><OfflineBanner lastSync={Date.parse(fixtures.captured_at) - 5 * 60000} /></MemoryRouter> }
 ];

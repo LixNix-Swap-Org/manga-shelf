@@ -532,17 +532,17 @@ describe('ReminderSwitch', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('the account dialog shows it on the tab "Sprache" for editors with the plugin, never for guests', async () => {
+  it('the settings dialog shows it on the tab "Allgemein" for editors with the plugin, never for guests', async () => {
     window.mangashelfNative = fakeNotificationsBridge().native;
     vi.stubGlobal('fetch', vi.fn(async (url) => (String(url).endsWith('/api/auth/me')
       ? fakeResponse(200, { user: { ...EDITOR, default_anime_visibility: 'public' } })
       : fakeResponse(404, { error: 'Nicht gefunden' }))));
     const { default: AccountModal } = await import('../components/modals/AccountModal');
-    const view = render(<AccountModal isOpen onClose={() => {}} user={EDITOR} initialTab="language" />);
+    const view = render(<AccountModal isOpen onClose={() => {}} user={EDITOR} initialTab="general" />);
     expect(await screen.findByRole('checkbox', { name: REMINDER_TEXTS.toggle })).toBeTruthy();
     view.unmount();
-    render(<AccountModal isOpen onClose={() => {}} user={{ id: 4, role: 'visitor' }} initialTab="language" />);
-    await screen.findByRole('tab', { name: 'Sprache' });
+    render(<AccountModal isOpen onClose={() => {}} user={{ id: 4, role: 'visitor' }} initialTab="general" />);
+    await screen.findByRole('tab', { name: 'Allgemein' });
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole('checkbox', { name: REMINDER_TEXTS.toggle })).toBeNull();
   });

@@ -89,8 +89,13 @@ function ConnectDialog({ onClose, returnFocusRef }) {
   );
 }
 
-/** Footer entry "Mit App verbinden" (web build, editors and admins): QR code with the manga-shelf://connect link. */
-export default function ConnectQr({ className = '' }) {
+const FOOTER_CLASS = 'hit-44 inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-200 font-medium cursor-pointer transition-colors';
+
+/**
+ * "Mit App verbinden" (web build, editors and admins): QR code with the manga-shelf://connect link. The footer entry by
+ * default; the settings dialog shows the same control as a button (`id`, `buttonClass`).
+ */
+export default function ConnectQr({ className = '', id = 'footer-connect-app', buttonClass = FOOTER_CLASS }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
   return (
@@ -98,9 +103,9 @@ export default function ConnectQr({ className = '' }) {
       <button
         ref={buttonRef}
         type="button"
-        id="footer-connect-app"
+        id={id}
         onClick={() => setOpen(true)}
-        className={`hit-44 inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-200 font-medium cursor-pointer transition-colors ${className}`}
+        className={`${buttonClass} ${className}`}
         title={t('QR-Code für die Manga-Shelf-App auf Handy oder Desktop anzeigen')}
       >
         <QrCode className="w-3.5 h-3.5" aria-hidden="true" />

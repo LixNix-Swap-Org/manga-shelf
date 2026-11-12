@@ -1318,7 +1318,7 @@ describe('AnimeDetailModal', () => {
       await act(async () => {});
       fireEvent.click(screen.getByRole('button', { name: 'Staffeln bearbeiten' }));
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vorschlag von TMDB laden' })); });
-      expect(screen.getByRole('status').textContent).toBe('Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).');
+      expect(screen.getByRole('status').textContent).toBe('Für den Vorschlag braucht es einen TMDB-Schlüssel (Einstellungen → Dienste).');
       unmount();
       openEditable(entry());
       await act(async () => {});

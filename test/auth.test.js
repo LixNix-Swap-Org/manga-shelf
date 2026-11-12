@@ -418,6 +418,32 @@ test('bearer: an own password change answers with the new token; cookie clients 
     assert.equal((await web('GET', '/auth/me')).status, 200);
 });
 
+test('logout-others: the other sessions of the account end, this one continues, password and calendar address stay', async () => {
+    await createUser('devices', 'editor');
+    const here = await loggedIn('devices');
+    const there = await loggedIn('devices');
+    const phone = withBearer(await appLogin('devices'));
+    const feed = (await here('POST', '/radar/feed-token')).body;
+    assert.equal(feed.active, true);
+
+    const out = await here('POST', '/auth/logout-others');
+    assert.equal(out.status, 200);
+    assert.deepEqual(Object.keys(out.body), ['success'], 'cookie clients get no token in the body');
+    assert.equal((await here('GET', '/auth/me')).status, 200);
+    assert.deepEqual([(await there('GET', '/auth/me')).status, (await phone('GET', '/auth/me')).status], [401, 401]);
+    assert.equal((await here('GET', '/radar/feed-token')).body.active, true);
+    assert.equal((await fetch(new URL(feed.path, ctx.base))).status, 200);
+
+    // the app gets its new token in the answer, and the password still signs in
+    const app = withBearer(await appLogin('devices'));
+    const again = await app('POST', '/auth/logout-others');
+    assert.match(again.body.token, /^[\w-]+\.[\w-]+\.[\w-]+$/);
+    assert.equal((await app('GET', '/auth/me')).status, 401);
+    assert.equal((await withBearer(again.body.token)('GET', '/auth/me')).status, 200);
+    assert.equal((await here('GET', '/auth/me')).status, 401);
+    assert.equal((await ctx.client()('POST', '/auth/logout-others')).status, 401);
+});
+
 test('bearer: an admin resetting their own password via user management gets the new token', async () => {
     const id = await createUser('selfreset', 'admin');
     const app = withBearer(await appLogin('selfreset'));

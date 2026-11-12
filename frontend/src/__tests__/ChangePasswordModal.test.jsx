@@ -21,7 +21,7 @@ describe('ChangePasswordModal', () => {
   it('different new passwords: message, no request', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    render(<ChangePasswordModal isOpen onClose={vi.fn()} />);
+    render(<ChangePasswordModal isOpen onClose={vi.fn()} initialTab="account" />);
     fill('altes-passwort', 'neues-passwort-1', 'neues-passwort-2');
     expect(screen.getByText('Die beiden neuen Passwörter sind nicht gleich.')).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -29,7 +29,7 @@ describe('ChangePasswordModal', () => {
 
   it('shows the server error message', async () => {
     vi.stubGlobal('fetch', reply(400, { error: 'Aktuelles Passwort ist falsch.' }));
-    render(<ChangePasswordModal isOpen onClose={vi.fn()} />);
+    render(<ChangePasswordModal isOpen onClose={vi.fn()} initialTab="account" />);
     fill('falsch-falsch', 'neues-passwort', 'neues-passwort');
     expect((await screen.findByRole('alert')).textContent).toBe('Aktuelles Passwort ist falsch.');
   });
@@ -37,7 +37,7 @@ describe('ChangePasswordModal', () => {
   it('sends PUT /api/auth/password and confirms', async () => {
     const fetchMock = reply(200, { ok: true });
     vi.stubGlobal('fetch', fetchMock);
-    render(<ChangePasswordModal isOpen onClose={vi.fn()} />);
+    render(<ChangePasswordModal isOpen onClose={vi.fn()} initialTab="account" />);
     fill('altes-passwort', 'neues-passwort', 'neues-passwort');
     expect(await screen.findByText(/Dein Passwort wurde geändert/)).toBeTruthy();
     const [url, init] = fetchMock.mock.calls[0];
@@ -48,7 +48,7 @@ describe('ChangePasswordModal', () => {
 
   it('Escape closes the dialog', () => {
     const onClose = vi.fn();
-    render(<ChangePasswordModal isOpen onClose={onClose} />);
+    render(<ChangePasswordModal isOpen onClose={onClose} initialTab="account" />);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
