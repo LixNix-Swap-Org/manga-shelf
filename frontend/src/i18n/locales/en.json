@@ -3700,7 +3700,13 @@
   "Heute": "Today",
   "Gestern": "Yesterday",
   "Aktivität konnte nicht geladen werden.": "Could not load the activity.",
-  "In den letzten {days} Tagen ist nichts passiert.": "Nothing happened in the last {days} days.",
-  "Aktivität der letzten {days} Tage": "Activity of the last {days} days",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Only the latest change of each volume is shown; deleted items do not appear here."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Only the latest change of each volume is shown; deleted items do not appear here.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "Nothing happened in the last day.",
+    "other": "Nothing happened in the last {n} days."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Activity of the last day",
+    "other": "Activity of the last {n} days"
+  }
 }

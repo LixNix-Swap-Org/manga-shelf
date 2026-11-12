@@ -3810,7 +3810,15 @@
   "Heute": "Aujourd’hui",
   "Gestern": "Hier",
   "Aktivität konnte nicht geladen werden.": "Impossible de charger l’activité.",
-  "In den letzten {days} Tagen ist nichts passiert.": "Rien ne s’est passé ces {days} derniers jours.",
-  "Aktivität der letzten {days} Tage": "Activité des {days} derniers jours",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Seule la dernière modification de chaque tome est affichée ; les éléments supprimés n’apparaissent pas."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Seule la dernière modification de chaque tome est affichée ; les éléments supprimés n’apparaissent pas.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "Rien ne s’est passé ces {n} derniers jours.",
+    "many": "Rien ne s’est passé ces {n} derniers jours.",
+    "other": "Rien ne s’est passé ces {n} derniers jours."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Activité du dernier jour",
+    "many": "Activité des {n} derniers jours",
+    "other": "Activité des {n} derniers jours"
+  }
 }

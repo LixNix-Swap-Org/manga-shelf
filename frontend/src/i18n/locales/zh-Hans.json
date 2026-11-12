@@ -3590,7 +3590,11 @@
   "Heute": "今天",
   "Gestern": "昨天",
   "Aktivität konnte nicht geladen werden.": "无法加载动态。",
-  "In den letzten {days} Tagen ist nichts passiert.": "过去 {days} 天没有动态。",
-  "Aktivität der letzten {days} Tage": "过去 {days} 天的动态",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "每卷只显示最近一次更改；已删除的内容不会出现在这里。"
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "每卷只显示最近一次更改；已删除的内容不会出现在这里。",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "other": "过去 {n} 天没有动态。"
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "other": "过去 {n} 天的动态"
+  }
 }

@@ -3810,7 +3810,15 @@
   "Heute": "Oggi",
   "Gestern": "Ieri",
   "Aktivität konnte nicht geladen werden.": "Impossibile caricare l’attività.",
-  "In den letzten {days} Tagen ist nichts passiert.": "Non è successo nulla negli ultimi {days} giorni.",
-  "Aktivität der letzten {days} Tage": "Attività degli ultimi {days} giorni",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Per ogni volume conta solo l’ultima modifica; gli elementi eliminati non compaiono."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Per ogni volume conta solo l’ultima modifica; gli elementi eliminati non compaiono.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "Non è successo nulla nell’ultimo giorno.",
+    "many": "Non è successo nulla negli ultimi {n} giorni.",
+    "other": "Non è successo nulla negli ultimi {n} giorni."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Attività dell’ultimo giorno",
+    "many": "Attività degli ultimi {n} giorni",
+    "other": "Attività degli ultimi {n} giorni"
+  }
 }

@@ -3920,7 +3920,17 @@
   "Heute": "Сегодня",
   "Gestern": "Вчера",
   "Aktivität konnte nicht geladen werden.": "Не удалось загрузить активность.",
-  "In den letzten {days} Tagen ist nichts passiert.": "За последние {days} дн. ничего не произошло.",
-  "Aktivität der letzten {days} Tage": "Активность за последние {days} дн.",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Для каждого тома показано только последнее изменение; удалённое здесь не появляется."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Для каждого тома показано только последнее изменение; удалённое здесь не появляется.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "За последний {n} день ничего не произошло.",
+    "few": "За последние {n} дня ничего не произошло.",
+    "many": "За последние {n} дней ничего не произошло.",
+    "other": "За последние {n} дня ничего не произошло."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Активность за последний {n} день",
+    "few": "Активность за последние {n} дня",
+    "many": "Активность за последние {n} дней",
+    "other": "Активность за последние {n} дня"
+  }
 }

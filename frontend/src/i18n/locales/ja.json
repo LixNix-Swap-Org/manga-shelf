@@ -3590,7 +3590,11 @@
   "Heute": "今日",
   "Gestern": "昨日",
   "Aktivität konnte nicht geladen werden.": "アクティビティを読み込めませんでした。",
-  "In den letzten {days} Tagen ist nichts passiert.": "過去{days}日間、何もありませんでした。",
-  "Aktivität der letzten {days} Tage": "過去{days}日間のアクティビティ",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "各巻は最後の変更のみ表示され、削除したものは表示されません。"
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "各巻は最後の変更のみ表示され、削除したものは表示されません。",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "other": "過去{n}日間、何もありませんでした。"
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "other": "過去{n}日間のアクティビティ"
+  }
 }

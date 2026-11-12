@@ -96,11 +96,11 @@ const PAGE_CSS = `
     .lead { color: #94a3b8; font-size: .875rem; margin: 0 0 24px; }
     ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
     li { display: flex; gap: 12px; padding: 12px; border-radius: 16px; background: rgba(15, 23, 42, .6); border: 1px solid rgba(244, 63, 94, .25); }
-    .cover { width: 64px; height: 96px; border-radius: 12px; object-fit: cover; border: 1px solid #1e293b; background: #0f172a; flex-shrink: 0; }
+    .cover { width: 64px; height: 96px; border-radius: 12px; object-fit: cover; border: 1px solid #1e293b; background: #0f172a; flex-shrink: 0; font-size: 0; color: transparent; }
     .title { font-weight: 700; font-size: .8rem; margin: 2px 0 4px; overflow-wrap: anywhere; }
     .meta { color: #94a3b8; font-size: .7rem; margin: 0 0 6px; }
     .prio { display: inline-block; font-size: .65rem; font-weight: 700; padding: 2px 6px; border-radius: 8px; border: 1px solid rgba(244, 63, 94, .4); background: rgba(244, 63, 94, .12); color: #fecdd3; }
-    .known { color: #cbd5e1; font-size: .7rem; margin-left: 6px; }
+    .known { color: #cbd5e1; font-size: .7rem; margin-left: 6px; white-space: nowrap; }
     .empty { color: #94a3b8; padding: 24px; border: 1px dashed #334155; border-radius: 16px; text-align: center; }
     footer { color: #94a3b8; font-size: .7rem; margin-top: 32px; }
 `;
@@ -139,7 +139,7 @@ function sharedWishlist(ctx, { query }) {
     const items = rows.map((r) => {
         const cover = safeCover(r.cover_image);
         const known = r.known_missing > 0 ? `<span class="known">${r.known_missing === 1 ? '1 Band bekannt' : `${r.known_missing} Bände bekannt`}</span>` : '';
-        return `<li>${cover ? `<img class="cover" src="${html(cover)}" alt="" loading="lazy">` : '<div class="cover" aria-hidden="true"></div>'}
+        return `<li>${cover ? `<img class="cover" src="${html(cover)}" alt="${html(r.title)}" loading="lazy">` : '<div class="cover" aria-hidden="true"></div>'}
 <div><p class="title">${html(r.title)}</p>${r.publisher ? `<p class="meta">${html(r.publisher)}</p>` : ''}
 <span class="prio">${html(PRIORITY_TEXT[r.priority] || 'Wunsch')}</span>${known}</div></li>`;
     }).join('\n');

@@ -3700,7 +3700,13 @@
   "Heute": "Vandaag",
   "Gestern": "Gisteren",
   "Aktivität konnte nicht geladen werden.": "Activiteit kon niet worden geladen.",
-  "In den letzten {days} Tagen ist nichts passiert.": "In de afgelopen {days} dagen is er niets gebeurd.",
-  "Aktivität der letzten {days} Tage": "Activiteit van de afgelopen {days} dagen",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Per deel telt alleen de laatste wijziging; verwijderde items staan hier niet."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Per deel telt alleen de laatste wijziging; verwijderde items staan hier niet.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "De afgelopen dag is er niets gebeurd.",
+    "other": "In de afgelopen {n} dagen is er niets gebeurd."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Activiteit van de afgelopen dag",
+    "other": "Activiteit van de afgelopen {n} dagen"
+  }
 }

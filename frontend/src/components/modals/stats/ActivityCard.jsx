@@ -4,7 +4,7 @@ import { BookCheck, BookPlus, History, Library, Pencil, Plus } from 'lucide-reac
 import { apiFetch, readJson } from '../../../utils/api';
 import { formatDate, formatTime } from '../../../utils/format';
 import { compactVolumes } from '../../dashboard/TodoList';
-import { t } from '../../../i18n/index.js';
+import { t, tn } from '../../../i18n/index.js';
 
 const KIND_ICON = {
   read: { Icon: BookCheck, className: 'text-emerald-400' },
@@ -77,7 +77,7 @@ export default function ActivityCard({ shelfId = null }) {
   if (failed) return <p className="py-12 text-center text-sm text-slate-400">{t('Aktivität konnte nicht geladen werden.')}</p>;
   if (!data) return <p role="status" className="py-12 text-center text-sm text-slate-400">{t('Wird geladen…')}</p>;
   if (!data.items.length) {
-    return <p className="py-12 text-center text-sm text-slate-400">{t('In den letzten {days} Tagen ist nichts passiert.', { days: data.days })}</p>;
+    return <p className="py-12 text-center text-sm text-slate-400">{tn('Am letzten Tag ist nichts passiert.', 'In den letzten {n} Tagen ist nichts passiert.', data.days)}</p>;
   }
 
   const days = [];
@@ -90,7 +90,7 @@ export default function ActivityCard({ shelfId = null }) {
   return (
     <div id="stats-activity" className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800">
       <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-4 flex items-center gap-1.5">
-        <History className="w-4 h-4 text-sky-400" aria-hidden="true" /> {t('Aktivität der letzten {days} Tage', { days: data.days })}
+        <History className="w-4 h-4 text-sky-400" aria-hidden="true" /> {tn('Aktivität des letzten Tages', 'Aktivität der letzten {n} Tage', data.days)}
       </h3>
       <div className="space-y-5">
         {days.map(({ day, items }) => (

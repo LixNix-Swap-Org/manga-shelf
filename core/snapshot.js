@@ -259,6 +259,7 @@ function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, 
 
 /** Full series detail (volumes with read info, values, reader stats) as served by GET /mangas/:id; null if missing. */
 function loadMangaDetail(ctx, mangaId, userId) {
+    // updated_by_name: "Zuletzt geändert von" on the tab Infos (also in the offline copy below)
     const manga = ctx.db.prepare(`SELECT *, (SELECT c.source_fields FROM catalog_series c WHERE c.id = mangas.catalog_series_id) AS catalog_source_fields,
         (SELECT u.username FROM users u WHERE u.id = mangas.updated_by) AS updated_by_name FROM mangas WHERE id = ?`).get(mangaId);
     if (!manga || !access.accessibleShelfIds(ctx).includes(manga.shelf_id)) return null;
@@ -307,7 +308,8 @@ async function buildOfflineSnapshot(ctx, user, shelfIds = access.accessibleShelf
     assertSameConnection(ctx, generation);
 
     const shelfScope = access.inShelves('shelf_id', shelfIds);
-    const series = ctx.db.prepare(`SELECT *, (SELECT c.source_fields FROM catalog_series c WHERE c.id = mangas.catalog_series_id) AS catalog_source_fields FROM mangas WHERE ${shelfScope.sql} ORDER BY id`).all(...shelfScope.params);
+    const series = ctx.db.prepare(`SELECT *, (SELECT c.source_fields FROM catalog_series c WHERE c.id = mangas.catalog_series_id) AS catalog_source_fields,
+        (SELECT u.username FROM users u WHERE u.id = mangas.updated_by) AS updated_by_name FROM mangas WHERE ${shelfScope.sql} ORDER BY id`).all(...shelfScope.params);
     const users = ctx.db.prepare(USERS_SQL).all();
     const members = loadMembers(ctx);
     const editionScope = access.inShelves('m.shelf_id', shelfIds);

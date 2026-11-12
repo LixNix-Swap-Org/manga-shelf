@@ -3920,7 +3920,17 @@
   "Heute": "Dzisiaj",
   "Gestern": "Wczoraj",
   "Aktivität konnte nicht geladen werden.": "Nie udało się wczytać aktywności.",
-  "In den letzten {days} Tagen ist nichts passiert.": "W ciągu ostatnich {days} dni nic się nie wydarzyło.",
-  "Aktivität der letzten {days} Tage": "Aktywność z ostatnich {days} dni",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Dla każdego tomu liczy się tylko ostatnia zmiana; usunięte elementy się tu nie pojawiają."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Dla każdego tomu liczy się tylko ostatnia zmiana; usunięte elementy się tu nie pojawiają.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "W ciągu ostatniego dnia nic się nie wydarzyło.",
+    "few": "W ciągu ostatnich {n} dni nic się nie wydarzyło.",
+    "many": "W ciągu ostatnich {n} dni nic się nie wydarzyło.",
+    "other": "W ciągu ostatnich {n} dni nic się nie wydarzyło."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Aktywność z ostatniego dnia",
+    "few": "Aktywność z ostatnich {n} dni",
+    "many": "Aktywność z ostatnich {n} dni",
+    "other": "Aktywność z ostatnich {n} dni"
+  }
 }

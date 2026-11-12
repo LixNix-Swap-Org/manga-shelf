@@ -3700,7 +3700,13 @@
   "Heute": "Bugün",
   "Gestern": "Dün",
   "Aktivität konnte nicht geladen werden.": "Etkinlik yüklenemedi.",
-  "In den letzten {days} Tagen ist nichts passiert.": "Son {days} günde hiçbir şey olmadı.",
-  "Aktivität der letzten {days} Tage": "Son {days} günün etkinliği",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Her cilt için yalnızca son değişiklik görünür; silinenler burada yer almaz."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Her cilt için yalnızca son değişiklik görünür; silinenler burada yer almaz.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "Son {n} günde hiçbir şey olmadı.",
+    "other": "Son {n} günde hiçbir şey olmadı."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Son {n} günün etkinliği",
+    "other": "Son {n} günün etkinliği"
+  }
 }

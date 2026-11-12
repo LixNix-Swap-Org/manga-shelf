@@ -3590,7 +3590,11 @@
   "Heute": "오늘",
   "Gestern": "어제",
   "Aktivität konnte nicht geladen werden.": "활동을 불러올 수 없습니다.",
-  "In den letzten {days} Tagen ist nichts passiert.": "최근 {days}일 동안 활동이 없습니다.",
-  "Aktivität der letzten {days} Tage": "최근 {days}일 활동",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "권마다 마지막 변경만 표시되며, 삭제된 항목은 나타나지 않습니다."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "권마다 마지막 변경만 표시되며, 삭제된 항목은 나타나지 않습니다.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "other": "최근 {n}일 동안 활동이 없습니다."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "other": "최근 {n}일 활동"
+  }
 }

@@ -3810,7 +3810,15 @@
   "Heute": "Hoy",
   "Gestern": "Ayer",
   "Aktivität konnte nicht geladen werden.": "No se pudo cargar la actividad.",
-  "In den letzten {days} Tagen ist nichts passiert.": "No ha pasado nada en los últimos {days} días.",
-  "Aktivität der letzten {days} Tage": "Actividad de los últimos {days} días",
-  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Solo se muestra el último cambio de cada tomo; lo eliminado no aparece aquí."
+  "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "Solo se muestra el último cambio de cada tomo; lo eliminado no aparece aquí.",
+  "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
+    "one": "No ha pasado nada en el último día.",
+    "many": "No ha pasado nada en los últimos {n} días.",
+    "other": "No ha pasado nada en los últimos {n} días."
+  },
+  "Aktivität des letzten Tages|Aktivität der letzten {n} Tage": {
+    "one": "Actividad del último día",
+    "many": "Actividad de los últimos {n} días",
+    "other": "Actividad de los últimos {n} días"
+  }
 }
