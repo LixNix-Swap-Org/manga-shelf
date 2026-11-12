@@ -14,6 +14,7 @@ const settings = require('./handlers/settings');
 const shopping = require('./handlers/shopping');
 const radar = require('./handlers/radar');
 const todoHandler = require('./handlers/todo');
+const activityHandler = require('./handlers/activity');
 const savedFilters = require('./handlers/savedFilters');
 const mangaPassion = require('./handlers/mangaPassion');
 const lookup = require('./handlers/lookup');
@@ -111,6 +112,7 @@ const routes = [
     { method: 'GET', path: '/release-radar', role: 'auth', conditional: true, handler: radar.releaseRadar },
     { method: 'GET', path: '/dashboard-summary', role: 'auth', conditional: true, handler: radar.dashboardSummary },
     { method: 'GET', path: '/todo', role: 'auth', handler: todoHandler.todo },
+    { method: 'GET', path: '/activity', role: 'auth', handler: activityHandler.activity },
     { method: 'GET', path: '/saved-filters', role: 'auth', handler: savedFilters.list },
     { method: 'POST', path: '/saved-filters', role: 'auth', handler: savedFilters.add },
     { method: 'DELETE', path: '/saved-filters/:id', role: 'auth', handler: savedFilters.remove },

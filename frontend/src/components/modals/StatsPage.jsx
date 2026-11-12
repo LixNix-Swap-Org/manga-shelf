@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useId, useRef } from 'react';
-import { TrendingUp, Coins, BuildingComplex, BookCheck, ArrowLeft, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge, Library, LayoutGrid, Users, HandHelping, Tv } from 'lucide-react';
+import { TrendingUp, Coins, BuildingComplex, BookCheck, ArrowLeft, Calendar, ChartColumn, Trash2, BrushCleaning, GitMerge, Library, LayoutGrid, Users, HandHelping, Tv, History } from 'lucide-react';
 import SpendingCard from './SpendingCard';
 import OwnerStatsCard from './OwnerStatsCard';
 import KpiCards from './stats/KpiCards';
@@ -8,6 +8,7 @@ import AnimeStatsCard from './stats/AnimeStatsCard';
 import AnimeInsightsCard from './stats/AnimeInsightsCard';
 import EditionsCard from './stats/EditionsCard';
 import LentCard from './stats/LentCard';
+import ActivityCard from './stats/ActivityCard';
 import PublisherTab, { TopPublishersCard } from './stats/PublisherTab';
 import ReadingTab, { ReadingSummaryCard } from './stats/ReadingTab';
 import { readApiError } from '../../hooks/useVolumeActions';
@@ -35,6 +36,7 @@ const STATS_TABS = [
   { id: 'verlauf', label: 'Leseverlauf', Icon: ChartColumn },
   { id: 'verlage', label: 'Verlage', Icon: BuildingComplex },
   { id: 'verliehen', label: 'Verliehen', Icon: HandHelping },
+  { id: 'aktivitaet', label: 'Aktivität', Icon: History },
   { id: 'anime', label: 'Anime', Icon: Tv }
 ];
 // a tab whose card has nothing to show yet says so instead of staying blank
@@ -350,6 +352,8 @@ export default function StatsPage({
                     : <EmptyTab>{t('Sobald mehrere Personen Bände besitzen, steht hier, wem was gehört.')}</EmptyTab>)}
 
                   {statsTab === 'verliehen' && <LentCard shelfId={shelfId} emptyText={t('Gerade ist nichts verliehen oder ausgeliehen.')} />}
+
+                  {statsTab === 'aktivitaet' && <ActivityCard shelfId={shelfId} />}
 
                   {statsTab === 'anime' && !statsData.anime?.total && <EmptyTab>{t('Noch keine Anime in der Liste')}</EmptyTab>}
                   {statsTab === 'anime' && Boolean(statsData.anime?.total) && (
