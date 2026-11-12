@@ -112,7 +112,7 @@ export default function TodoList({ enabled = true, shelfId = null, reloadKey, on
         {shown.map((item) => (
           <li key={`${item.kind}-${item.manga_id}-${item.lent_to ?? ''}`} className="flex items-center gap-2.5 min-h-[40px] text-sm">
             <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${KIND_CLASS[item.kind] || KIND_CLASS.gap}`}>{t(KIND_LABEL[item.kind] || KIND_LABEL.gap)}</span>
-            <span className="min-w-0 flex-1 text-slate-200 truncate">{todoText(item)}</span>
+            <span className="min-w-0 flex-1 text-slate-200 line-clamp-2 sm:line-clamp-1 break-words" title={todoText(item)}>{todoText(item)}</span>
             <Link to={`/manga/${item.manga_id}`} aria-label={t('„{title}“ öffnen', { title: item.title || t('Ohne Titel') })} className="shrink-0 text-xs font-semibold text-sky-400 hover:text-sky-300 px-2 py-1.5 rounded-lg hover:bg-slate-800/60">
               {t('Öffnen')}
             </Link>
