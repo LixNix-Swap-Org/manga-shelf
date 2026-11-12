@@ -3871,5 +3871,17 @@
     "many": "{n} dodatkowych egzemplarzy",
     "other": "{n} dodatkowego egzemplarza"
   },
-  "Ungültige weitere Exemplare": "Nieprawidłowe dodatkowe egzemplarze"
+  "Ungültige weitere Exemplare": "Nieprawidłowe dodatkowe egzemplarze",
+  "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
+    "one": "{title}: tom {volume} pożyczony {name} od {n} miesiąca",
+    "few": "{title}: tom {volume} pożyczony {name} od {n} miesięcy",
+    "many": "{title}: tom {volume} pożyczony {name} od {n} miesięcy",
+    "other": "{title}: tom {volume} pożyczony {name} od {n} miesiąca"
+  },
+  "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
+    "one": "{title}: tomy {volumes} pożyczone {name} od {n} miesiąca",
+    "few": "{title}: tomy {volumes} pożyczone {name} od {n} miesięcy",
+    "many": "{title}: tomy {volumes} pożyczone {name} od {n} miesięcy",
+    "other": "{title}: tomy {volumes} pożyczone {name} od {n} miesiąca"
+  }
 }

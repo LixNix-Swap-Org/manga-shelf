@@ -3547,5 +3547,11 @@
   "{n} weiteres Exemplar|{n} weitere Exemplare": {
     "other": "추가 사본 {n}권"
   },
-  "Ungültige weitere Exemplare": "추가 사본이 잘못되었습니다"
+  "Ungültige weitere Exemplare": "추가 사본이 잘못되었습니다",
+  "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
+    "other": "{title}: {volume}권을 {name}님에게 {n}개월째 빌려주었습니다"
+  },
+  "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
+    "other": "{title}: {volumes}권을 {name}님에게 {n}개월째 빌려주었습니다"
+  }
 }

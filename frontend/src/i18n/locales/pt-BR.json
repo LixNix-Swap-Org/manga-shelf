@@ -3763,5 +3763,15 @@
     "many": "{n} exemplares extras",
     "other": "{n} exemplares extras"
   },
-  "Ungültige weitere Exemplare": "Exemplares extras inválidos"
+  "Ungültige weitere Exemplare": "Exemplares extras inválidos",
+  "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
+    "one": "{title}: volume {volume} emprestado a {name} há {n} mês",
+    "many": "{title}: volume {volume} emprestado a {name} há {n} meses",
+    "other": "{title}: volume {volume} emprestado a {name} há {n} meses"
+  },
+  "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
+    "one": "{title}: volumes {volumes} emprestados a {name} há {n} mês",
+    "many": "{title}: volumes {volumes} emprestados a {name} há {n} meses",
+    "other": "{title}: volumes {volumes} emprestados a {name} há {n} meses"
+  }
 }

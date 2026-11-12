@@ -1183,16 +1183,27 @@ const scenarios = [
             const dropped = await newSeries(ed, 'Kern Todo Abgebrochen', { shelf_id: shelfA, collecting: 'abgebrochen' });
             await newVolume(ed, dropped, '1', { status: 'Vorhanden' });
             await newVolume(ed, dropped, '2', { status: 'Fehlt' });
+            // volume 1 lent out long ago is a reminder, a lending from today is not
+            const owned = (await ed('GET', `/mangas/${inA}`)).body.volumes.find(v => v.volume_number === '1');
+            const lend = await ed('PUT', `/volumes/${owned.id}/copies/${owned.copies[0].id}`, { lent: { name: 'Mia', at: '2020-01-01' } });
+            assert.equal(lend.status, 200, JSON.stringify(lend.body));
+            const recent = await newSeries(ed, 'Kern Todo Frisch', { shelf_id: shelfA });
+            const fresh = await newVolume(ed, recent, '1', { status: 'Vorhanden' });
+            const freshCopy = (await ed('GET', `/mangas/${recent}`)).body.volumes[0].copies[0].id;
+            assert.equal((await ed('PUT', `/volumes/${fresh}/copies/${freshCopy}`, { lent: { name: 'Mia' } })).status, 200);
 
             const res = await ed('GET', `/todo?shelf_id=${shelfA}`);
             assert.equal(res.status, 200, JSON.stringify(res.body));
             assert.deepEqual(res.body.items.map(i => [i.kind, i.manga_id, i.count, i.volumes]), [
                 ['elsewhere', inA, 1, ['2']],
                 ['overdue', inA, 1, ['5']],
+                ['lent', inA, 1, ['1']],
                 ['gap', inA, 2, ['3', '4']]
             ]);
             assert.equal(res.body.items[0].shelf_name, 'Kern Todo B');
-            assert.equal(res.body.total, 3);
+            assert.deepEqual([res.body.items[2].lent_to, res.body.items[2].lent_at], ['Mia', '2020-01-01']);
+            assert.ok(res.body.items[2].days > 90);
+            assert.equal(res.body.total, 4);
             assert.equal(JSON.stringify((await ed('GET', '/todo')).body).includes('Kern Todo Fremd'), false);
             assert.equal((await ed('GET', '/todo?shelf_id=' + foreign)).status, 404);
         }

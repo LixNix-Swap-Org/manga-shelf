@@ -7,10 +7,11 @@ import { t, tn } from '../../i18n/index.js';
 export const TODO_PREVIEW = 3;
 
 // i18n
-const KIND_LABEL = { elsewhere: 'Anderes Regal', overdue: 'Erschienen?', gap: 'Lücke' };
+const KIND_LABEL = { elsewhere: 'Anderes Regal', overdue: 'Erschienen?', lent: 'Verliehen', gap: 'Lücke' };
 const KIND_CLASS = {
   elsewhere: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
   overdue: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  lent: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
   gap: 'bg-amber-500/15 text-amber-300 border-amber-500/30'
 };
 
@@ -57,6 +58,14 @@ export function todoText(item) {
       ? t('{title}: Band {volume} sollte erschienen sein', { title, volume })
       : t('{title}: Bände {volumes} sollten erschienen sein', { title, volumes });
   }
+  if (item.kind === 'lent') {
+    // the server lists lendings of 90 days and more: "seit 3 Monaten"
+    const months = Math.max(1, Math.floor((Number(item.days) || 0) / 30));
+    const vars = { title, volume, volumes, name: item.lent_to || '' };
+    return one
+      ? tn('{title}: Band {volume} seit {n} Monat an {name} verliehen', '{title}: Band {volume} seit {n} Monaten an {name} verliehen', months, vars)
+      : tn('{title}: Bände {volumes} seit {n} Monat an {name} verliehen', '{title}: Bände {volumes} seit {n} Monaten an {name} verliehen', months, vars);
+  }
   return one
     ? t('{title}: Band {volume} fehlt', { title, volume })
     : tn('{title}: {n} Band fehlt ({volumes})', '{title}: {n} Bände fehlen ({volumes})', item.count, { title, volumes });
@@ -64,7 +73,7 @@ export function todoText(item) {
 
 /**
  * "Zu erledigen" on the shelf: the open points of the collection from GET /api/todo (volumes owned in another shelf,
- * orders that should be out, gaps), each linking to its series. Shows the first TODO_PREVIEW, the rest on demand.
+ * orders that should be out, copies lent out for months, gaps), each linking to its series. Shows the first TODO_PREVIEW, the rest on demand.
  * Hidden offline, on an error and when nothing is open. `reloadKey` reloads it (the dashboard passes its data time).
  */
 export default function TodoList({ enabled = true, shelfId = null, reloadKey, onCount }) {
@@ -101,7 +110,7 @@ export default function TodoList({ enabled = true, shelfId = null, reloadKey, on
       </h3>
       <ul className="space-y-1.5">
         {shown.map((item) => (
-          <li key={`${item.kind}-${item.manga_id}`} className="flex items-center gap-2.5 min-h-[40px] text-sm">
+          <li key={`${item.kind}-${item.manga_id}-${item.lent_to ?? ''}`} className="flex items-center gap-2.5 min-h-[40px] text-sm">
             <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${KIND_CLASS[item.kind] || KIND_CLASS.gap}`}>{t(KIND_LABEL[item.kind] || KIND_LABEL.gap)}</span>
             <span className="min-w-0 flex-1 text-slate-200 truncate">{todoText(item)}</span>
             <Link to={`/manga/${item.manga_id}`} aria-label={t('„{title}“ öffnen', { title: item.title || t('Ohne Titel') })} className="shrink-0 text-xs font-semibold text-sky-400 hover:text-sky-300 px-2 py-1.5 rounded-lg hover:bg-slate-800/60">

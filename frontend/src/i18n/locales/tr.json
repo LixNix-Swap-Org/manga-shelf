@@ -3655,5 +3655,13 @@
     "one": "{n} ek kopya",
     "other": "{n} ek kopya"
   },
-  "Ungültige weitere Exemplare": "Geçersiz ek kopyalar"
+  "Ungültige weitere Exemplare": "Geçersiz ek kopyalar",
+  "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
+    "one": "{title}: {volume}. cilt {n} aydır {name} adlı kişide",
+    "other": "{title}: {volume}. cilt {n} aydır {name} adlı kişide"
+  },
+  "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
+    "one": "{title}: {volumes}. ciltler {n} aydır {name} adlı kişide",
+    "other": "{title}: {volumes}. ciltler {n} aydır {name} adlı kişide"
+  }
 }

@@ -3763,5 +3763,15 @@
     "many": "{n} exemplaires supplémentaires",
     "other": "{n} exemplaires supplémentaires"
   },
-  "Ungültige weitere Exemplare": "Exemplaires supplémentaires non valides"
+  "Ungültige weitere Exemplare": "Exemplaires supplémentaires non valides",
+  "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
+    "one": "{title} : tome {volume} prêté à {name} depuis {n} mois",
+    "many": "{title} : tome {volume} prêté à {name} depuis {n} mois",
+    "other": "{title} : tome {volume} prêté à {name} depuis {n} mois"
+  },
+  "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
+    "one": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois",
+    "many": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois",
+    "other": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois"
+  }
 }
