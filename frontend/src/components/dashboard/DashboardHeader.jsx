@@ -206,7 +206,7 @@ export default function DashboardHeader({
   const [backupOpen, setBackupOpen] = useState(false);
   const openBackups = local ? () => setBackupOpen(true) : handleOpenRestoreModal;
   const logoutLabel = local ? t('Sammlung schließen') : t('Abmelden');
-  const accountLabel = local ? t('Konto: API-Schlüssel') : t('Konto: Passwort und API-Schlüssel');
+  const accountLabel = local ? t('Sprache, Privatsphäre und Dienste') : t('Sprache, Privatsphäre, Dienste und Konto');
   const showScope = Boolean(searchScope) && !user?.offline;
   const searchOnline = showScope && searchScope.scope === 'online';
   useCoverPreconnect(searchOnline, Boolean(searchScope?.pending));
@@ -583,7 +583,7 @@ export default function DashboardHeader({
                 </button>
                 {!user?.offline && (
                   <button id="btn-change-password" type="button" onClick={() => fromAccountMenu(handleOpenPasswordModal)} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-slate-100 hover:bg-slate-800/80" title={accountLabel}>
-                    <Settings className="w-4 h-4 text-brand-300" aria-hidden="true" /> {t('Konto & Sprache')}
+                    <Settings className="w-4 h-4 text-brand-300" aria-hidden="true" /> {t('Einstellungen')}
                   </button>
                 )}
                 <div aria-hidden="true" className="my-1 border-t border-slate-800" />
@@ -680,7 +680,7 @@ export default function DashboardHeader({
               onClick={() => runFromMenu(handleOpenPasswordModal)}
               className="w-full btn-secondary text-xs py-2 text-slate-200 flex items-center justify-center gap-2"
             >
-              <Settings className="w-4 h-4 text-brand-400" /> {t('Konto & Sprache')}
+              <Settings className="w-4 h-4 text-brand-400" /> {t('Einstellungen')}
             </button>
           )}
 

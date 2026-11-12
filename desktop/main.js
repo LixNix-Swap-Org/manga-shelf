@@ -533,7 +533,7 @@ function registerIpc() {
             type: 'info',
             title: 'Quellen & Schlüssel',
             message: 'Bitte zuerst anmelden.',
-            detail: 'Quellen & Schlüssel stehen nach der Anmeldung in der Sammlung bereit (Konto → API-Schlüssel).'
+            detail: 'Quellen & Schlüssel stehen nach der Anmeldung in der Sammlung bereit (Einstellungen → Dienste).'
         });
     });
     ipcMain.on('desktop-dialog:submit', (event, value) => {

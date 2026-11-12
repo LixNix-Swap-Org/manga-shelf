@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useId } from 'react';
-import { KeyRound, Languages, Lock, X } from 'lucide-react';
+import { EyeOff, KeyRound, Settings, SlidersHorizontal, User, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useTabList from '../../hooks/useTabList';
 import useAccountDefaults, { rememberAccountDefaults } from '../../hooks/useAccountDefaults';
@@ -16,6 +16,7 @@ import { serverText } from '../../i18n/serverText.js';
 import { markReopenAccount } from '../../i18n/preference.js';
 import { useDefaultLanguage } from '../common/LanguagePill';
 import { EDITION_LANGUAGES, languageName, setDefaultLanguage, withCurrent } from '../../utils/editions';
+import { CalendarFeeds, DevicesSection, ResetViewField, SettingsSection, SignedInAs, WhoSeesWhat } from './SettingsExtras';
 
 // apps only (feature-detected): the Crunchyroll history card and its sync code load on demand; other builds drop them
 const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('../../app/watch/CrunchyrollCard')) : null;
@@ -23,7 +24,7 @@ const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('../../app/watch/Crunchy
 const ReminderSwitch = REMINDER_BUILD ? lazy(() => import('../../app/reminders/ReminderSwitch')) : null;
 
 /** Own password change (PUT /api/auth/password): current password, new password twice. Other devices are logged out. */
-function PasswordTab({ onClose }) {
+function PasswordForm({ onClose }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -76,7 +77,7 @@ function PasswordTab({ onClose }) {
       )}
       <div>
         <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-current">{t('Aktuelles Passwort')}</label>
-        <input id="pw-current" type="password" autoComplete="current-password" className="input-field" required autoFocus value={current} onChange={(e) => setCurrent(e.target.value)} />
+        <input id="pw-current" type="password" autoComplete="current-password" className="input-field" required value={current} onChange={(e) => setCurrent(e.target.value)} />
       </div>
       <div>
         <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="pw-new">{t('Neues Passwort (mind. 8 Zeichen)')}</label>
@@ -232,7 +233,7 @@ export function listSyncProps(keys, provider) {
   };
 }
 
-function KeysTab({ isAdmin, canEdit }) {
+function KeyCards({ isAdmin, canEdit }) {
   const keys = useApiKeys({ admin: isAdmin, listSync: canEdit });
   if (keys.error) return <p role="alert" className="text-sm text-rose-300">{keys.error}</p>;
   if (!keys.guides) return <p className="text-sm text-slate-400" role="status">{t('Wird geladen…')}</p>;
@@ -287,6 +288,19 @@ function KeysTab({ isAdmin, canEdit }) {
   );
 }
 
+/** "Dienste": the calendar addresses first (short, and easy to miss below the long key cards), then the API keys. */
+function ServicesTab({ isAdmin, canEdit, feeds }) {
+  if (!feeds) return <KeyCards isAdmin={isAdmin} canEdit={canEdit} />;
+  return (
+    <div className="space-y-4">
+      <CalendarFeeds />
+      <div className="pt-4 border-t border-slate-800">
+        <KeyCards isAdmin={isAdmin} canEdit={canEdit} />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Default edition language of the collection (users.default_language): series in it get no language pill, new series
  * start in it. Saved at once with PUT /api/auth/profile.
@@ -317,7 +331,7 @@ function DefaultLanguageField({ offline }) {
   };
 
   return (
-    <div className="space-y-2 pt-4 border-t border-slate-800">
+    <div className="space-y-2">
       <label htmlFor={`${id}-default-language`} className="block text-xs font-semibold text-slate-300">{t('Standardsprache deiner Ausgaben')}</label>
       <select
         id={`${id}-default-language`}
@@ -367,7 +381,7 @@ function DefaultVisibilityField({ offline }) {
   };
 
   return (
-    <div className="space-y-2 pt-4 border-t border-slate-800">
+    <div className="space-y-2">
       <label htmlFor={`${id}-visibility`} className="block text-xs font-semibold text-slate-300">{t('Sichtbarkeit deiner Anime-Bewertungen')}</label>
       <select id={`${id}-visibility`} className="input-field bg-slate-950" value={value} disabled={saving || offline || !stored.loaded} onChange={(e) => save(e.target.value)}>
         <option value="public">{t('Alle mit Namen')}</option>
@@ -411,7 +425,7 @@ function ProfileSwitch({ offline, field, storedKey, label, hint }) {
   };
 
   return (
-    <div className="space-y-2 pt-4 border-t border-slate-800">
+    <div className="space-y-2">
       <label htmlFor={`${id}-${field}`} className="flex items-center gap-2 text-xs font-semibold text-slate-300">
         <input id={`${id}-${field}`} type="checkbox" className="h-4 w-4 accent-brand-500" checked={checked} disabled={saving || offline || !stored.loaded} onChange={(e) => save(e.target.checked)} />
         {label}
@@ -446,41 +460,77 @@ const ShowTodoField = ({ offline }) => (
   />
 );
 
-/** UI language of this account; the switch remounts the page, the dialog reopens on this tab. Apps: the reminder switch. */
-function LanguageTab({ user = null, offline = false }) {
+/**
+ * "Allgemein": the UI language of this account (the switch remounts the page, the dialog reopens on this tab), the
+ * language of new editions, what the collection shows (apps: the reminder switch) and the view of this device.
+ */
+function GeneralTab({ user = null, offline = false }) {
+  const reminders = ReminderSwitch && canRemind(user) && remindersAvailable();
   return (
     <div className="space-y-4">
-      <p className="text-xs text-slate-400">
-        {t('Die Sprache gilt für dein Konto auf allen Geräten. „Gerätesprache“ folgt der Sprache des Geräts, auf dem du gerade bist.')}
-      </p>
-      <LanguageSelect beforeChange={() => markReopenAccount('language')} />
-      <DefaultLanguageField offline={offline} />
-      <DefaultVisibilityField offline={offline} />
-      <ShareAnimeField offline={offline} />
-      <ShowTodoField offline={offline} />
-      {ReminderSwitch && canRemind(user) && remindersAvailable() && (
-        <div className="pt-4 border-t border-slate-800">
+      <SettingsSection title={t('Sprache')} first>
+        <p className="text-xs text-slate-400">
+          {t('Die Sprache gilt für dein Konto auf allen Geräten. „Gerätesprache“ folgt der Sprache des Geräts, auf dem du gerade bist.')}
+        </p>
+        <LanguageSelect beforeChange={() => markReopenAccount('general')} />
+        <DefaultLanguageField offline={offline} />
+      </SettingsSection>
+      <SettingsSection title={t('Sammlung')}>
+        <ShowTodoField offline={offline} />
+        {reminders && (
           <Suspense fallback={null}>
             <ReminderSwitch />
           </Suspense>
-        </div>
-      )}
+        )}
+      </SettingsSection>
+      <ResetViewField />
+    </div>
+  );
+}
+
+/** "Privatsphäre": the two anime settings and, with other accounts around, the overview of who sees what. */
+function PrivacyTab({ offline = false }) {
+  return (
+    <div className="space-y-4">
+      <SettingsSection title={t('Anime')} first>
+        <DefaultVisibilityField offline={offline} />
+        <ShareAnimeField offline={offline} />
+      </SettingsSection>
+      {!isLocalMode() && <WhoSeesWhat offline={offline} />}
+    </div>
+  );
+}
+
+/** "Konto" (with a server only): who is signed in, the own password and the devices of the account. */
+function AccountTab({ user, onClose }) {
+  return (
+    <div className="space-y-4">
+      <SignedInAs user={user} />
+      <SettingsSection title={t('Passwort ändern')} first>
+        <PasswordForm onClose={onClose} />
+      </SettingsSection>
+      {!user?.offline && <DevicesSection user={user} />}
     </div>
   );
 }
 
 // i18n
 const TABS = [
-  { id: 'password', label: 'Passwort', Icon: Lock },
-  { id: 'keys', label: 'API-Schlüssel', Icon: KeyRound },
-  { id: 'language', label: 'Sprache', Icon: Languages }
+  { id: 'general', label: 'Allgemein', Icon: SlidersHorizontal },
+  { id: 'privacy', label: 'Privatsphäre', Icon: EyeOff },
+  { id: 'services', label: 'Dienste', Icon: KeyRound },
+  { id: 'account', label: 'Konto', Icon: User }
 ];
-// without a server there is no password, only the keys
-const LOCAL_TABS = TABS.filter((t) => t.id !== 'password');
+// without a server there is no account to sign in to: no password, no other devices
+const LOCAL_TABS = TABS.filter((t) => t.id !== 'account');
 
-/** Account dialog (lock icon in the header): own password and personal API keys; admins also the instance keys. */
-export default function AccountModal({ isOpen, onClose, user, initialTab = 'password' }) {
+/**
+ * Settings dialog ("Einstellungen" in the account menu and in "Verwaltung"): Allgemein, Privatsphäre, Dienste (personal
+ * API keys, admins also the instance keys, calendar addresses) and Konto (password, devices).
+ */
+export default function AccountModal({ isOpen, onClose, user, initialTab = 'general' }) {
   const tabs = isLocalMode() ? LOCAL_TABS : TABS;
+  const offline = Boolean(user?.offline);
   const [chosen, setTab] = useState(initialTab);
   const tab = tabs.some((t) => t.id === chosen) ? chosen : tabs[0].id;
   const dialogRef = useDialogA11y(isOpen);
@@ -497,7 +547,7 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={tab === 'password' ? t('Passwort ändern') : tab === 'language' ? t('Sprache') : t('API-Schlüssel')}
+      aria-label={t('Einstellungen')}
       tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
@@ -507,21 +557,21 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
         <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/40 text-brand-400 flex items-center justify-center">
-              <Lock className="w-5 h-5" aria-hidden="true" />
+              <Settings className="w-5 h-5" aria-hidden="true" />
             </div>
-            <h2 className="text-xl font-bold text-white">{t('Konto')}</h2>
+            <h2 className="text-xl font-bold text-white">{t('Einstellungen')}</h2>
           </div>
           <button type="button" onClick={onClose} aria-label={t('Schließen')} className="hit-44 shrink-0 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div {...tabListProps} aria-label={t('Bereich')} className="flex gap-1 mb-5 bg-slate-900/80 border border-slate-800 p-1 rounded-xl w-fit">
+        <div {...tabListProps} aria-label={t('Bereich')} className={`grid ${tabs.length === 4 ? 'grid-cols-2' : 'grid-cols-3'} sm:flex gap-1 mb-5 bg-slate-900/80 border border-slate-800 p-1 rounded-xl sm:w-fit`}>
           {tabs.map(({ id, label, Icon }) => (
             <button
               key={id}
               {...tabProps(id)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 ${tab === id ? 'bg-brand-700 text-white' : 'text-slate-400 hover:text-white'}`}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center justify-center gap-1.5 ${tab === id ? 'bg-brand-700 text-white' : 'text-slate-400 hover:text-white'}`}
             >
               <Icon className="w-3.5 h-3.5" aria-hidden="true" /> {t(label)}
             </button>
@@ -529,9 +579,10 @@ export default function AccountModal({ isOpen, onClose, user, initialTab = 'pass
         </div>
 
         <div {...panelProps}>
-          {tab === 'password' ? <PasswordTab onClose={onClose} />
-            : tab === 'language' ? <LanguageTab user={user} offline={Boolean(user?.offline)} />
-              : <KeysTab isAdmin={user?.role === 'admin'} canEdit={!user?.offline && (user?.role === 'admin' || user?.role === 'editor')} />}
+          {tab === 'account' ? <AccountTab user={user} onClose={onClose} />
+            : tab === 'privacy' ? <PrivacyTab offline={offline} />
+              : tab === 'services' ? <ServicesTab isAdmin={user?.role === 'admin'} canEdit={!offline && (user?.role === 'admin' || user?.role === 'editor')} feeds={!offline && !isLocalMode()} />
+                : <GeneralTab user={user} offline={offline} />}
         </div>
       </div>
     </div>

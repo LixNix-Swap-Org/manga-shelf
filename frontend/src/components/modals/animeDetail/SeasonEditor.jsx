@@ -83,7 +83,7 @@ export function SeasonEditor({ anime, onSave, loadSuggestion, disabled }) {
         setRows(answer.seasons.map((s) => ({ start: String(s.start), name: (s.name || '').slice(0, maxName) })));
         setNote(tn('{n} Staffel von TMDB übernommen. Prüfen und speichern.', '{n} Staffeln von TMDB übernommen. Prüfen und speichern.', answer.seasons.length));
       } else if (answer?.reason === 'no_key') {
-        setNote(t('Für den Vorschlag braucht es einen TMDB-Schlüssel (Konto & Sprache → API-Schlüssel).'));
+        setNote(t('Für den Vorschlag braucht es einen TMDB-Schlüssel (Einstellungen → Dienste).'));
       } else {
         setNote(t('TMDB kennt für diesen Eintrag keine Staffeln.'));
       }

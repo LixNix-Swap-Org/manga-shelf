@@ -74,7 +74,7 @@ const openAdmin = async () => {
 describe('Dashboard: wiring of round 5', () => {
   it('the navigation state { openAccount: "keys" } opens the keys tab once and is cleared, the view stays', async () => {
     renderAt({ pathname: '/', search: '?view=shopping', state: { openAccount: 'keys' } });
-    expect((await screen.findByRole('dialog', { name: 'Konto' })).textContent).toBe('Konto-Tab keys');
+    expect((await screen.findByRole('dialog', { name: 'Konto' })).textContent).toBe('Konto-Tab services');
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/?view=shopping null'));
   });
 

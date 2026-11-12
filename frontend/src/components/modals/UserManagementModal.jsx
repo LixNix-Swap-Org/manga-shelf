@@ -808,7 +808,7 @@ export default function UserManagementModal({ isOpen, onClose, currentUser }) {
               })}
             </div>
           )}
-          <p className="text-[10px] text-slate-400 mt-2">{t('Dein eigenes Passwort änderst du über das Schloss-Symbol oben rechts („Konto: Passwort und API-Schlüssel“, Reiter „Passwort“).')}</p>
+          <p className="text-[10px] text-slate-400 mt-2">{t('Dein eigenes Passwort änderst du im Kontomenü oben rechts („Einstellungen“, Reiter „Konto“).')}</p>
         </div>
 
         <div className="flex justify-end pt-5 mt-5 border-t border-slate-800">

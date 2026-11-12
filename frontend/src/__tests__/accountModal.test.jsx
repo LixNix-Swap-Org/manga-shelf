@@ -33,7 +33,7 @@ function serve(extra = () => undefined) {
 }
 
 const openKeys = async (user) => {
-  render(<AccountModal isOpen onClose={vi.fn()} user={user} initialTab="keys" />);
+  render(<AccountModal isOpen onClose={vi.fn()} user={user} initialTab="services" />);
   return (await screen.findByRole('heading', { name: 'AniList' })).closest('section');
 };
 
@@ -97,7 +97,7 @@ describe('AccountModal: API keys', () => {
     serve();
     await openKeys({ id: 1, role: 'admin' });
     const instance = await screen.findByTestId('instance-keys');
-    expect(screen.getByRole('heading', { name: 'Konto' }).tagName).toBe('H2');
+    expect(screen.getByRole('heading', { name: 'Einstellungen' }).tagName).toBe('H2');
     expect(screen.getByRole('heading', { name: 'AniList' }).tagName).toBe('H3');
     expect(within(instance).getByRole('heading', { name: 'Google Books' }).tagName).toBe('H4');
     const names = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label')).filter(Boolean);
@@ -255,58 +255,70 @@ describe('AccountModal: tabs', () => {
   it('follows the ARIA tabs pattern: panel, roving tabIndex, arrow keys, Home and End', async () => {
     serve();
     render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 2, role: 'editor' }} />);
-    const password = screen.getByRole('tab', { name: 'Passwort' });
-    const keys = screen.getByRole('tab', { name: 'API-Schlüssel' });
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent.trim())).toEqual(['Allgemein', 'Privatsphäre', 'Dienste', 'Konto']);
+    const general = screen.getByRole('tab', { name: 'Allgemein' });
+    const privacy = screen.getByRole('tab', { name: 'Privatsphäre' });
+    const services = screen.getByRole('tab', { name: 'Dienste' });
+    const account = screen.getByRole('tab', { name: 'Konto' });
     const panel = screen.getByRole('tabpanel');
-    expect(password.getAttribute('aria-controls')).toBe(panel.id);
-    expect(keys.getAttribute('aria-controls')).toBe(panel.id);
-    expect(panel.getAttribute('aria-labelledby')).toBe(password.id);
-    expect([password.tabIndex, keys.tabIndex]).toEqual([0, -1]);
+    expect(general.getAttribute('aria-controls')).toBe(panel.id);
+    expect(services.getAttribute('aria-controls')).toBe(panel.id);
+    expect(panel.getAttribute('aria-labelledby')).toBe(general.id);
+    expect([general.tabIndex, privacy.tabIndex]).toEqual([0, -1]);
+    expect(screen.getByRole('combobox', { name: 'Sprache' })).toBeTruthy();
 
-    fireEvent.keyDown(password, { key: 'ArrowRight' });
-    expect(keys.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(keys);
-    expect([password.tabIndex, keys.tabIndex]).toEqual([-1, 0]);
-    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(keys.id);
+    fireEvent.keyDown(general, { key: 'ArrowRight' });
+    expect(privacy.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(privacy);
+    expect([general.tabIndex, privacy.tabIndex]).toEqual([-1, 0]);
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(privacy.id);
+    expect(screen.getByLabelText('Sichtbarkeit deiner Anime-Bewertungen')).toBeTruthy();
+
+    fireEvent.keyDown(privacy, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(services);
     expect(await screen.findByRole('heading', { name: 'AniList' })).toBeTruthy();
-
-    // third tab since I18N-A: Sprache
-    const language = screen.getByRole('tab', { name: 'Sprache' });
-    fireEvent.keyDown(keys, { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(language);
-    fireEvent.keyDown(language, { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(password);
+    fireEvent.keyDown(services, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(account);
     expect(screen.getByLabelText('Aktuelles Passwort')).toBeTruthy();
-    fireEvent.keyDown(password, { key: 'End' });
-    expect(document.activeElement).toBe(language);
-    fireEvent.keyDown(language, { key: 'Home' });
-    expect(document.activeElement).toBe(password);
-    fireEvent.keyDown(password, { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(language);
-    fireEvent.keyDown(language, { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(keys);
-    fireEvent.keyDown(keys, { key: 'Enter' });
-    expect(keys.getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(account, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(general);
+    fireEvent.keyDown(general, { key: 'End' });
+    expect(document.activeElement).toBe(account);
+    fireEvent.keyDown(account, { key: 'Home' });
+    expect(document.activeElement).toBe(general);
+    fireEvent.keyDown(general, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(account);
+    fireEvent.keyDown(account, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(services);
+    fireEvent.keyDown(services, { key: 'Enter' });
+    expect(services.getAttribute('aria-selected')).toBe('true');
   });
 });
 
 describe('AccountModal without a server (local mode)', () => {
-  it('has no password tab, opens on the keys even when asked for the password', async () => {
+  it('has no account tab, opens on the first tab even when asked for the account; no calendar addresses, no overview', async () => {
     mode.local = true;
     serve();
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'admin' }} initialTab="password" />);
-    expect(await screen.findByRole('heading', { name: 'AniList' })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: /Passwort/ })).toBeNull();
-    expect(screen.getByRole('tab', { name: /API-Schlüssel/ }).getAttribute('aria-selected')).toBe('true');
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'admin' }} initialTab="account" />);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent.trim())).toEqual(['Allgemein', 'Privatsphäre', 'Dienste']);
+    expect(screen.getByRole('tab', { name: 'Allgemein' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByLabelText('Aktuelles Passwort')).toBeNull();
-    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('API-Schlüssel');
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Einstellungen');
+    fireEvent.click(screen.getByRole('tab', { name: 'Privatsphäre' }));
+    expect(screen.queryByRole('heading', { name: 'Wer sieht was' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Dienste' }));
+    expect(await screen.findByRole('heading', { name: 'AniList' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Kalender-Abo' })).toBeNull();
   });
 
-  it('with a server the password tab stays first', () => {
+  it('with a server the dialog opens on "Allgemein" and the password sits on "Konto"', () => {
     serve();
-    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, role: 'editor' }} />);
-    expect(screen.getByRole('tab', { name: /Passwort/ }).getAttribute('aria-selected')).toBe('true');
+    render(<AccountModal isOpen onClose={vi.fn()} user={{ id: 1, username: 'kim', role: 'editor' }} />);
+    expect(screen.getByRole('tab', { name: 'Allgemein' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByLabelText('Aktuelles Passwort')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Konto' }));
     expect(screen.getByLabelText('Aktuelles Passwort')).toBeTruthy();
+    expect(document.getElementById('settings-signed-in').textContent).toBe('Angemeldet als: kimEditor');
   });
 });
 
