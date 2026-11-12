@@ -325,6 +325,8 @@ export default function useVolumeActions({
     if (removed.purchase_date) body.purchase_date = removed.purchase_date;
     if (removed.price !== null && removed.price !== undefined) body.price = removed.price;
     if (String(removed.user_id) !== String(user?.id)) body.user_id = removed.user_id;
+    // further copies of the person come back too (migration 56)
+    if (Array.isArray(data.removed_extra_copies) && data.removed_extra_copies.length) body.extra_copies = data.removed_extra_copies;
     try {
       const res = await apiFetch(`/api/volumes/${vol.id}/owners`, { method: 'POST', body });
       if (res.ok) {

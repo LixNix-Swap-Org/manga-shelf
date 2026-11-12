@@ -479,6 +479,8 @@ describe('OwnersField: undo of an owner toggle', () => {
 
   it('ownersUndoBody: no undo for an un-own without the removed row; no date key from an older server', () => {
     expect(ownersUndoBody({ owners: [] }, true)).toBeNull();
+    const extra = [{ price: 12, purchase_date: null, condition: 'Neu', lent_to_user_id: null, lent_to_name: 'Mia', lent_at: '2026-10-01' }];
+    expect(ownersUndoBody({ removed_owner: { price: 7 }, removed_extra_copies: extra }, true)).toEqual({ owned: true, price: 7, extra_copies: extra });
     expect(ownersUndoBody({ owners: [] }, false)).toEqual({ owned: false });
     expect(ownersUndoBody({ removed_owner: { price: null, purchase_date: null }, previous_purchase_date: null }, true, { user_id: 3 }))
       .toEqual({ owned: true, user_id: 3, previous_purchase_date: null });

@@ -104,3 +104,20 @@ test('a bulk status change and its undo keep the second copy', async () => {
     const vol = await volumeOf(editor, mangaId);
     assert.deepEqual([vol.status, vol.copies.length], ['Vorhanden', 2]);
 });
+
+test('undo of "Besitze ich" off brings every copy of the person back', async () => {
+    const { mangaId, volumeId } = await ownedVolume('Alle zurück');
+    const added = (await editor('POST', `/volumes/${volumeId}/copies`, { condition: 'Neu', price: 12 })).body;
+    await editor('PUT', `/volumes/${volumeId}/copies/${added.copy.id}`, { lent: { name: 'Mia', at: '2026-10-01' } });
+    const off = await editor('POST', `/volumes/${volumeId}/owners`, { owned: false });
+    assert.equal(off.status, 200);
+    assert.deepEqual(off.body.removed_extra_copies.map((c) => [c.price, c.condition, c.lent_to_name]), [[12, 'Neu', 'Mia']]);
+    const undo = await editor('POST', `/volumes/${volumeId}/owners`, {
+        owned: true, price: off.body.removed_owner.price, extra_copies: off.body.removed_extra_copies
+    });
+    assert.equal(undo.status, 200, JSON.stringify(undo.body));
+    const vol = await volumeOf(editor, mangaId);
+    assert.deepEqual(vol.copies.map((c) => [c.owner_user_id, c.condition, c.lent_to]), [[ids.ed, null, null], [ids.ed, 'Neu', 'Mia']]);
+    const bad = await editor('POST', `/volumes/${volumeId}/owners`, { owned: false, extra_copies: 'x' });
+    assert.equal(bad.status, 400);
+});
