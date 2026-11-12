@@ -14,6 +14,7 @@ const settings = require('./handlers/settings');
 const shopping = require('./handlers/shopping');
 const radar = require('./handlers/radar');
 const todoHandler = require('./handlers/todo');
+const activityHandler = require('./handlers/activity');
 const savedFilters = require('./handlers/savedFilters');
 const mangaPassion = require('./handlers/mangaPassion');
 const lookup = require('./handlers/lookup');
@@ -53,6 +54,8 @@ const routes = [
     // the caller's own chapter of a webtoon; viewer rights in the shelf are enough, like reading marks
     { method: 'PUT', path: '/mangas/:id/chapters', role: 'editor', handler: chapters.setChapters },
     { method: 'PUT', path: '/mangas/:id/wish', role: 'editor', handler: wishlist.setOwnWish },
+    // family and friends without an account: the token (POST /wishlist/share-token in routes/system.js) is the credential
+    { method: 'GET', path: '/wishlist/shared', role: 'public', handler: wishlist.sharedWishlist },
     { method: 'GET', path: '/mangas/:id/shelf-move', role: 'editor', handler: shelves.movePreview },
     { method: 'PUT', path: '/mangas/:id/shelf', role: 'editor', handler: shelves.moveManga },
     { method: 'GET', path: '/users/directory', role: 'editor', handler: shelves.directory },
@@ -109,6 +112,7 @@ const routes = [
     { method: 'GET', path: '/release-radar', role: 'auth', conditional: true, handler: radar.releaseRadar },
     { method: 'GET', path: '/dashboard-summary', role: 'auth', conditional: true, handler: radar.dashboardSummary },
     { method: 'GET', path: '/todo', role: 'auth', handler: todoHandler.todo },
+    { method: 'GET', path: '/activity', role: 'auth', handler: activityHandler.activity },
     { method: 'GET', path: '/saved-filters', role: 'auth', handler: savedFilters.list },
     { method: 'POST', path: '/saved-filters', role: 'auth', handler: savedFilters.add },
     { method: 'DELETE', path: '/saved-filters/:id', role: 'auth', handler: savedFilters.remove },

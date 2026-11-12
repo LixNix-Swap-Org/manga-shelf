@@ -20,7 +20,10 @@ function readLending(ctx, lent, ownerId) {
     if (typeof lent !== 'object' || Array.isArray(lent)) throw badRequest('Ungültige Angabe zum Verleihen');
     const at = parseDate(lent.at);
     if (at.error) throw badRequest('Ungültiges Datum (erwartet: JJJJ-MM-TT)');
-    const lentAt = at.value || isoDay(zonedToday(ctx.now(), ctx.config.appTimeZone));
+    const today = isoDay(zonedToday(ctx.now(), ctx.config.appTimeZone));
+    // a lending starts today at the latest (a date ahead would never count toward the reminder in "Zu erledigen")
+    if (at.value && at.value > today) throw badRequest('Das Datum des Verleihens liegt in der Zukunft');
+    const lentAt = at.value || today;
     if (!isBlank(lent.user_id)) {
         const id = access.parseId(lent.user_id);
         const user = id && ctx.db.prepare('SELECT id, username FROM users WHERE id = ?').get(id);

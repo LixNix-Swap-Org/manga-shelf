@@ -1112,3 +1112,39 @@ test('migrations 49 to 52: personal anime tags and notes, the feed table, editio
     assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), [49, 50, 51, 52], 'a second run is harmless');
     assert.equal(conn.prepare('SELECT count(*) AS n FROM anime_tags').get().n, 2);
 });
+
+test('migration 58: the feed table also takes the wishlist link, every feed and its index stay', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    schema.applySchema(conn);
+    // the table as migration 50 made it
+    conn.exec(`
+        DROP TABLE calendar_feeds;
+        CREATE TABLE calendar_feeds (
+            token_hash TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            scope TEXT NOT NULL CHECK (scope IN ('radar', 'anime')),
+            sealed TEXT,
+            created_at TEXT,
+            last_used_at INTEGER
+        );
+        CREATE INDEX idx_calendar_feeds_user ON calendar_feeds (user_id, scope);
+        DELETE FROM schema_migrations WHERE version = 58;
+    `);
+    const anna = Number(conn.prepare("INSERT INTO users (username, password_hash, role) VALUES ('anna', 'x', 'editor')").run().lastInsertRowid);
+    conn.prepare("INSERT INTO calendar_feeds (token_hash, user_id, scope, sealed, last_used_at) VALUES ('aa', ?, 'radar', 's1', 5)").run(anna);
+    assert.throws(() => conn.prepare("INSERT INTO calendar_feeds (token_hash, user_id, scope) VALUES ('ww', ?, 'wishlist')").run(anna), /CHECK/);
+
+    assert.deepEqual(schema.runSequentialMigrations(conn, { log: { debug() {}, info() {}, warn() {}, error() {} } }).map(r => r.version), [58]);
+    conn.prepare("INSERT INTO calendar_feeds (token_hash, user_id, scope) VALUES ('ww', ?, 'wishlist')").run(anna);
+    assert.throws(() => conn.prepare("INSERT INTO calendar_feeds (token_hash, user_id, scope) VALUES ('xx', ?, 'other')").run(anna), /CHECK/);
+    assert.deepEqual(conn.prepare('SELECT token_hash, scope, sealed, last_used_at FROM calendar_feeds ORDER BY token_hash').all().map(r => ({ ...r })), [
+        { token_hash: 'aa', scope: 'radar', sealed: 's1', last_used_at: 5 },
+        { token_hash: 'ww', scope: 'wishlist', sealed: null, last_used_at: null }
+    ]);
+    assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_calendar_feeds_user'").get());
+    conn.prepare('DELETE FROM users WHERE id = ?').run(anna);
+    assert.equal(conn.prepare('SELECT count(*) AS n FROM calendar_feeds').get().n, 0, 'the links go with the account');
+});

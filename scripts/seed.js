@@ -11,6 +11,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { manualWorkKey } = require('../core/lib/language');
+const { adoptColumnWish } = require('../core/lib/wishes');
 const { mulberry32 } = require('./lib/rng');
 
 const DEFAULTS = { series: 1500, volumes: 45000, seed: 42 };
@@ -204,6 +205,8 @@ function seedDemo({ db, runTransaction }, data, passwordHash) {
     for (const s of data.series) {
       mangaId[s.key] = Number(insManga.run(s.title, s.alt_title, s.author, s.publisher, s.status, s.tags, s.total_volumes, s.description, s.cover_image, s.banner_image,
         s.manga_passion_id, s.wish_priority, s.format, s.total_chapters, shelfId[s.shelf], userId.max).lastInsertRowid);
+      // the wish column alone is no wish since migration 57: a demo wish becomes the household's, as the migration does
+      adoptColumnWish(db, mangaId[s.key], null);
       stats.series++;
       for (const v of s.volumes) {
         const volumeId = Number(insVolume.run(mangaId[s.key], v.number, v.price, v.release_date, v.release_year, v.condition, v.pages, v.purchase_date, v.status, v.notes,

@@ -3,6 +3,7 @@ import { Link, useInRouterContext } from 'react-router-dom';
 import { ChevronDown, Tag } from 'lucide-react';
 import { splitTags } from '../../utils/tags';
 import { isLongDescription, tagShelfPath } from './MangaHeroCard';
+import LastChanged from './volumeEdit/LastChanged';
 import { t as tr } from '../../i18n/index.js';
 
 /**
@@ -80,6 +81,7 @@ export default function SeriesInfo({ manga, canEdit, canFillTags = false, fillin
           )}
         </div>
       </div>
+      <LastChanged item={manga} testId="series-last-changed" />
     </div>
   );
 }

@@ -21,6 +21,13 @@ describe('todoText', () => {
     expect(todoText(items[2])).toBe('Blue Lock: 3 Bände fehlen (24–26)');
     expect(todoText(items[3])).toBe('Dandadan: Band 3 fehlt');
   });
+
+  it('names the borrower and the months of a long lending', () => {
+    expect(todoText({ kind: 'lent', manga_id: 5, title: 'Naruto', count: 1, volumes: ['4'], lent_to: 'Mia', days: 95 }))
+      .toBe('Naruto: Band 4 seit 3 Monaten an Mia verliehen');
+    expect(todoText({ kind: 'lent', manga_id: 5, title: 'Naruto', count: 3, volumes: ['4', '5', '6'], lent_to: 'Mia', days: 400 }))
+      .toBe('Naruto: Bände 4–6 seit 13 Monaten an Mia verliehen');
+  });
 });
 
 describe('compactVolumes', () => {

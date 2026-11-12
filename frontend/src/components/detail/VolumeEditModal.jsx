@@ -184,7 +184,7 @@ function VolumeEditDialog({
                   manga={manga}
                   mpLookup={mpLookup}
                 />
-                <LastChanged volume={activeVolume} />
+                <LastChanged item={activeVolume} />
               </div>
 
               {formError && (

@@ -1491,6 +1491,18 @@ function migrationList(log = silentLog) {
                         WHERE wish_priority IS NOT NULL
                           AND NOT EXISTS (SELECT 1 FROM series_wishes w WHERE w.manga_id = mangas.id)`);
             }
+        },
+        {
+            version: 58,
+            name: 'allow_wishlist_share',
+            foreignKeys: false,
+            up: (d) => {
+                // a shared wishlist (GET /wishlist/shared?token=…) is a token like a calendar feed: same table, same revocation
+                // (password change, end all sessions, account deleted), one more scope
+                rebuildTable(d, 'calendar_feeds', (sql) => (/'wishlist'/.test(sql) ? sql
+                    : replaceOnce(sql, /CHECK\s*\(\s*scope\s+IN\s*\(\s*'radar'\s*,\s*'anime'\s*\)\s*\)/i,
+                        "CHECK (scope IN ('radar', 'anime', 'wishlist'))", 'calendar_feeds.scope')));
+            }
         }
     ];
 }

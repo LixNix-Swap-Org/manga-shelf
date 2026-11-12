@@ -770,6 +770,29 @@ describe('ShoppingListView wished series', () => {
     expect(screen.getByText('Meins')).toBeTruthy();
   });
 
+  it('"Meine Wunschliste teilen" shows the read-only link, creates one on demand; no button without own wishes', async () => {
+    const path = '/api/wishlist/shared?token=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';
+    const fetchMock = vi.fn(async (url, init) => (init?.method === 'POST'
+      ? response(200, { active: true, path, url: `http://x${path}`, last_used_at: null })
+      : response(200, { active: false })));
+    vi.stubGlobal('fetch', fetchMock);
+    const theirs = wished({ id: 42, title: 'Fremd', my_wish: null, wishes: [{ user_id: 2, username: 'Felix', priority: 3, mine: false }] });
+    renderView(props({ shoppingData: withWished([theirs]) }));
+    expect(screen.queryByRole('button', { name: /Meine Wunschliste teilen/ })).toBeNull();
+    cleanup();
+    const mine = wished({ id: 41, title: 'Meins', my_wish: 2, wishes: [{ user_id: 1, username: 'anna', priority: 2, mine: true }] });
+    renderView(props({ shoppingData: withWished([mine]) }));
+    fireEvent.click(screen.getByRole('button', { name: /Meine Wunschliste teilen/ }));
+    await flush();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/wishlist/share-token');
+    fireEvent.click(screen.getByRole('button', { name: 'Link erzeugen' }));
+    await flush();
+    expect(fetchMock.mock.calls[1][1].method).toBe('POST');
+    expect(screen.getByLabelText('Link zur Wunschliste').value).toMatch(/\/api\/wishlist\/shared\?token=/);
+    expect(screen.getByRole('button', { name: 'Nicht mehr teilen' })).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
   it('a household wish nobody holds as their own gets "Haushalts-Wunsch entfernen"', async () => {
     const fetchMock = vi.fn(async () => response(200, { success: true, my_wish: null, wish_priority: null, wishes: [] }));
     vi.stubGlobal('fetch', fetchMock);

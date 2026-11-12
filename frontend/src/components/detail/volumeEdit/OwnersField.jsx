@@ -27,6 +27,8 @@ export function ownersUndoBody(data, wasOwned, target = {}) {
     ...(removed.purchase_date ? { purchase_date: removed.purchase_date } : {}),
     ...(removed.condition ? { condition: removed.condition } : {}),
     ...(lent ? { lent } : {}),
+    // further copies of the person come back too (migration 56)
+    ...(Array.isArray(data.removed_extra_copies) && data.removed_extra_copies.length ? { extra_copies: data.removed_extra_copies } : {}),
     ...restoreDate
   };
 }

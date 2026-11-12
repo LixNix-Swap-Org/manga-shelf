@@ -480,7 +480,7 @@ router.delete('/system/update/staging/:stagingId', requireAdmin, updateAvailable
 // ----- calendar feed tokens (GET /api/radar/feed.ics and /api/anime/feed.ics are core handlers; they only compare
 // the hash). One token per user and feed: a radar token opens only the radar feed, an anime token only the anime feed.
 
-const FEED_PATHS = { radar: '/api/radar/feed.ics', anime: '/api/anime/feed.ics' };
+const FEED_PATHS = { radar: '/api/radar/feed.ics', anime: '/api/anime/feed.ics', wishlist: '/api/wishlist/shared' };
 const feedLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 120, message: 'Zu viele Kalender-Abrufe. Bitte später erneut versuchen.' });
 
 const feedPath = (scope, token) => `${FEED_PATHS[scope]}?token=${encodeURIComponent(token)}`;
@@ -525,6 +525,7 @@ const revokeFeed = (scope) => (req, res) => {
 
 router.get('/radar/feed.ics', feedLimiter, (req, res, next) => next());
 router.get('/anime/feed.ics', feedLimiter, (req, res, next) => next());
+router.get('/wishlist/shared', feedLimiter, (req, res, next) => next());
 
 router.get('/radar/feed-token', requireAuth, showFeed('radar'));
 router.post('/radar/feed-token', requireAuth, mintFeed('radar'));
@@ -532,6 +533,10 @@ router.delete('/radar/feed-token', requireAuth, revokeFeed('radar'));
 router.get('/anime/feed-token', requireAuth, showFeed('anime'));
 router.post('/anime/feed-token', requireAuth, mintFeed('anime'));
 router.delete('/anime/feed-token', requireAuth, revokeFeed('anime'));
+// the read-only link to the own wishlist (migration 58): same token rules as a calendar feed
+router.get('/wishlist/share-token', requireAuth, showFeed('wishlist'));
+router.post('/wishlist/share-token', requireAuth, mintFeed('wishlist'));
+router.delete('/wishlist/share-token', requireAuth, revokeFeed('wishlist'));
 
 module.exports = router;
 module.exports.checkForUpdate = checkForUpdate;

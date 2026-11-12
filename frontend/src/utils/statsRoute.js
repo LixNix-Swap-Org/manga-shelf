@@ -1,6 +1,6 @@
 // The addresses of the statistics page: /statistik for the overview, /statistik/<tab> for another tab.
 export const STATS_PATH = '/statistik';
-export const STATS_TAB_IDS = ['ueberblick', 'finanzen', 'personen', 'lesen', 'verlauf', 'verlage', 'verliehen', 'anime'];
+export const STATS_TAB_IDS = ['ueberblick', 'finanzen', 'personen', 'lesen', 'verlauf', 'verlage', 'verliehen', 'aktivitaet', 'anime'];
 
 /** The tab of a /statistik address ('ueberblick' for an unknown one), or null outside the statistics page. */
 export function statsTabFromPath(pathname) {

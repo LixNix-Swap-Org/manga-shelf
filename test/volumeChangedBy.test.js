@@ -63,3 +63,12 @@ test('bulk changes and batch creation name the person, a deleted account leaves 
     const after = (await admin('GET', `/mangas/${id}`)).body.volumes;
     assert.deepEqual(after.map((v) => [v.updated_by, v.updated_by_name]), [[null, null], [null, null]]);
 });
+
+test('the series detail names who last changed the series itself', async () => {
+    const { id } = (await admin('POST', '/mangas', { title: 'Reihe mit Namen' })).body;
+    assert.equal((await admin('GET', `/mangas/${id}`)).body.updated_by_name, 'admin');
+    assert.equal((await editor('PUT', `/mangas/${id}`, { title: 'Reihe mit Namen', description: 'Neu' })).status, 200);
+    const detail = (await admin('GET', `/mangas/${id}`)).body;
+    assert.equal(detail.updated_by_name, 'Jörg');
+    assert.ok(detail.updated_at);
+});

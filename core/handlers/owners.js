@@ -2,13 +2,35 @@
 const {
     OWNED_STATUS, isLegacyReadStatus, addOwner, listOwners, syncStatusWithOwners, convertLegacyRead, purchaseDateFromRemainingOwners
 } = require('../lib/owners');
-const { hasCopy, hasOwner, claimHouseholdCopy, updateCopy, removeCopy } = require('../lib/copies');
+const { hasCopy, hasOwner, claimHouseholdCopy, updateCopy, removeCopy, extraCopies, addExtraCopy } = require('../lib/copies');
 const { resolveTargetUser, volumeAccess } = require('../lib/access');
 const { badRequest, notFound } = require('../errors');
 const { isBlank, parsePrice, parseFlag, isValidDate, parseDate, parseCondition } = require('../lib/validate');
 const { FIELD_ERRORS, DATE_ERROR } = require('./volumes');
 const { readLending } = require('./copies');
 const { touchVolumes } = require('../lib/volumeChanges');
+
+const MAX_EXTRA_COPIES = 4;
+
+/** `extra_copies` of an undo body: [{ price, purchase_date, condition, lent_to_user_id, lent_to_name, lent_at }], checked. */
+function readExtraCopies(raw) {
+    if (raw === undefined || raw === null) return [];
+    if (!Array.isArray(raw) || raw.length > MAX_EXTRA_COPIES) throw badRequest('Ungültige weitere Exemplare');
+    return raw.map((c) => {
+        if (!c || typeof c !== 'object') throw badRequest('Ungültige weitere Exemplare');
+        const price = parsePrice(c.price);
+        const date = parseDate(c.purchase_date);
+        const condition = parseCondition(c.condition);
+        const lentAt = parseDate(c.lent_at);
+        if (price.error || date.error || condition.error || lentAt.error) throw badRequest('Ungültige weitere Exemplare');
+        const name = typeof c.lent_to_name === 'string' ? c.lent_to_name.trim().slice(0, 64) : null;
+        const lentUser = Number.isInteger(c.lent_to_user_id) ? c.lent_to_user_id : null;
+        return {
+            price: price.value ?? null, purchase_date: date.value ?? null, condition: condition.value ?? null,
+            lent_to_user_id: lentUser, lent_to_name: name || null, lent_at: (lentUser || name) ? lentAt.value ?? null : null
+        };
+    });
+}
 
 function toggleOwner(ctx, { params, body }) {
     const volumeId = parseInt(params.id, 10);
@@ -27,9 +49,12 @@ function toggleOwner(ctx, { params, body }) {
     // undo of a toggle: the volume date as the earlier answer reported it (previous_purchase_date)
     const restoreDate = Object.prototype.hasOwnProperty.call(body, 'previous_purchase_date') ? parseDate(body.previous_purchase_date) : null;
     if (restoreDate?.error) throw badRequest(DATE_ERROR);
+    // undo of a toggle: the further copies the earlier answer reported (removed_extra_copies, migration 56)
+    const restoreExtras = readExtraCopies(body.extra_copies);
 
     let status;
     let removedOwner = null;
+    let removedExtras = [];
     ctx.db.transaction(() => {
         const isOwner = () => hasCopy(ctx.db, volumeId, targetUserId);
         const wasOwner = isOwner();
@@ -74,7 +99,14 @@ function toggleOwner(ctx, { params, body }) {
             removedOwner = ctx.db.prepare(
                 'SELECT user_id, price, purchase_date, condition, lent_to_user_id, lent_to_name, lent_at FROM volume_owners WHERE volume_id = ? AND user_id = ?'
             ).get(volumeId, targetUserId);
+            removedExtras = extraCopies(ctx.db, volumeId).filter(c => c.owner_user_id === targetUserId).map(c => ({
+                price: c.purchase_price, purchase_date: c.purchase_date, condition: c.condition,
+                lent_to_user_id: c.lent_to_user_id, lent_to_name: c.lent_to_name, lent_at: c.lent_at
+            }));
             removeCopy(ctx.db, volumeId, targetUserId);
+        }
+        if (wantOwned && !wasOwner && restoreExtras.length && isOwner()) {
+            for (const c of restoreExtras) addExtraCopy(ctx.db, volumeId, targetUserId, c);
         }
         status = syncStatusWithOwners(ctx.db, volumeId);
         touchVolumes(ctx, volumeId);
@@ -97,7 +129,8 @@ function toggleOwner(ctx, { params, body }) {
             owned_by_me: owners.some(o => o.user_id === ctx.user.id),
             purchase_date: ctx.db.prepare('SELECT purchase_date FROM volumes WHERE id = ?').get(volumeId)?.purchase_date ?? null,
             previous_purchase_date: vol.purchase_date,
-            removed_owner: removedOwner
+            removed_owner: removedOwner,
+            removed_extra_copies: removedExtras
         }
     };
 }

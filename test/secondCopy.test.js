@@ -104,3 +104,40 @@ test('a bulk status change and its undo keep the second copy', async () => {
     const vol = await volumeOf(editor, mangaId);
     assert.deepEqual([vol.status, vol.copies.length], ['Vorhanden', 2]);
 });
+
+test('undo of "Besitze ich" off brings every copy of the person back', async () => {
+    const { mangaId, volumeId } = await ownedVolume('Alle zurück');
+    const added = (await editor('POST', `/volumes/${volumeId}/copies`, { condition: 'Neu', price: 12 })).body;
+    await editor('PUT', `/volumes/${volumeId}/copies/${added.copy.id}`, { lent: { name: 'Mia', at: '2026-10-01' } });
+    const off = await editor('POST', `/volumes/${volumeId}/owners`, { owned: false });
+    assert.equal(off.status, 200);
+    assert.deepEqual(off.body.removed_extra_copies.map((c) => [c.price, c.condition, c.lent_to_name]), [[12, 'Neu', 'Mia']]);
+    const undo = await editor('POST', `/volumes/${volumeId}/owners`, {
+        owned: true, price: off.body.removed_owner.price, extra_copies: off.body.removed_extra_copies
+    });
+    assert.equal(undo.status, 200, JSON.stringify(undo.body));
+    const vol = await volumeOf(editor, mangaId);
+    assert.deepEqual(vol.copies.map((c) => [c.owner_user_id, c.condition, c.lent_to]), [[ids.ed, null, null], [ids.ed, 'Neu', 'Mia']]);
+    const bad = await editor('POST', `/volumes/${volumeId}/owners`, { owned: false, extra_copies: 'x' });
+    assert.equal(bad.status, 400);
+});
+
+test('a second copy counts toward the person\'s value in the statistics, not their volume count', async () => {
+    const mine = async () => (await editor('GET', '/stats')).body.owner_stats.find((o) => o.user_id === ids.ed);
+    const { volumeId } = await ownedVolume('Statistik-Doppel');
+    const before = await mine();
+    assert.equal((await editor('POST', `/volumes/${volumeId}/copies`, {})).status, 200);
+    const after = await mine();
+    assert.equal(after.volume_count, before.volume_count);
+    assert.equal(after.extra_copies, before.extra_copies + 1);
+    assert.equal(after.total_value, before.total_value + 7, 'the extra copy counts with the list price');
+});
+
+test('a lending date ahead of today is refused', async () => {
+    const { volumeId } = await ownedVolume('Verleih Zukunft');
+    const copy = (await editor('GET', `/volumes/${volumeId}`)).body?.copies?.[0]
+        ?? (await editor('POST', `/volumes/${volumeId}/copies`, {})).body.copy;
+    const res = await editor('PUT', `/volumes/${volumeId}/copies/${copy.id}`, { lent: { name: 'Mia', at: '2099-01-01' } });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, 'Das Datum des Verleihens liegt in der Zukunft');
+});
