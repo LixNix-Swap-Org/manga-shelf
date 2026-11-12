@@ -3719,5 +3719,18 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "Retirer « {name} » de cette étagère ? Les marques de possession de {name} dans cette étagère seront supprimées. Les tomes que plus personne ne possède ensuite passent au statut « Manquant ». Les marques de lecture sont conservées. Juste après, on peut l’annuler pendant 10 secondes.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Déplacer « {title} » vers « {shelf} » ? Les personnes qui ne voient pas cette étagère perdent leurs marques de possession sur la série : {people}. Les tomes que plus personne ne possède ensuite passent au statut « Manquant ». Les marques de lecture sont conservées. Juste après, on peut l’annuler pendant 15 secondes.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Déplacer « {title} » vers « {shelf} » ? Les personnes qui ne voient pas cette étagère perdent leurs marques de possession sur la série ; les tomes que plus personne ne possède ensuite passent au statut « Manquant ». Les marques de lecture sont conservées. Juste après, on peut l’annuler pendant 15 secondes.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} n’avaient pas d’autre étagère et en ont maintenant une à eux, vide."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} n’avaient pas d’autre étagère et en ont maintenant une à eux, vide.",
+  "Für wen?": "Pour qui ?",
+  "Für mich": "Pour moi",
+  "Für {name}": "Pour {name}",
+  "Noch für niemanden (Haushalt)": "Pour personne encore (foyer)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "À qui appartiennent les tomes. « Pour personne encore » : la première personne qui coche un tome comme « Possédé » le reçoit.",
+  "{read} von deinen {own}": "{read} sur tes {own}",
+  "{read} von {own} eigenen": "{read} sur {own} à soi",
+  "Gelesen von den eigenen Bänden": "Lus parmi ses propres tomes",
+  "Gelesen von allen Bänden im Regal": "Lus parmi tous les tomes de l’étagère",
+  "Andere Regale": "Autres étagères",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Étagères dont tu n’es pas membre. Tu ne vois que le nom, le gestionnaire et le nombre de séries, pas le contenu.",
+  "Verwalter: {names}": "Gestionnaire : {names}",
+  "ohne Verwalter": "sans gestionnaire"
 }

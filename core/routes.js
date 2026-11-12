@@ -56,6 +56,8 @@ const routes = [
     { method: 'GET', path: '/users/directory', role: 'editor', handler: shelves.directory },
     { method: 'GET', path: '/shelves', role: 'auth', handler: shelves.list },
     { method: 'POST', path: '/shelves', role: 'editor', handler: shelves.create },
+    // admins: shelves they are no member of (name, Verwalter, counts; no content)
+    { method: 'GET', path: '/shelves/others', role: 'admin', handler: shelves.others },
     { method: 'GET', path: '/shelves/:id', role: 'auth', handler: shelves.detail },
     { method: 'PUT', path: '/shelves/:id', role: 'editor', handler: shelves.update },
     { method: 'DELETE', path: '/shelves/:id', role: 'editor', handler: shelves.remove },

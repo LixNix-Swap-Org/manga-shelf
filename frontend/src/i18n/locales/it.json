@@ -3719,5 +3719,18 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "Rimuovere “{name}” da questo scaffale? I segni di possesso di {name} in questo scaffale verranno eliminati. I volumi che in seguito non appartengono più a nessuno saranno considerati “Mancante”. I segni di lettura restano. Subito dopo si può annullare per 10 secondi.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Spostare “{title}” in “{shelf}”? Chi non vede quello scaffale perde i propri segni di possesso sulla serie: {people}. I volumi che in seguito non appartengono più a nessuno saranno considerati “Mancante”. I segni di lettura restano. Subito dopo si può annullare per 15 secondi.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Spostare “{title}” in “{shelf}”? Chi non vede quello scaffale perde i propri segni di possesso sulla serie; i volumi che in seguito non appartengono più a nessuno saranno considerati “Mancante”. I segni di lettura restano. Subito dopo si può annullare per 15 secondi.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} non avevano un altro scaffale e ora ne hanno uno proprio, vuoto."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} non avevano un altro scaffale e ora ne hanno uno proprio, vuoto.",
+  "Für wen?": "Per chi?",
+  "Für mich": "Per me",
+  "Für {name}": "Per {name}",
+  "Noch für niemanden (Haushalt)": "Ancora per nessuno (casa)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "A chi appartengono i volumi. «Ancora per nessuno»: chi segna per primo un volume come «Posseduto» lo riceve.",
+  "{read} von deinen {own}": "{read} dei tuoi {own}",
+  "{read} von {own} eigenen": "{read} di {own} propri",
+  "Gelesen von den eigenen Bänden": "Letti tra i propri volumi",
+  "Gelesen von allen Bänden im Regal": "Letti tra tutti i volumi dello scaffale",
+  "Andere Regale": "Altri scaffali",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Scaffali di cui non sei membro. Vedi solo il nome, il gestore e il numero di serie, non il contenuto.",
+  "Verwalter: {names}": "Gestore: {names}",
+  "ohne Verwalter": "senza gestore"
 }

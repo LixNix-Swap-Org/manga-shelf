@@ -3719,5 +3719,18 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "Remover “{name}” desta estante? As marcações de posse de {name} nesta estante serão apagadas. Volumes que ninguém mais possuir depois ficam como “Faltando”. As marcações de leitura são mantidas. Logo depois dá para desfazer por 10 segundos.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Mover “{title}” para “{shelf}”? Quem não vê essa estante perde suas marcações de posse da série: {people}. Volumes que ninguém mais possuir depois ficam como “Faltando”. As marcações de leitura são mantidas. Logo depois dá para desfazer por 15 segundos.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Mover “{title}” para “{shelf}”? Quem não vê essa estante perde suas marcações de posse da série; volumes que ninguém mais possuir depois ficam como “Faltando”. As marcações de leitura são mantidas. Logo depois dá para desfazer por 15 segundos.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} não tinham outra estante e agora têm uma própria, vazia."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} não tinham outra estante e agora têm uma própria, vazia.",
+  "Für wen?": "Para quem?",
+  "Für mich": "Para mim",
+  "Für {name}": "Para {name}",
+  "Noch für niemanden (Haushalt)": "Ainda para ninguém (casa)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "De quem são os volumes. “Ainda para ninguém”: quem marcar primeiro um volume como “Possuído” fica com ele.",
+  "{read} von deinen {own}": "{read} dos seus {own}",
+  "{read} von {own} eigenen": "{read} de {own} próprios",
+  "Gelesen von den eigenen Bänden": "Lidos entre os próprios volumes",
+  "Gelesen von allen Bänden im Regal": "Lidos entre todos os volumes da estante",
+  "Andere Regale": "Outras estantes",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Estantes em que você não é membro. Você vê só o nome, o gestor e o número de séries, não o conteúdo.",
+  "Verwalter: {names}": "Gestor: {names}",
+  "ohne Verwalter": "sem gestor"
 }

@@ -58,6 +58,8 @@ export function recomputeDetail(detail) {
   let full = 0;
   let owned = 0;
   const reads = new Map();
+  const own = new Map();
+  const ownRead = new Map();
   for (const v of volumes) {
     const p = priceOf(v);
     full += p;
@@ -66,6 +68,11 @@ export function recomputeDetail(detail) {
     owned++;
     for (const id of v.read_by || (v.read_users || []).map((u) => u.user_id ?? u.id)) {
       reads.set(String(id), (reads.get(String(id)) || 0) + 1);
+    }
+    const readers = new Set((v.read_by || (v.read_users || []).map((u) => u.user_id ?? u.id)).map(String));
+    for (const id of new Set((v.owners || []).map((o) => String(o.user_id)))) {
+      own.set(id, (own.get(id) || 0) + 1);
+      if (readers.has(id)) ownRead.set(id, (ownRead.get(id) || 0) + 1);
     }
   }
   const next = { ...detail, owned_volumes: owned, total_value: round2(total), full_value: round2(full) };
@@ -82,7 +89,9 @@ export function recomputeDetail(detail) {
         read_count: count,
         total_owned: owned,
         unread_count: owned - count,
-        percentage: owned > 0 ? Math.min(100, Math.round((count / owned) * 100)) : 0
+        percentage: owned > 0 ? Math.min(100, Math.round((count / owned) * 100)) : 0,
+        own_owned: own.get(String(r.user_id)) || 0,
+        own_read: ownRead.get(String(r.user_id)) || 0
       };
     });
   }

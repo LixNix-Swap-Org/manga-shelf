@@ -3719,5 +3719,18 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "¿Quitar a «{name}» de esta estantería? Se borrarán las marcas de posesión de {name} en esta estantería. Los tomos que después no tenga nadie contarán como «Falta». Las marcas de lectura se conservan. Justo después se puede deshacer durante 10 segundos.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "¿Mover «{title}» a «{shelf}»? Quien no vea esa estantería perderá sus marcas de posesión de la serie: {people}. Los tomos que después no tenga nadie contarán como «Falta». Las marcas de lectura se conservan. Justo después se puede deshacer durante 15 segundos.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "¿Mover «{title}» a «{shelf}»? Quien no vea esa estantería perderá sus marcas de posesión de la serie; los tomos que después no tenga nadie contarán como «Falta». Las marcas de lectura se conservan. Justo después se puede deshacer durante 15 segundos.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} no tenían otra estantería y ahora tienen una propia, vacía."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} no tenían otra estantería y ahora tienen una propia, vacía.",
+  "Für wen?": "¿Para quién?",
+  "Für mich": "Para mí",
+  "Für {name}": "Para {name}",
+  "Noch für niemanden (Haushalt)": "Para nadie todavía (hogar)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "A quién pertenecen los tomos. «Para nadie todavía»: quien marque primero un tomo como «En posesión» se lo queda.",
+  "{read} von deinen {own}": "{read} de tus {own}",
+  "{read} von {own} eigenen": "{read} de {own} propios",
+  "Gelesen von den eigenen Bänden": "Leídos de los tomos propios",
+  "Gelesen von allen Bänden im Regal": "Leídos de todos los tomos de la estantería",
+  "Andere Regale": "Otras estanterías",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Estanterías de las que no eres miembro. Solo ves el nombre, el gestor y el número de series, no el contenido.",
+  "Verwalter: {names}": "Gestor: {names}",
+  "ohne Verwalter": "sin gestor"
 }

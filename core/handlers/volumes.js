@@ -273,7 +273,12 @@ function createBatch(ctx, { body }) {
     const numeric = parseNumericFields(body, { default_price: parsePrice, release_year: parseYear });
     if (numeric.error) throw badRequest(numeric.error);
 
-    access.mangaAccess(ctx, mId, 'editor');
+    const shelfId = access.mangaAccess(ctx, mId, 'editor');
+    // whose copies the owned volumes become: absent = the caller (as before), null = nobody yet (a copy of the
+    // household), an id = that member of the shelf (another account than the caller only for admins, as for /owners)
+    const ownerId = Object.prototype.hasOwnProperty.call(body, 'owner_user_id')
+        ? (body.owner_user_id === null ? null : resolveTargetUser(ctx, body.owner_user_id === '' ? NaN : body.owner_user_id, shelfId))
+        : ctx.user.id;
 
     // Special editions, Schuber and Specials carry their own numbers and never block a regular volume
     const existing = ctx.db.prepare("SELECT volume_number FROM volumes WHERE manga_id = ? AND type = 'volume'").all(mId);
@@ -298,8 +303,8 @@ function createBatch(ctx, { body }) {
                 continue;
             }
             const volumeId = Number(insertStmt.run(mId, String(i), st.value, price, pub, cond, rDate, year).lastInsertRowid);
-            syncOwnersWithStatus(ctx.db, volumeId, ctx.user.id);
-            if (st.read) markRead(ctx.db, volumeId, ctx.user.id);
+            syncOwnersWithStatus(ctx.db, volumeId, ownerId);
+            if (st.read) markRead(ctx.db, volumeId, ownerId ?? ctx.user.id);
             created++;
         }
     });

@@ -95,6 +95,15 @@ describe('volumePatch', () => {
     expect(applyVolumeChange(same, { kind: 'status', volumeId: 99, value: 'Fehlt' }, me)).toBe(same);
     expect(patchVolume({ id: 1 }, { kind: 'nope' })).toBeNull();
     expect(recomputeDetail({ volumes: [] })).toMatchObject({ owned_volumes: 0, total_value: 0 });
+    const ownStats = recomputeDetail({
+      volumes: [
+        { status: 'Vorhanden', read_by: [1], owners: [{ user_id: 1 }] },
+        { status: 'Vorhanden', read_by: [2], owners: [{ user_id: 1 }] },
+        { status: 'Fehlt', read_by: [1], owners: [] }
+      ],
+      reader_stats: [{ user_id: 1 }, { user_id: 2 }]
+    });
+    expect(ownStats.reader_stats.map((r) => [r.own_read, r.own_owned])).toEqual([[1, 2], [0, 0]]);
   });
 
   it('the wish flag follows the owned volumes: the first owned volume ends the wish, the last one leaving restores it', () => {

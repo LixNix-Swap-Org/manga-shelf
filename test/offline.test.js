@@ -217,7 +217,7 @@ test('reader_stats name the role of each user; volumes carry no internal number_
     await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Vorhanden' });
     const detail = (await visitor('GET', `/mangas/${id}`)).body;
     assert.deepEqual(detail.reader_stats.map(r => [r.username, r.role]), [['admin', 'admin'], ['ed', 'editor'], ['vis', 'visitor']]);
-    assert.deepEqual(Object.keys(detail.reader_stats[0]), ['user_id', 'username', 'role', 'read_count', 'total_owned', 'unread_count', 'percentage']);
+    assert.deepEqual(Object.keys(detail.reader_stats[0]), ['user_id', 'username', 'role', 'read_count', 'total_owned', 'unread_count', 'percentage', 'own_owned', 'own_read']);
     assert.ok(detail.volumes.length === 2 && detail.volumes.every(v => !('number_sort' in v)));
     const snap = (await visitor('GET', '/offline-snapshot')).body;
     assert.deepEqual(snap.details[id].reader_stats, detail.reader_stats);

@@ -43,6 +43,34 @@ export function batchResultText({ created, skipped } = {}) {
   return tr('{made}, übersprungen (schon vorhanden): {shown}', { made, shown });
 }
 
+// i18n-ignore: values of the "Für wen?" select, not shown
+const FOR_ME = 'me';
+const FOR_NOBODY = 'nobody';
+const READ_ONLY = ['visitor', 'guest'];
+
+/**
+ * The choices of "Für wen?": me, nobody yet (a household copy) and, for an admin, every other person of the shelf who
+ * may own volumes. Empty when nobody else is there to tell apart (the field is then left out).
+ */
+export function ownerOptions(people, user) {
+  const list = Array.isArray(people) ? people : [];
+  const others = list.filter((p) => String(p.user_id) !== String(user?.id) && !READ_ONLY.includes(p.role));
+  if (others.length === 0) return [];
+  const name = (p) => p.display_name || p.username;
+  return [
+    { value: FOR_ME, text: tr('Für mich') },
+    ...(user?.role === 'admin' ? others.map((p) => ({ value: String(p.user_id), text: tr('Für {name}', { name: name(p) }) })) : []),
+    { value: FOR_NOBODY, text: tr('Noch für niemanden (Haushalt)') }
+  ];
+}
+
+/** The owner_user_id of POST /api/volumes/batch for a choice: me = left out (the caller), nobody = null, else the id. */
+export function ownerBody(choice) {
+  if (!choice || choice === FOR_ME) return {};
+  if (choice === FOR_NOBODY) return { owner_user_id: null };
+  return { owner_user_id: Number(choice) };
+}
+
 const pillClass = (active, tone) => `py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
   active
     ? (tone === 'emerald'
@@ -51,7 +79,7 @@ const pillClass = (active, tone) => `py-2 px-2.5 rounded-lg text-xs font-bold tr
     : 'text-slate-400 hover:text-slate-200 border border-transparent'
 }`;
 
-export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSuccess, volumes, officialTotal }) {
+export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSuccess, volumes, officialTotal, people = [], user = null }) {
   const [initialRange] = useState(() => batchDefaults(volumes, manga?.total_volumes, officialTotal));
   const [batchFrom, setBatchFrom] = useState(initialRange.from);
   const [batchTo, setBatchTo] = useState(initialRange.to);
@@ -59,6 +87,8 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
   const [batchPrice, setBatchPrice] = useState('');
   const [batchPublisher, setBatchPublisher] = useState('');
   const [batchCondition, setBatchCondition] = useState('');
+  const [batchOwner, setBatchOwner] = useState(FOR_ME);
+  const owners = ownerOptions(people, user);
   const symbol = currencySymbol(editionCurrency(manga));
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
@@ -97,7 +127,8 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
           status: batchStatus,
           default_price: batchPrice.trim() || null,
           publisher: batchPublisher.trim() || manga?.publisher || null,
-          condition: batchCondition.trim() || null
+          condition: batchCondition.trim() || null,
+          ...(batchStatus === 'Vorhanden' ? ownerBody(batchOwner) : {})
         },
         timeout: TIMEOUTS.long
       });
@@ -229,6 +260,24 @@ export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSucce
               )}
             </div>
           </div>
+
+          {batchStatus === 'Vorhanden' && owners.length > 0 && (
+            <div>
+              <label htmlFor={`${ids}-owner`} className="block text-xs font-semibold text-slate-300 mb-1">{tr('Für wen?')}</label>
+              <select
+                id={`${ids}-owner`}
+                className="input-field bg-slate-950 text-base sm:text-xs"
+                value={batchOwner}
+                onChange={(e) => setBatchOwner(e.target.value)}
+                aria-describedby={`${ids}-owner-hint`}
+              >
+                {owners.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+              </select>
+              <p id={`${ids}-owner-hint`} className="text-[11px] text-slate-400 mt-1">
+                {tr('Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.')}
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

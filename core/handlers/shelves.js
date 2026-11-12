@@ -405,10 +405,32 @@ function undoMove(ctx, prev) {
     return { id: prev.mangaId, shelf_id: prev.source, restored_copies: restored };
 }
 
+/**
+ * GET /shelves/others (admins): the shelves the caller is no member of, so an admin knows they exist (a private shelf
+ * of another person). Name, colour, the Verwalter (role owner) and how many series and members; nothing of the content.
+ */
+function others(ctx) {
+    const mine = access.accessibleShelfIds(ctx);
+    const rows = ctx.db.prepare('SELECT id, name, color FROM shelves ORDER BY name COLLATE NOCASE, id').all().filter(r => !mine.includes(r.id));
+    const managers = ctx.db.prepare(`
+        SELECT u.username FROM shelf_members m JOIN users u ON u.id = m.user_id
+        WHERE m.shelf_id = ? AND m.role = 'owner' AND u.role NOT IN ('visitor', 'guest') ORDER BY u.username COLLATE NOCASE`);
+    const counts = ctx.db.prepare(`
+        SELECT (SELECT count(*) FROM mangas WHERE shelf_id = ?) AS series, (SELECT count(*) FROM shelf_members WHERE shelf_id = ?) AS members`);
+    return {
+        body: {
+            shelves: rows.map(r => {
+                const c = counts.get(r.id, r.id);
+                return { id: r.id, name: r.name, color: r.color, managers: managers.all(r.id).map(m => m.username), series_count: c.series, member_count: c.members };
+            })
+        }
+    };
+}
+
 /** GET /users/directory: the accounts the caller may see by name (shares a shelf with them; an admin sees all). */
 function directory(ctx) {
     const users = ctx.db.prepare('SELECT id, username FROM users ORDER BY username COLLATE NOCASE').all();
     return { body: { users: access.visibleRows(ctx, users, 'id') } };
 }
 
-module.exports = { directory, list, detail, create, update, remove, addMember, setMemberRole, removeMember, movePreview, moveManga, undo };
+module.exports = { directory, others, list, detail, create, update, remove, addMember, setMemberRole, removeMember, movePreview, moveManga, undo };

@@ -3505,5 +3505,18 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "이 책장에서 “{name}”을(를) 제거할까요? 이 책장에 있는 {name}의 보유 표시가 삭제돼요. 이후 아무도 보유하지 않는 권은 “미보유”로 처리돼요. 읽음 표시는 남아 있어요. 직후 10초 동안 실행 취소할 수 있어요.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "“{title}” 시리즈를 “{shelf}” 책장으로 옮길까요? 그 책장을 볼 수 없는 사람은 이 시리즈의 보유 표시를 잃어요: {people}. 이후 아무도 보유하지 않는 권은 “미보유”로 처리돼요. 읽음 표시는 남아 있어요. 직후 15초 동안 실행 취소할 수 있어요.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "“{title}” 시리즈를 “{shelf}” 책장으로 옮길까요? 그 책장을 볼 수 없는 사람은 이 시리즈의 보유 표시를 잃어요. 이후 아무도 보유하지 않는 권은 “미보유”로 처리돼요. 읽음 표시는 남아 있어요. 직후 15초 동안 실행 취소할 수 있어요.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names}에게는 다른 책장이 없어서 이제 비어 있는 자기 책장이 생겼습니다."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names}에게는 다른 책장이 없어서 이제 비어 있는 자기 책장이 생겼습니다.",
+  "Für wen?": "누구 것인가요?",
+  "Für mich": "내 것",
+  "Für {name}": "{name}의 것",
+  "Noch für niemanden (Haushalt)": "아직 아무도 아님 (가정)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "권의 소유자입니다. “아직 아무도 아님”: 처음으로 “소장”에 체크한 사람이 갖게 됩니다.",
+  "{read} von deinen {own}": "내 {own}권 중 {read}권",
+  "{read} von {own} eigenen": "본인 {own}권 중 {read}권",
+  "Gelesen von den eigenen Bänden": "본인 소유 권 중 읽음",
+  "Gelesen von allen Bänden im Regal": "책장의 모든 권 중 읽음",
+  "Andere Regale": "다른 책장",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "내가 멤버가 아닌 책장입니다. 이름, 관리자, 시리즈 수만 보이고 내용은 보이지 않습니다.",
+  "Verwalter: {names}": "관리자: {names}",
+  "ohne Verwalter": "관리자 없음"
 }

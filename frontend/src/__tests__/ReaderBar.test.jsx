@@ -120,4 +120,17 @@ describe('ReaderBar', () => {
     expect(screen.queryByRole('group', { name: 'Besitz filtern' })).toBeNull();
     expect(screen.getByLabelText('Gelesen am')).toBeTruthy();
   });
+
+  it('adds the read count of the own copies when a person owns only some of the volumes', () => {
+    const own = [
+      { user_id: 1, username: 'max', display_name: 'Max', read_count: 3, total_owned: 12, own_owned: 8, own_read: 2 },
+      { user_id: 2, username: 'lea', read_count: 1, total_owned: 12, own_owned: 4, own_read: 1 },
+      { user_id: 3, username: 'tom', read_count: 0, total_owned: 12, own_owned: 12, own_read: 0 }
+    ];
+    render(<ReaderBar {...props({ readers: own, ownedCount: 12 })} />);
+    openChip();
+    expect(screen.getByRole('button', { name: /^Max\s*2 von deinen 8\s*3 \/ 12$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^lea\s*1 von 4 eigenen\s*1 \/ 12$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^tom\s*0 \/ 12$/ })).toBeTruthy();
+  });
 });

@@ -3612,5 +3612,18 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "“{name}” van deze plank verwijderen? De bezitsmarkeringen van {name} op deze plank worden verwijderd. Delen die daarna niemand meer bezit, gelden als “Ontbreekt”. De leesmarkeringen blijven bewaard. Direct daarna kun je het 10 seconden lang ongedaan maken.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "“{title}” naar “{shelf}” verplaatsen? Wie die plank niet ziet, verliest zijn bezitsmarkeringen bij de reeks: {people}. Delen die daarna niemand meer bezit, gelden als “Ontbreekt”. Leesmarkeringen blijven bewaard. Direct daarna kun je het 15 seconden lang ongedaan maken.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "“{title}” naar “{shelf}” verplaatsen? Wie die plank niet ziet, verliest zijn bezitsmarkeringen bij de reeks; delen die daarna niemand meer bezit, gelden als “Ontbreekt”. Leesmarkeringen blijven bewaard. Direct daarna kun je het 15 seconden lang ongedaan maken.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} hadden geen andere plank en hebben nu een eigen, lege."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "{names} hadden geen andere plank en hebben nu een eigen, lege.",
+  "Für wen?": "Voor wie?",
+  "Für mich": "Voor mij",
+  "Für {name}": "Voor {name}",
+  "Noch für niemanden (Haushalt)": "Nog voor niemand (huishouden)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Van wie de delen zijn. ‘Nog voor niemand’: wie een deel als eerste als ‘In bezit’ aanvinkt, krijgt het.",
+  "{read} von deinen {own}": "{read} van jouw {own}",
+  "{read} von {own} eigenen": "{read} van {own} eigen",
+  "Gelesen von den eigenen Bänden": "Gelezen van de eigen delen",
+  "Gelesen von allen Bänden im Regal": "Gelezen van alle delen op de plank",
+  "Andere Regale": "Andere planken",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Planken waarvan je geen lid bent. Je ziet alleen de naam, beheerder en het aantal reeksen, niet de inhoud.",
+  "Verwalter: {names}": "Beheerder: {names}",
+  "ohne Verwalter": "geen beheerder"
 }

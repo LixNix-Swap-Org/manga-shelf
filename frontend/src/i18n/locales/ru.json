@@ -3826,5 +3826,18 @@
   "„{name}“ aus diesem Regal entfernen? Die Besitzmarkierungen von {name} in diesem Regal werden gelöscht. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Die Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": "Удалить «{name}» с этой полки? Отметки о наличии пользователя {name} на этой полке будут удалены. Тома, которых после этого ни у кого нет, получат статус «Нет в наличии». Отметки о прочтении сохранятся. Сразу после этого действие можно отменить в течение 10 секунд.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe: {people}. Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Переместить «{title}» на полку «{shelf}»? Те, кто не видит эту полку, потеряют свои отметки о наличии по этой серии: {people}. Тома, которых после этого ни у кого нет, получат статус «Нет в наличии». Отметки о прочтении сохранятся. Сразу после этого действие можно отменить в течение 15 секунд.",
   "„{title}“ nach „{shelf}“ verschieben? Wer dieses Regal nicht sieht, verliert seine Besitzmarkierungen an der Reihe; Bände, die danach niemand mehr besitzt, gelten als „Fehlt“. Lesemarkierungen bleiben erhalten. Direkt danach lässt sich das 15 Sekunden lang rückgängig machen.": "Переместить «{title}» на полку «{shelf}»? Те, кто не видит эту полку, потеряют свои отметки о наличии по этой серии; тома, которых после этого ни у кого нет, получат статус «Нет в наличии». Отметки о прочтении сохранятся. Сразу после этого действие можно отменить в течение 15 секунд.",
-  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "У {names} не было другой полки, теперь у них есть своя, пустая."
+  "{names} hatten kein anderes Regal und haben jetzt ein eigenes, leeres.": "У {names} не было другой полки, теперь у них есть своя, пустая.",
+  "Für wen?": "Для кого?",
+  "Für mich": "Для меня",
+  "Für {name}": "Для {name}",
+  "Noch für niemanden (Haushalt)": "Пока ни для кого (общее)",
+  "Wem die Bände gehören. „Noch für niemanden“: Wer den Band zuerst als „Im Besitz“ abhakt, bekommt ihn.": "Кому принадлежат тома. «Пока ни для кого»: том получает тот, кто первым отметит его как «В наличии».",
+  "{read} von deinen {own}": "{read} из твоих {own}",
+  "{read} von {own} eigenen": "{read} из {own} своих",
+  "Gelesen von den eigenen Bänden": "Прочитано из своих томов",
+  "Gelesen von allen Bänden im Regal": "Прочитано из всех томов на полке",
+  "Andere Regale": "Другие полки",
+  "Regale, in denen du kein Mitglied bist. Du siehst nur Name, Verwalter und Anzahl der Reihen, nicht den Inhalt.": "Полки, участником которых ты не являешься. Видны только название, управляющий и число серий, но не содержимое.",
+  "Verwalter: {names}": "Управляющий: {names}",
+  "ohne Verwalter": "без управляющего"
 }

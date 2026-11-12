@@ -58,6 +58,13 @@ export default function ReaderBar({
   const isSelected = (r) => String(selectedReaderId) === String(r.user_id) || (selectedReaderId === 'ALL' && String(r.user_id) === String(user?.id));
   const shown = readers.find(isSelected) || readers[0];
   const nameOf = (u) => u.display_name || u.username;
+  // "4 von deinen 8" / "3 von 5 eigenen": only when the person owns some, but not all, of the owned volumes
+  const ownPart = (r) => {
+    const own = Number(r.own_owned) || 0;
+    if (own === 0 || own >= (Number(r.total_owned) || 0)) return null;
+    const read = Math.min(Number(r.own_read) || 0, own);
+    return String(r.user_id) === String(user?.id) ? t('{read} von deinen {own}', { read, own }) : t('{read} von {own} eigenen', { read, own });
+  };
   const ownerList = owners ? ownerChoices(owners) : [];
   const ownerFiltered = ownerList.length > 0 && owners.ownerFilter !== 'ALL';
   const chosenOwner = ownerFiltered ? ownerList.find((c) => String(c.user.user_id) === String(owners.ownerFilter))?.user : null;
@@ -135,8 +142,13 @@ export default function ReaderBar({
                       >
                         <Radio on={on} />
                         <span>{nameOf(r)}</span>
-                        <span className="ml-auto text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300">
-                          {Math.min(r.read_count, r.total_owned)} / {r.total_owned}
+                        <span className="ml-auto flex items-center gap-1.5">
+                          {ownPart(r) && (
+                            <span className="text-[11px] text-amber-300/90 whitespace-nowrap" title={t('Gelesen von den eigenen Bänden')}>{ownPart(r)}</span>
+                          )}
+                          <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300" title={t('Gelesen von allen Bänden im Regal')}>
+                            {Math.min(r.read_count, r.total_owned)} / {r.total_owned}
+                          </span>
                         </span>
                       </button>
                     );
