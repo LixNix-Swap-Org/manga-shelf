@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { applyLookupToForm } from '../utils/volumeFormHelpers';
 import {
   buildEditorForm, readJsonSafe, isAbortError, validateVolumeForm, buildSaveBody, rebaseForm, priceForQuery, isAllowedImageUrl,
-  filterUploadFiles, chunk, addImages, removeImage, moveImage, deleteVolumeRequest, MAX_UPLOAD_FILES, FIELD_NAMES
+  filterUploadFiles, chunk, addImages, removeImage, moveImage, deleteVolumeRequest, MAX_UPLOAD_FILES, FIELD_NAMES, statusLossText
 } from '../components/detail/volumeEdit/editorUtils';
 import { apiFetch, TIMEOUTS } from '../utils/api';
 import { prepareImagesForUpload } from '../utils/imageResize';
@@ -277,6 +277,9 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
       return;
     }
     setFormError('');
+    // leaving "Vorhanden" removes the copies with their prices and lendings: asked first, a no keeps the form open
+    const loss = statusLossText(editVolForm, baseRef.current, activeVolume.copies);
+    if (loss && !(await askConfirm(loss, { title: t('Status ändern'), confirmLabel: t('Trotzdem speichern') }))) return;
     setSavingVol(true);
     try {
       const res = await apiFetch(`/api/volumes/${activeVolume.id}`, {

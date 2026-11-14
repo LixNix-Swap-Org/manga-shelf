@@ -284,6 +284,7 @@
   "Art des Eintrags": "Soort item",
   "Artbook": "Artbook",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Ook je account “{name}” heeft daarin geen wachtwoord: een nieuw wachtwoord stel je daarna alleen in via een andere beheerder in het gebruikersbeheer of via het consolecommando “{command}” op de server.",
+  "Auch die Ausleihe an {names} geht verloren.": "Ook de uitlening aan {names} gaat verloren.",
   "Auch für automatische Aktualisierungen verwenden": "Ook gebruiken voor automatische updates",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "one": "Ook {n} speciale uitgave/box set",
@@ -1864,6 +1865,10 @@
   "Mit Server verbinden": "Met server verbinden",
   "Mit Vorbestellungen": "Met voorbestellingen",
   "Mit dem Server verbinden": "Met de server verbinden",
+  "Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.|Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.": {
+    "one": "Met de nieuwe status is het deel niet meer in bezit: het exemplaar wordt verwijderd, met eigenaar, aankoopprijs, aankoopdatum en staat.",
+    "other": "Met de nieuwe status is het deel niet meer in bezit: de {n} exemplaren worden verwijderd, met eigenaren, aankoopprijzen, aankoopdata en staat."
+  },
   "Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).": "Met eigen sleutels krijgt deze server een eigen limiet bij MyAnimeList en Google Books, in plaats van de anonieme met iedereen te delen. Alles werkt ook zonder; later kan het in het accountvenster (slotsymbool).",
   "Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.": "Met een server verbinden? De collectie zonder server blijft op dit apparaat opgeslagen en kan hier altijd weer worden geopend.",
   "Mit einem eigenen Manga-Shelf-Server verbinden. Die Sammlung auf diesem Gerät bleibt erhalten.": "Met een eigen Manga Shelf-server verbinden. De collectie op dit apparaat blijft behouden.",
@@ -2058,6 +2063,7 @@
   "Nur Lesezugriff für Besucher/Gäste gestattet": "Alleen leestoegang toegestaan voor bezoekers/gasten",
   "Nur Print-Bände": "Alleen gedrukte delen",
   "Nur Schuber ({count})": "Alleen box sets ({count})",
+  "Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.": "Wil je alleen het bezit van één persoon beëindigen, gebruik dan „Eigenaren”: dat kan ongedaan worden gemaakt.",
   "Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.": "Alleen de Duitse markt (Manga Passion): edities in andere talen verschijnen alleen onder “Mijn voorbestellingen en budget”, met de data die je zelf invult.",
   "Nur du": "Alleen jij",
   "Nur ein Administrator kann eine Sammlung auf den Server übertragen. Für ein anderes Konto „Zusammenführen“ verwenden.": "Alleen een beheerder kan een collectie naar de server overdragen. Gebruik voor een ander account “Samenvoegen”.",
@@ -2526,6 +2532,7 @@
   "Status für {title}": "Status voor {title}",
   "Status und Besitzer bitte getrennt ändern": "Wijzig status en eigenaar apart",
   "Status wählen": "Status kiezen",
+  "Status ändern": "Status wijzigen",
   "Status-Filter": "Statusfilter",
   "Status: Erscheint bald (Erinnerung im Release-Radar)": "Status: binnenkort (herinnering in de Release Radar)",
   "Status: Fehlt noch (erscheint im Buchladen-Modus)": "Status: ontbreekt nog (verschijnt in de winkelmodus)",
@@ -2623,6 +2630,7 @@
   "Trotzdem als komplett markieren": "Toch als compleet markeren",
   "Trotzdem anzeigen": "Toch tonen",
   "Trotzdem einspielen (nicht empfohlen)": "Toch terugzetten (niet aanbevolen)",
+  "Trotzdem speichern": "Toch opslaan",
   "Typ": "Type",
   "Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben": "Voer type (los deel, special edition, box set of special), nummer, status en optioneel een prijs of coverfoto in",
   "Typ, Details, Preis und Sammlerangaben für diesen Eintrag": "Type, details, prijs en verzamelgegevens voor dit item",
