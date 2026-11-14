@@ -342,6 +342,7 @@
   "Ausgeliehen an {name}": "Prêté à {name}",
   "Ausgeliehen an {name} seit {date}": "Prêté à {name} depuis le {date}",
   "Ausgeliehen an: {names}": "Prêté à : {names}",
+  "Ausleihfrist": "Durée de prêt",
   "Ausstehend: {changes}": "En attente : {changes}",
   "Auswahl": "Sélection",
   "Auswahl aufheben": "Désélectionner",
@@ -843,7 +844,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "La recherche par ISBN nécessite une connexion au serveur.",
   "Die Kamera ließ sich nicht starten.": "Impossible de démarrer la caméra.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "La caméra est en cours d'utilisation par une autre app.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "La liste regroupe les trous, les tomes d’autres étagères et les précommandes qui devraient être sorties. Désactivée, elle disparaît seulement pour toi ; les avis sur les séries restent.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "La liste regroupe les trous, les tomes d’autres étagères, les précommandes qui devraient être sorties et les longs prêts. Désactivée, elle disparaît seulement pour toi ; les avis sur les séries restent.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "La liste est servie depuis le stockage local de cet appareil (état du {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "La liste est servie depuis le stockage local de cet appareil.",
   "Die Liste wird noch geladen…": "La liste est encore en cours de chargement…",
@@ -1020,6 +1021,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Une étagère, une personne : rien à changer ici. Tes filtres enregistrés sont en dessous.",
   "Ein Tag hat 1 bis {max} Zeichen": "Un tag compte de 1 à {max} caractères",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "Une faute de frappe ou une graphie à fusionner ?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Un tome prêté apparaît dans « À faire » lorsqu’il est absent depuis cette durée. Ne s’applique qu’à toi.",
   "Eine Folge mehr": "Un épisode de plus",
   "Eine Folge mehr gesehen": "Un épisode de plus vu",
   "Eine Folge weniger": "Un épisode de moins",
@@ -1196,7 +1198,9 @@
   "Filme": "Films",
   "Filme & Specials": "Films et spéciaux",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Films et séries dans la recherche de l'onglet Anime, avec affiches, saisons et lien IMDb. Sans clé, aucun résultat TMDB.",
+  "Filter": "Filtres",
   "Filter & Suche zurücksetzen": "Réinitialiser filtres et recherche",
+  "Filter ({n} geändert)": "Filtres ({n} modifiés)",
   "Filter und Suche zurücksetzen": "Réinitialiser filtres et recherche",
   "Filter zurücksetzen": "Réinitialiser les filtres",
   "Finanzen": "Finances",
@@ -2352,6 +2356,7 @@
   "Scanner ist geöffnet…": "Le scanner est ouvert…",
   "Scanner schließen": "Fermer le scanner",
   "Scanner starten": "Démarrer le scanner",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Active « À faire » pour que le rappel apparaisse.",
   "Schaue": "En visionnage",
   "Schauen": "En visionnage",
   "Schauen auch: {names}": "Regardent aussi : {names}",
@@ -2708,6 +2713,7 @@
   "Ungültige Angabe zum Verleihen": "Informations de prêt non valides",
   "Ungültige AniList-ID": "ID AniList non valide",
   "Ungültige Anmeldedaten": "Identifiants non valides",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Durée de prêt invalide (autorisé : {allowed} jours)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Sélection non valide (1 à {max_ids} ID de tome)",
   "Ungültige Backup-Datenbank: {reason}": "Base de données de sauvegarde non valide : {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Numéro de tome invalide (un nombre de 0 à {max})",
@@ -3557,6 +3563,11 @@
     "many": "{n} comptes ont besoin d'une réinitialisation du mot de passe après la restauration (pas de mot de passe dans la sauvegarde) : {names}.",
     "other": "{n} comptes ont besoin d'une réinitialisation du mot de passe après la restauration (pas de mot de passe dans la sauvegarde) : {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} mois",
+    "many": "{n} mois",
+    "other": "{n} mois"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} nouveauté aujourd’hui",
     "many": "{n} nouveautés aujourd’hui",
@@ -3601,6 +3612,11 @@
     "one": "{n} résultat",
     "many": "{n} de résultats",
     "other": "{n} résultats"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} semaine",
+    "many": "{n} semaines",
+    "other": "{n} semaines"
   },
   "{n} abgeschlossen": "{n} terminés",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3687,12 +3703,22 @@
     "many": "{title} : tome {volume} prêté à {name} depuis {n} mois",
     "other": "{title} : tome {volume} prêté à {name} depuis {n} mois"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title} : tome {volume} prêté à {name} depuis {n} semaine",
+    "many": "{title} : tome {volume} prêté à {name} depuis {n} semaines",
+    "other": "{title} : tome {volume} prêté à {name} depuis {n} semaines"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title} : le tome {volume} devrait être paru",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title} : le tome {volume} est déjà sur l’étagère « {shelf} »",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois",
     "many": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois",
     "other": "{title} : tomes {volumes} prêtés à {name} depuis {n} mois"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title} : tomes {volumes} prêtés à {name} depuis {n} semaine",
+    "many": "{title} : tomes {volumes} prêtés à {name} depuis {n} semaines",
+    "other": "{title} : tomes {volumes} prêtés à {name} depuis {n} semaines"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title} : les tomes {volumes} devraient être parus",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title} : les tomes {volumes} sont déjà sur l’étagère « {shelf} »",

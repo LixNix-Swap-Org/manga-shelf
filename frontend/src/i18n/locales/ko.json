@@ -330,6 +330,7 @@
   "Ausgeliehen an {name}": "{name}에게 빌려줌",
   "Ausgeliehen an {name} seit {date}": "{date}부터 {name}에게 빌려줌",
   "Ausgeliehen an: {names}": "빌려준 사람: {names}",
+  "Ausleihfrist": "대여 기간",
   "Ausstehend: {changes}": "대기 중: {changes}",
   "Auswahl": "선택",
   "Auswahl aufheben": "선택 해제",
@@ -803,7 +804,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "ISBN 검색에는 서버 연결이 필요해요.",
   "Die Kamera ließ sich nicht starten.": "카메라를 시작하지 못했어요.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "다른 앱에서 카메라를 사용 중이에요.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "빠진 권, 다른 책장에 있는 권, 이미 나왔어야 할 예약을 모아 보여 줍니다. 끄면 나에게만 사라지고 시리즈의 알림은 그대로입니다.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "빠진 권, 다른 책장에 있는 권, 이미 나왔어야 할 예약, 오래된 대여를 모아 보여 줍니다. 끄면 나에게만 사라지고 시리즈의 알림은 그대로입니다.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "이 기기의 로컬 저장소에서 목록을 불러왔어요 (기준: {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "이 기기의 로컬 저장소에서 목록을 불러왔어요.",
   "Die Liste wird noch geladen…": "목록을 아직 불러오는 중이에요…",
@@ -976,6 +977,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "책장도 사람도 하나뿐이라 바꿀 것이 없습니다. 저장한 필터는 아래에 있습니다.",
   "Ein Tag hat 1 bis {max} Zeichen": "태그는 1~{max}자입니다",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "병합해야 할 오타나 표기 차이인가요?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "빌려준 권이 이 기간 동안 돌아오지 않으면 ‘할 일’에 나타납니다. 나에게만 적용됩니다.",
   "Eine Folge mehr": "1화 추가",
   "Eine Folge mehr gesehen": "1화 더 시청함",
   "Eine Folge weniger": "1화 빼기",
@@ -1150,7 +1152,9 @@
   "Filme": "영화",
   "Filme & Specials": "영화 및 스페셜",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "애니메이션 탭 검색에서 영화와 TV 시리즈를 찾을 수 있어요. 포스터, 시즌, IMDb 링크도 함께 나와요. 키가 없으면 TMDB 결과가 나오지 않아요.",
+  "Filter": "필터",
   "Filter & Suche zurücksetzen": "필터 및 검색 초기화",
+  "Filter ({n} geändert)": "필터({n}개 변경됨)",
   "Filter und Suche zurücksetzen": "필터와 검색 초기화",
   "Filter zurücksetzen": "필터 초기화",
   "Finanzen": "재정",
@@ -2276,6 +2280,7 @@
   "Scanner ist geöffnet…": "스캐너가 열려 있어요…",
   "Scanner schließen": "스캐너 닫기",
   "Scanner starten": "스캐너 시작",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "알림이 나타나도록 ‘할 일’을 켜세요.",
   "Schaue": "시청 중",
   "Schauen": "시청 중",
   "Schauen auch: {names}": "함께 시청 중: {names}",
@@ -2622,6 +2627,7 @@
   "Ungültige Angabe zum Verleihen": "대여 정보가 올바르지 않아요",
   "Ungültige AniList-ID": "올바르지 않은 AniList ID예요",
   "Ungültige Anmeldedaten": "로그인 정보가 올바르지 않아요",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "잘못된 대여 기간입니다(허용: {allowed}일)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "올바르지 않은 선택이에요 (권 ID 1~{max_ids}개)",
   "Ungültige Backup-Datenbank: {reason}": "올바르지 않은 백업 데이터베이스예요: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "잘못된 권 번호입니다(0~{max} 사이의 숫자)",
@@ -3389,6 +3395,9 @@
   "{n} Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.|{n} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": {
     "other": "백업에 비밀번호가 없어서 복원 후 {n}개 계정은 비밀번호를 재설정해야 해요: {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "other": "{n}개월"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "other": "오늘 신간 {n}개"
   },
@@ -3415,6 +3424,9 @@
   },
   "{n} Treffer|{n} Treffer": {
     "other": "{n}건"
+  },
+  "{n} Woche|{n} Wochen": {
+    "other": "{n}주"
   },
   "{n} abgeschlossen": "{n}개 완료",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3483,10 +3495,16 @@
   "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
     "other": "{title}: {volume}권을 {name}님에게 {n}개월째 빌려주었습니다"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "other": "{title}: {volume}권을 {name}님에게 {n}주째 빌려주었습니다"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: {volume}권이 이미 출간되었을 것입니다",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: {volume}권은 이미 「{shelf}」 책장에 있습니다",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "other": "{title}: {volumes}권을 {name}님에게 {n}개월째 빌려주었습니다"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "other": "{title}: {volumes}권을 {name}님에게 {n}주째 빌려주었습니다"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: {volumes}권이 이미 출간되었을 것입니다",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: {volumes}권은 이미 「{shelf}」 책장에 있습니다",

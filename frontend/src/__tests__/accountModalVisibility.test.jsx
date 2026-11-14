@@ -69,7 +69,7 @@ describe('AccountModal: default visibility of anime ratings', () => {
     const put = fetchMock.mock.calls.find(([url, init]) => url === '/api/auth/profile' && init?.method === 'PUT');
     expect(JSON.parse(put[1].body)).toEqual({ default_anime_visibility: 'anonymous' });
     const { result } = renderHook(() => useAccountDefaults());
-    expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, loaded: true });
+    expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, lentReminderDays: null, loaded: true });
   });
 
   it('a refused change goes back to the stored value', async () => {
@@ -103,7 +103,7 @@ describe('useAccountDefaults', () => {
     await waitFor(() => expect(answers).toHaveLength(2));
     expect(result.current.animeVisibility).toBeNull();
     answers[1](fakeResponse(200, { user: { id: 2, default_anime_visibility: 'anonymous' } }));
-    await waitFor(() => expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, loaded: true }));
+    await waitFor(() => expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, lentReminderDays: null, loaded: true }));
     renderHook(() => useAccountDefaults());
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(2);
   });
@@ -169,5 +169,35 @@ describe('AccountModal: "Zu erledigen" on or off', () => {
     openGeneral();
     await waitFor(() => expect(box().disabled).toBe(false));
     expect(box().checked).toBe(true);
+  });
+});
+
+describe('AccountModal: loan period of "Zu erledigen"', () => {
+  const select = () => screen.getByLabelText('Ausleihfrist');
+
+  it('offers two weeks to a year and saves the choice for the account', async () => {
+    const fetchMock = serve({
+      me: () => fakeResponse(200, { user: { id: 2, show_todo: true, lent_reminder_days: 90 } }),
+      profile: (body) => fakeResponse(200, { user: { id: 2, show_todo: true, lent_reminder_days: body.lent_reminder_days } })
+    });
+    openGeneral();
+    await waitFor(() => expect(select().disabled).toBe(false));
+    expect(select().value).toBe('90');
+    expect([...select().options].map((o) => o.textContent)).toEqual(['2 Wochen', '1 Monat', '2 Monate', '3 Monate', '6 Monate', '1 Jahr']);
+    fireEvent.change(select(), { target: { value: '30' } });
+    await waitFor(() => expect(select().disabled).toBe(false));
+    expect(select().value).toBe('30');
+    const put = fetchMock.mock.calls.find(([url, init]) => url === '/api/auth/profile' && init?.method === 'PUT');
+    expect(JSON.parse(put[1].body)).toEqual({ lent_reminder_days: 30 });
+    const { result } = renderHook(() => useAccountDefaults());
+    expect(result.current.lentReminderDays).toBe(30);
+  });
+
+  it('waits while "Zu erledigen" is off, and shows 90 days for an older server', async () => {
+    serve({ me: () => fakeResponse(200, { user: { id: 2, show_todo: false } }) });
+    openGeneral();
+    await waitFor(() => expect(screen.getByText('Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.')).toBeTruthy());
+    expect(select().disabled).toBe(true);
+    expect(select().value).toBe('90');
   });
 });

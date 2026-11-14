@@ -342,6 +342,7 @@
   "Ausgeliehen an {name}": "Prestato a {name}",
   "Ausgeliehen an {name} seit {date}": "Prestato a {name} dal {date}",
   "Ausgeliehen an: {names}": "Prestato a: {names}",
+  "Ausleihfrist": "Durata del prestito",
   "Ausstehend: {changes}": "In sospeso: {changes}",
   "Auswahl": "Selezione",
   "Auswahl aufheben": "Annulla selezione",
@@ -843,7 +844,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "La ricerca ISBN richiede una connessione al server.",
   "Die Kamera ließ sich nicht starten.": "Impossibile avviare la fotocamera.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "La fotocamera è in uso da un’altra app.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "L’elenco raccoglie lacune, volumi in altri scaffali e preordini che dovrebbero essere usciti. Disattivato, scompare solo per te; gli avvisi sulle serie restano.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "L’elenco raccoglie lacune, volumi in altri scaffali, preordini che dovrebbero essere usciti e prestiti lunghi. Disattivato, scompare solo per te; gli avvisi sulle serie restano.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "La lista viene fornita dalla memoria locale di questo dispositivo (aggiornata al {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "La lista viene fornita dalla memoria locale di questo dispositivo.",
   "Die Liste wird noch geladen…": "La lista è ancora in caricamento…",
@@ -1020,6 +1021,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Uno scaffale, una persona: qui non c'è niente da cambiare. I filtri salvati sono qui sotto.",
   "Ein Tag hat 1 bis {max} Zeichen": "Un tag ha da 1 a {max} caratteri",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "Un errore di battitura o una grafia da unire?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Un volume prestato compare in «Da fare» quando è via da questo tempo. Vale solo per te.",
   "Eine Folge mehr": "Un episodio in più",
   "Eine Folge mehr gesehen": "Visto un episodio in più",
   "Eine Folge weniger": "Un episodio in meno",
@@ -1196,7 +1198,9 @@
   "Filme": "Film",
   "Filme & Specials": "Film e speciali",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Film e serie TV nella ricerca della scheda Anime, con poster, stagioni e link a IMDb. Senza chiave non ci sono risultati da TMDB.",
+  "Filter": "Filtri",
   "Filter & Suche zurücksetzen": "Azzera filtri e ricerca",
+  "Filter ({n} geändert)": "Filtri ({n} modificati)",
   "Filter und Suche zurücksetzen": "Azzera filtri e ricerca",
   "Filter zurücksetzen": "Azzera filtri",
   "Finanzen": "Finanze",
@@ -2352,6 +2356,7 @@
   "Scanner ist geöffnet…": "Lo scanner è aperto…",
   "Scanner schließen": "Chiudi scanner",
   "Scanner starten": "Avvia scanner",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Attiva «Da fare» perché compaia il promemoria.",
   "Schaue": "Sto guardando",
   "Schauen": "In visione",
   "Schauen auch: {names}": "Lo guardano anche: {names}",
@@ -2708,6 +2713,7 @@
   "Ungültige Angabe zum Verleihen": "Dati del prestito non validi",
   "Ungültige AniList-ID": "ID AniList non valido",
   "Ungültige Anmeldedaten": "Credenziali non valide",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Durata del prestito non valida (consentiti: {allowed} giorni)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Selezione non valida (da 1 a {max_ids} ID di volumi)",
   "Ungültige Backup-Datenbank: {reason}": "Database di backup non valido: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Numero di volume non valido (un numero da 0 a {max})",
@@ -3557,6 +3563,11 @@
     "many": "{n} account richiedono un reset della password dopo il ripristino (nessuna password nel backup): {names}.",
     "other": "{n} account richiedono un reset della password dopo il ripristino (nessuna password nel backup): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} mese",
+    "many": "{n} mesi",
+    "other": "{n} mesi"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} novità oggi",
     "many": "{n} novità oggi",
@@ -3601,6 +3612,11 @@
     "one": "{n} risultato",
     "many": "{n} di risultati",
     "other": "{n} risultati"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} settimana",
+    "many": "{n} settimane",
+    "other": "{n} settimane"
   },
   "{n} abgeschlossen": "{n} completati",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3687,12 +3703,22 @@
     "many": "{title}: volume {volume} prestato a {name} da {n} mesi",
     "other": "{title}: volume {volume} prestato a {name} da {n} mesi"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: volume {volume} prestato a {name} da {n} settimana",
+    "many": "{title}: volume {volume} prestato a {name} da {n} settimane",
+    "other": "{title}: volume {volume} prestato a {name} da {n} settimane"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: il volume {volume} dovrebbe essere uscito",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: il volume {volume} è già nello scaffale «{shelf}»",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: volumi {volumes} prestati a {name} da {n} mese",
     "many": "{title}: volumi {volumes} prestati a {name} da {n} mesi",
     "other": "{title}: volumi {volumes} prestati a {name} da {n} mesi"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: volumi {volumes} prestati a {name} da {n} settimana",
+    "many": "{title}: volumi {volumes} prestati a {name} da {n} settimane",
+    "other": "{title}: volumi {volumes} prestati a {name} da {n} settimane"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: i volumi {volumes} dovrebbero essere usciti",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: i volumi {volumes} sono già nello scaffale «{shelf}»",

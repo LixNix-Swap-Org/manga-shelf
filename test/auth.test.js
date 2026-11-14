@@ -345,7 +345,7 @@ test('app login: X-Client: app or client: app add the token, other clients get t
 test('bearer: an Authorization header authenticates reads and writes like the cookie', async () => {
     const token = await appLogin('ed');
     const app = withBearer(token);
-    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor', locale: null, default_language: 'de', default_anime_visibility: 'public', share_anime_activity: true, show_todo: true });
+    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor', locale: null, default_language: 'de', default_anime_visibility: 'public', share_anime_activity: true, show_todo: true, lent_reminder_days: 90 });
     const created = await app('POST', '/mangas', { title: 'Bearer Reihe' });
     assert.equal(created.status, 200);
     assert.equal((await withBearer(await appLogin('vis'))('POST', '/mangas', { title: 'X' })).body.code, 'READ_ONLY');
@@ -506,4 +506,29 @@ test('profile: "Zu erledigen" can be switched off and on per account', async () 
     const bad = await app('PUT', '/auth/profile', { show_todo: 'nein' });
     assert.equal(bad.status, 400);
     assert.equal((await app('PUT', '/auth/profile', { show_todo: true })).body.user.show_todo, true);
+});
+
+test('profile: the loan period of "Zu erledigen" is chosen per account', async () => {
+    const app = await loggedIn('ed');
+    const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    const series = await app('POST', '/mangas', { title: 'Ausleihfrist Reihe' });
+    assert.equal(series.status, 200, JSON.stringify(series.body));
+    const volume = await app('POST', '/volumes', { manga_id: series.body.id, volume_number: '1', status: 'Vorhanden' });
+    assert.equal(volume.status, 200, JSON.stringify(volume.body));
+    const copy = (await app('GET', `/mangas/${series.body.id}`)).body.volumes[0].copies[0];
+    assert.equal((await app('PUT', `/volumes/${volume.body.id}/copies/${copy.id}`, { lent: { name: 'Mia', at: daysAgo(20) } })).status, 200);
+    const lentTitles = async () => (await app('GET', '/todo')).body.items.filter(i => i.kind === 'lent').map(i => i.title);
+
+    assert.equal((await app('GET', '/auth/me')).body.user.lent_reminder_days, 90, '90 days by default');
+    assert.deepEqual(await lentTitles(), [], '20 days are not yet 90');
+    const short = await app('PUT', '/auth/profile', { lent_reminder_days: 14 });
+    assert.equal(short.status, 200);
+    assert.equal(short.body.user.lent_reminder_days, 14);
+    assert.deepEqual(await lentTitles(), ['Ausleihfrist Reihe']);
+    assert.equal((await (await loggedIn('vis'))('GET', '/auth/me')).body.user.lent_reminder_days, 90, 'only for this account');
+    for (const bad of [0, 45, '30', null, 3650]) {
+        assert.equal((await app('PUT', '/auth/profile', { lent_reminder_days: bad })).status, 400, String(bad));
+    }
+    assert.equal((await app('PUT', '/auth/profile', { lent_reminder_days: 90 })).body.user.lent_reminder_days, 90);
+    assert.deepEqual(await lentTitles(), []);
 });

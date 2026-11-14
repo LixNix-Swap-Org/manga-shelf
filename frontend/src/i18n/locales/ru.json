@@ -348,6 +348,7 @@
   "Ausgeliehen an {name}": "Одолжено: {name}",
   "Ausgeliehen an {name} seit {date}": "Одолжено: {name} с {date}",
   "Ausgeliehen an: {names}": "Одолжено: {names}",
+  "Ausleihfrist": "Срок выдачи",
   "Ausstehend: {changes}": "В ожидании: {changes}",
   "Auswahl": "Выбор",
   "Auswahl aufheben": "Снять выбор",
@@ -863,7 +864,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "Для поиска по ISBN нужно соединение с сервером.",
   "Die Kamera ließ sich nicht starten.": "Не удалось запустить камеру.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "Камеру сейчас использует другое приложение.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Список собирает пропуски, тома с других полок и предзаказы, которые уже должны были выйти. Если выключить, он исчезнет только для вас; пометки у серий останутся.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Список собирает пропуски, тома с других полок, предзаказы, которые уже должны были выйти, и долгие выдачи. Если выключить, он исчезнет только для вас; пометки у серий останутся.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "Список взят из локального хранилища этого устройства (состояние на {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "Список взят из локального хранилища этого устройства.",
   "Die Liste wird noch geladen…": "Список ещё загружается…",
@@ -1042,6 +1043,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Одна полка, один человек: переключать нечего. Сохранённые фильтры ниже.",
   "Ein Tag hat 1 bis {max} Zeichen": "Тег содержит от 1 до {max} символов",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "Опечатка или написание, которое стоит объединить?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Выданный том появится в «Нужно сделать», если его нет так долго. Касается только вас.",
   "Eine Folge mehr": "На один эпизод больше",
   "Eine Folge mehr gesehen": "Просмотрен ещё один эпизод",
   "Eine Folge weniger": "На один эпизод меньше",
@@ -1219,7 +1221,9 @@
   "Filme": "Фильмы",
   "Filme & Specials": "Фильмы и спецвыпуски",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Фильмы и сериалы в поиске на вкладке «Аниме», с постерами, сезонами и ссылкой на IMDb. Без ключа результатов TMDB нет.",
+  "Filter": "Фильтры",
   "Filter & Suche zurücksetzen": "Сбросить фильтры и поиск",
+  "Filter ({n} geändert)": "Фильтры (изменено: {n})",
   "Filter und Suche zurücksetzen": "Сбросить фильтры и поиск",
   "Filter zurücksetzen": "Сбросить фильтры",
   "Finanzen": "Финансы",
@@ -2390,6 +2394,7 @@
   "Scanner ist geöffnet…": "Сканер открыт…",
   "Scanner schließen": "Закрыть сканер",
   "Scanner starten": "Запустить сканер",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Включите «Нужно сделать», чтобы напоминание появилось.",
   "Schaue": "Смотрю",
   "Schauen": "Смотрю",
   "Schauen auch: {names}": "Также смотрят: {names}",
@@ -2751,6 +2756,7 @@
   "Ungültige Angabe zum Verleihen": "Неверные данные о займе",
   "Ungültige AniList-ID": "Недопустимый ID AniList",
   "Ungültige Anmeldedaten": "Неверные данные для входа",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Недопустимый срок выдачи (допустимо: {allowed} дн.)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Недопустимый выбор (от 1 до {max_ids} ID томов)",
   "Ungültige Backup-Datenbank: {reason}": "Недопустимая база данных резервной копии: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Недопустимый номер тома (число от 0 до {max})",
@@ -3641,6 +3647,12 @@
     "many": "{n} аккаунтов после восстановления требуют сброса пароля (в копии нет пароля): {names}.",
     "other": "{n} аккаунта после восстановления требуют сброса пароля (в копии нет пароля): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} месяц",
+    "few": "{n} месяца",
+    "many": "{n} месяцев",
+    "other": "{n} месяца"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} новинка сегодня",
     "few": "{n} новинки сегодня",
@@ -3694,6 +3706,12 @@
     "few": "{n} совпадения",
     "many": "{n} совпадений",
     "other": "{n} совпадения"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} неделя",
+    "few": "{n} недели",
+    "many": "{n} недель",
+    "other": "{n} недели"
   },
   "{n} abgeschlossen": "{n} завершено",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3789,6 +3807,12 @@
     "many": "{title}: том {volume} у {name} уже {n} месяцев",
     "other": "{title}: том {volume} у {name} уже {n} месяца"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: том {volume} у {name} уже {n} неделю",
+    "few": "{title}: том {volume} у {name} уже {n} недели",
+    "many": "{title}: том {volume} у {name} уже {n} недель",
+    "other": "{title}: том {volume} у {name} уже {n} недели"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: том {volume} уже должен был выйти",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: том {volume} уже стоит на полке «{shelf}»",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
@@ -3796,6 +3820,12 @@
     "few": "{title}: тома {volumes} у {name} уже {n} месяца",
     "many": "{title}: тома {volumes} у {name} уже {n} месяцев",
     "other": "{title}: тома {volumes} у {name} уже {n} месяца"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: тома {volumes} у {name} уже {n} неделю",
+    "few": "{title}: тома {volumes} у {name} уже {n} недели",
+    "many": "{title}: тома {volumes} у {name} уже {n} недель",
+    "other": "{title}: тома {volumes} у {name} уже {n} недели"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: тома {volumes} уже должны были выйти",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: тома {volumes} уже стоят на полке «{shelf}»",

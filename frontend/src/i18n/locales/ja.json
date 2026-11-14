@@ -330,6 +330,7 @@
   "Ausgeliehen an {name}": "{name}に貸し出し中",
   "Ausgeliehen an {name} seit {date}": "{date}から{name}に貸し出し中",
   "Ausgeliehen an: {names}": "貸出先: {names}",
+  "Ausleihfrist": "貸出期間",
   "Ausstehend: {changes}": "保留中: {changes}",
   "Auswahl": "選択",
   "Auswahl aufheben": "選択を解除",
@@ -803,7 +804,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "ISBN検索にはサーバーへの接続が必要です。",
   "Die Kamera ließ sich nicht starten.": "カメラを起動できませんでした。",
   "Die Kamera wird gerade von einer anderen App benutzt.": "カメラは現在、別のアプリが使用中です。",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "欠番、他の棚にある巻、発売済みのはずの予約をまとめて表示します。オフにすると自分だけ非表示になり、シリーズの通知は残ります。",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "欠番、他の棚にある巻、発売済みのはずの予約、長期の貸し出しをまとめて表示します。オフにすると自分だけ非表示になり、シリーズの通知は残ります。",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "リストはこの端末のローカルストレージから表示されています(日時: {stand})。",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "リストはこの端末のローカルストレージから表示されています。",
   "Die Liste wird noch geladen…": "リストはまだ読み込み中です…",
@@ -976,6 +977,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "本棚も人も1つだけなので切り替えるものはありません。保存したフィルターは下にあります。",
   "Ein Tag hat 1 bis {max} Zeichen": "タグは1〜{max}文字です",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "誤字や、統合すべき表記ゆれでしょうか？",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "貸した巻がこの期間戻らないと「やること」に表示されます。自分にだけ適用されます。",
   "Eine Folge mehr": "1話進める",
   "Eine Folge mehr gesehen": "1話視聴済みにする",
   "Eine Folge weniger": "1話戻す",
@@ -1150,7 +1152,9 @@
   "Filme": "映画",
   "Filme & Specials": "映画とスペシャル",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "アニメタブの検索で、映画とTVシリーズを探せます。ポスター、シーズン、IMDbへのリンク付きです。キーがないと、TMDBの検索結果は表示されません。",
+  "Filter": "フィルター",
   "Filter & Suche zurücksetzen": "フィルターと検索をリセット",
+  "Filter ({n} geändert)": "フィルター（{n}件変更）",
   "Filter und Suche zurücksetzen": "フィルターと検索をリセット",
   "Filter zurücksetzen": "フィルターをリセット",
   "Finanzen": "費用",
@@ -2276,6 +2280,7 @@
   "Scanner ist geöffnet…": "スキャナーを開いています…",
   "Scanner schließen": "スキャナーを閉じる",
   "Scanner starten": "スキャナーを起動",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "リマインダーを表示するには「やること」をオンにしてください。",
   "Schaue": "視聴中",
   "Schauen": "視聴中",
   "Schauen auch: {names}": "他の視聴者: {names}",
@@ -2622,6 +2627,7 @@
   "Ungültige Angabe zum Verleihen": "貸出情報が無効です",
   "Ungültige AniList-ID": "無効なAniList ID",
   "Ungültige Anmeldedaten": "サインイン情報が正しくありません",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "貸出期間が無効です(使用可能: {allowed} 日)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "選択が正しくありません(巻IDを1～{max_ids}件)",
   "Ungültige Backup-Datenbank: {reason}": "バックアップのデータベースが無効です: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "巻数が無効です（0〜{max}の数値）",
@@ -3389,6 +3395,9 @@
   "{n} Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.|{n} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": {
     "other": "復元後、{n}件のアカウントでパスワードのリセットが必要です(バックアップにパスワードがありません): {names}。"
   },
+  "{n} Monat|{n} Monate": {
+    "other": "{n}か月"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "other": "今日の新着 {n} 件"
   },
@@ -3415,6 +3424,9 @@
   },
   "{n} Treffer|{n} Treffer": {
     "other": "{n}件"
+  },
+  "{n} Woche|{n} Wochen": {
+    "other": "{n}週間"
   },
   "{n} abgeschlossen": "{n}件完結",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3483,10 +3495,16 @@
   "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
     "other": "{title}：第{volume}巻を{name}さんに{n}か月貸しています"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "other": "{title}：第{volume}巻を{name}さんに{n}週間貸しています"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}：第{volume}巻は発売済みのはずです",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}：第{volume}巻はすでに本棚「{shelf}」にあります",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "other": "{title}：第{volumes}巻を{name}さんに{n}か月貸しています"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "other": "{title}：第{volumes}巻を{name}さんに{n}週間貸しています"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}：第{volumes}巻は発売済みのはずです",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}：第{volumes}巻はすでに本棚「{shelf}」にあります",

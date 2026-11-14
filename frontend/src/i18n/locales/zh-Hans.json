@@ -330,6 +330,7 @@
   "Ausgeliehen an {name}": "已借给 {name}",
   "Ausgeliehen an {name} seit {date}": "自 {date} 起借给 {name}",
   "Ausgeliehen an: {names}": "已借给：{names}",
+  "Ausleihfrist": "借出期限",
   "Ausstehend: {changes}": "待处理：{changes}",
   "Auswahl": "选择",
   "Auswahl aufheben": "取消选择",
@@ -803,7 +804,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "ISBN 查询需要连接服务器。",
   "Die Kamera ließ sich nicht starten.": "无法启动相机。",
   "Die Kamera wird gerade von einer anderen App benutzt.": "相机正被其他应用使用。",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "列表汇总缺卷、其他书架上的卷，以及应已发售的预购。关闭后仅对你隐藏；系列上的提示仍然保留。",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "列表汇总缺卷、其他书架上的卷、应已发售的预购以及长期借出。关闭后仅对你隐藏；系列上的提示仍然保留。",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "列表来自此设备的本地存储（截至：{stand}）。",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "列表来自此设备的本地存储。",
   "Die Liste wird noch geladen…": "列表仍在加载…",
@@ -976,6 +977,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "只有一个书架和一个人，这里无需切换。已保存的筛选在下方。",
   "Ein Tag hat 1 bis {max} Zeichen": "标签长度为 1 到 {max} 个字符",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "是需要合并的笔误或不同写法吗？",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "借出的卷超过这段时间后会出现在“待办”中。仅对你生效。",
   "Eine Folge mehr": "多一集",
   "Eine Folge mehr gesehen": "多看了一集",
   "Eine Folge weniger": "少一集",
@@ -1150,7 +1152,9 @@
   "Filme": "电影",
   "Filme & Specials": "电影与特别篇",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "在动画标签页的搜索中提供电影和剧集，附带海报、季数和 IMDb 链接。没有密钥就不会有 TMDB 结果。",
+  "Filter": "筛选",
   "Filter & Suche zurücksetzen": "重置筛选和搜索",
+  "Filter ({n} geändert)": "筛选（已更改 {n} 项）",
   "Filter und Suche zurücksetzen": "重置筛选和搜索",
   "Filter zurücksetzen": "重置筛选",
   "Finanzen": "财务",
@@ -2276,6 +2280,7 @@
   "Scanner ist geöffnet…": "扫描器已打开…",
   "Scanner schließen": "关闭扫描器",
   "Scanner starten": "启动扫描器",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "开启“待办”后才会显示提醒。",
   "Schaue": "在看",
   "Schauen": "在看",
   "Schauen auch: {names}": "同时在看：{names}",
@@ -2622,6 +2627,7 @@
   "Ungültige Angabe zum Verleihen": "借出信息无效",
   "Ungültige AniList-ID": "无效的 AniList ID",
   "Ungültige Anmeldedaten": "登录凭据无效",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "借出期限无效（允许：{allowed} 天）",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "选择无效（1 到 {max_ids} 个卷 ID）",
   "Ungültige Backup-Datenbank: {reason}": "无效的备份数据库：{reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "卷号无效（0 到 {max} 之间的数字）",
@@ -3389,6 +3395,9 @@
   "{n} Konto braucht nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.|{n} Konten brauchen nach der Wiederherstellung einen Passwort-Reset (kein Passwort in der Sicherung): {names}.": {
     "other": "恢复后，{n} 个账户需要重置密码（备份中没有密码）：{names}。"
   },
+  "{n} Monat|{n} Monate": {
+    "other": "{n} 个月"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "other": "今天有 {n} 项新内容"
   },
@@ -3415,6 +3424,9 @@
   },
   "{n} Treffer|{n} Treffer": {
     "other": "{n} 个结果"
+  },
+  "{n} Woche|{n} Wochen": {
+    "other": "{n} 周"
   },
   "{n} abgeschlossen": "{n} 部完结",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3483,10 +3495,16 @@
   "{title}: Band {volume} seit {n} Monat an {name} verliehen|{title}: Band {volume} seit {n} Monaten an {name} verliehen": {
     "other": "{title}：第 {volume} 卷已借给 {name} {n} 个月"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "other": "{title}：第 {volume} 卷已借给 {name} {n} 周"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}：第 {volume} 卷应该已经出版",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}：第 {volume} 卷已在书架“{shelf}”中",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "other": "{title}：第 {volumes} 卷已借给 {name} {n} 个月"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "other": "{title}：第 {volumes} 卷已借给 {name} {n} 周"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}：第 {volumes} 卷应该已经出版",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}：第 {volumes} 卷已在书架“{shelf}”中",

@@ -336,6 +336,7 @@
   "Ausgeliehen an {name}": "{name} kişisine ödünç verildi",
   "Ausgeliehen an {name} seit {date}": "{date} tarihinden beri {name} kişisinde",
   "Ausgeliehen an: {names}": "Ödünç verilen: {names}",
+  "Ausleihfrist": "Ödünç süresi",
   "Ausstehend: {changes}": "Bekleyen: {changes}",
   "Auswahl": "Seçim",
   "Auswahl aufheben": "Seçimi temizle",
@@ -823,7 +824,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "ISBN araması sunucuya bağlantı gerektirir.",
   "Die Kamera ließ sich nicht starten.": "Kamera başlatılamadı.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "Kamera şu an başka bir uygulama tarafından kullanılıyor.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Liste eksikleri, başka raflardaki ciltleri ve çıkmış olması gereken ön siparişleri toplar. Kapatılınca yalnızca senin için kaybolur; serilerdeki uyarılar kalır.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Liste eksikleri, başka raflardaki ciltleri, çıkmış olması gereken ön siparişleri ve uzun ödünçleri toplar. Kapatılınca yalnızca senin için kaybolur; serilerdeki uyarılar kalır.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "Liste, bu cihazın yerel depolamasından sunuluyor (durum: {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "Liste, bu cihazın yerel depolamasından sunuluyor.",
   "Die Liste wird noch geladen…": "Liste hâlâ yükleniyor…",
@@ -998,6 +999,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Tek raf, tek kişi: burada değiştirilecek bir şey yok. Kayıtlı filtrelerin aşağıda.",
   "Ein Tag hat 1 bis {max} Zeichen": "Bir etiket 1 ile {max} karakter arasında olmalı",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "Birleştirilmesi gereken bir yazım hatası veya yazım biçimi mi?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Ödünç verilen bir cilt bu kadar süre dışarıda kalınca “Yapılacaklar” altında görünür. Yalnızca senin için geçerlidir.",
   "Eine Folge mehr": "Bir bölüm daha",
   "Eine Folge mehr gesehen": "Bir bölüm daha izlendi",
   "Eine Folge weniger": "Bir bölüm daha az",
@@ -1173,7 +1175,9 @@
   "Filme": "Filmler",
   "Filme & Specials": "Filmler ve özel bölümler",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Anime sekmesinin aramasında filmler ve diziler; posterler, sezonlar ve IMDb bağlantısıyla. Anahtar olmadan TMDB sonucu çıkmaz.",
+  "Filter": "Filtreler",
   "Filter & Suche zurücksetzen": "Filtreleri ve aramayı sıfırla",
+  "Filter ({n} geändert)": "Filtreler ({n} değişti)",
   "Filter und Suche zurücksetzen": "Filtreleri ve aramayı sıfırla",
   "Filter zurücksetzen": "Filtreleri sıfırla",
   "Finanzen": "Finans",
@@ -2314,6 +2318,7 @@
   "Scanner ist geöffnet…": "Tarayıcı açık…",
   "Scanner schließen": "Tarayıcıyı kapat",
   "Scanner starten": "Tarayıcıyı başlat",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Hatırlatmanın görünmesi için “Yapılacaklar”ı aç.",
   "Schaue": "İzliyorum",
   "Schauen": "İzleniyor",
   "Schauen auch: {names}": "Şunlar da izliyor: {names}",
@@ -2665,6 +2670,7 @@
   "Ungültige Angabe zum Verleihen": "Geçersiz ödünç bilgisi",
   "Ungültige AniList-ID": "Geçersiz AniList kimliği",
   "Ungültige Anmeldedaten": "Geçersiz kimlik bilgileri",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Geçersiz ödünç süresi (izin verilen: {allowed} gün)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Geçersiz seçim (1 ile {max_ids} cilt kimliği)",
   "Ungültige Backup-Datenbank: {reason}": "Geçersiz yedek veritabanı: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Geçersiz cilt numarası (0 ile {max} arasında bir sayı)",
@@ -3473,6 +3479,10 @@
     "one": "{n} hesabın, geri yüklemeden sonra parolasının sıfırlanması gerekiyor (yedekte parola yok): {names}.",
     "other": "{n} hesabın, geri yüklemeden sonra parolasının sıfırlanması gerekiyor (yedekte parola yok): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} ay",
+    "other": "{n} ay"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "Bugün {n} yeni çıkan",
     "other": "Bugün {n} yeni çıkan"
@@ -3508,6 +3518,10 @@
   "{n} Treffer|{n} Treffer": {
     "one": "{n} sonuç",
     "other": "{n} sonuç"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} hafta",
+    "other": "{n} hafta"
   },
   "{n} abgeschlossen": "{n} tamamlandı",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3585,11 +3599,19 @@
     "one": "{title}: {volume}. cilt {n} aydır {name} adlı kişide",
     "other": "{title}: {volume}. cilt {n} aydır {name} adlı kişide"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: {volume}. cilt {n} haftadır {name} adlı kişide",
+    "other": "{title}: {volume}. cilt {n} haftadır {name} adlı kişide"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: {volume}. cilt çıkmış olmalı",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: {volume}. cilt zaten “{shelf}” rafında",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: {volumes}. ciltler {n} aydır {name} adlı kişide",
     "other": "{title}: {volumes}. ciltler {n} aydır {name} adlı kişide"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: {volumes}. ciltler {n} haftadır {name} adlı kişide",
+    "other": "{title}: {volumes}. ciltler {n} haftadır {name} adlı kişide"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: {volumes}. ciltler çıkmış olmalı",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: {volumes}. ciltler zaten “{shelf}” rafında",

@@ -2,7 +2,7 @@ import { lazy, Suspense, useState, useEffect, useCallback, useId } from 'react';
 import { EyeOff, KeyRound, Settings, SlidersHorizontal, User, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import useTabList from '../../hooks/useTabList';
-import useAccountDefaults, { rememberAccountDefaults } from '../../hooks/useAccountDefaults';
+import useAccountDefaults, { LENT_REMINDER_CHOICES, rememberAccountDefaults } from '../../hooks/useAccountDefaults';
 import api, { apiFetch, isLocalMode, readJson, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { ANIME_SYNC_EVENT } from '../../utils/shareIntake';
@@ -11,7 +11,7 @@ import TmdbAttribution from '../TmdbAttribution';
 import { WATCH_BUILD, watchAvailable } from '../../app/watch/watchState';
 import { REMINDER_BUILD, canRemind, remindersAvailable } from '../../app/reminders/reminderState';
 import LanguageSelect from '../common/LanguageSelect';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
 import { markReopenAccount } from '../../i18n/preference.js';
 import { useDefaultLanguage } from '../common/LanguagePill';
@@ -456,9 +456,61 @@ const ShowTodoField = ({ offline }) => (
     field="show_todo"
     storedKey="showTodo"
     label={t('„Zu erledigen“ in der Sammlung zeigen')}
-    hint={t('Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.')}
+    hint={t('Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.')}
   />
 );
+
+/**
+ * After how many days a lent copy shows up in "Zu erledigen" (users.lent_reminder_days, 90 by default); only for this
+ * account. Disabled while the list itself is switched off.
+ */
+function LentReminderField({ offline }) {
+  const id = useId();
+  const stored = useAccountDefaults({ fresh: true, enabled: !offline });
+  const [picked, setPicked] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const value = picked ?? stored.lentReminderDays ?? 90;
+  const listOff = stored.showTodo === false;
+
+  const save = async (next) => {
+    setPicked(next);
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/auth/profile', { method: 'PUT', body: { lent_reminder_days: next } });
+      const data = await readJson(res);
+      if (!res.ok) {
+        notify.error(serverText(data) || t('Speichern fehlgeschlagen'));
+        return;
+      }
+      rememberAccountDefaults({ ...data?.user, lent_reminder_days: data?.user?.lent_reminder_days || next });
+    } catch (_) {
+      notify.error(t('Netzwerkfehler – bitte erneut versuchen.'));
+    } finally {
+      setPicked(null);
+      setSaving(false);
+    }
+  };
+
+  const label = (days) => {
+    if (days % 365 === 0) return tn('{n} Jahr', '{n} Jahre', days / 365);
+    if (days % 30 === 0) return tn('{n} Monat', '{n} Monate', days / 30);
+    return tn('{n} Woche', '{n} Wochen', days / 7);
+  };
+
+  return (
+    <div className="space-y-2">
+      <label htmlFor={`${id}-lent`} className="block text-xs font-semibold text-slate-300">{t('Ausleihfrist')}</label>
+      <select id={`${id}-lent`} className="input-field bg-slate-950" value={value} disabled={saving || offline || !stored.loaded || listOff} onChange={(e) => save(Number(e.target.value))}>
+        {LENT_REMINDER_CHOICES.map((days) => <option key={days} value={days}>{label(days)}</option>)}
+      </select>
+      <p className="text-xs text-slate-400">
+        {listOff
+          ? t('Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.')
+          : t('Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.')}
+      </p>
+    </div>
+  );
+}
 
 /**
  * "Allgemein": the UI language of this account (the switch remounts the page, the dialog reopens on this tab), the
@@ -477,6 +529,7 @@ function GeneralTab({ user = null, offline = false }) {
       </SettingsSection>
       <SettingsSection title={t('Sammlung')}>
         <ShowTodoField offline={offline} />
+        <LentReminderField offline={offline} />
         {reminders && (
           <Suspense fallback={null}>
             <ReminderSwitch />

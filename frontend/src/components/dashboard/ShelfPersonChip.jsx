@@ -54,7 +54,7 @@ export default function ShelfPersonChip({
   const narrowed = shelfFilter !== 'ALL' || personFilter !== 'ALL';
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
+    <div ref={rootRef} className="relative shrink-0 max-sm:shrink max-sm:min-w-0 max-sm:basis-0 max-sm:grow">
       <button
         ref={buttonRef}
         type="button"
@@ -63,7 +63,7 @@ export default function ShelfPersonChip({
         aria-controls={panelId}
         aria-label={t('Regal und Person: {label}', { label })}
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold max-w-[260px] ${narrowed ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
+        className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold max-w-[260px] max-sm:max-w-full ${narrowed ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
       >
         {showPersons ? <Users className="w-3.5 h-3.5 text-teal-400 shrink-0" aria-hidden="true" /> : <Library className="w-3.5 h-3.5 text-teal-400 shrink-0" aria-hidden="true" />}
         <span className="truncate">{label}</span>
