@@ -24,7 +24,7 @@ export default function MpFilters({
 
   return (
     <div className="glass-panel p-3.5 sm:p-4 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
-      <div className="flex items-center gap-2 bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 w-full md:w-72 shadow-inner focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400">
+      <div className="flex items-center gap-2 bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 w-full md:w-80 shadow-inner focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400">
         <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
         <input
           type="text"

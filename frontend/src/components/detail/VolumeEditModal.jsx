@@ -62,6 +62,7 @@ function VolumeEditDialog({
     handleDeleteVolume
   } = useVolumeEditForm({ activeVolume, mangaId, canEdit, onClose, onSuccess });
   const mpLookup = isMpVolume(activeVolume, manga) && isMpVolume(editVolForm, manga);
+  const hasCopies = Boolean(activeVolume?.copies?.length > 0);
 
   const dialogRef = useDialogA11y(true);
   // an owners toggle adds or drops a copy: the copies list reads them again
@@ -111,6 +112,7 @@ function VolumeEditDialog({
                   setEditVolForm={setEditVolForm}
                   errors={fieldErrors}
                   currency={editionCurrency(manga)}
+                  hasCopies={hasCopies}
                 />
                 {canEdit && (
                   <OwnersField
@@ -183,6 +185,7 @@ function VolumeEditDialog({
                   handleAutofillVolumeData={handleAutofillVolumeData}
                   manga={manga}
                   mpLookup={mpLookup}
+                  hasCopies={hasCopies}
                 />
                 <LastChanged item={activeVolume} />
               </div>

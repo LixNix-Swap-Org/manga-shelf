@@ -1,6 +1,7 @@
 // The one progress rule of the anime tab: PUT progress, "Folge gesehen" from a shared link, the history sync and the AniList
 // pull all write through writeProgress, so clamping, automatic status and dates never differ between them.
 const { zonedToday } = require('../radar');
+const { badRequest } = require('../errors');
 const episodeMarks = require('./episodes');
 
 const PROGRESS_STATUSES = ['Geplant', 'Schaue', 'Gesehen', 'Pausiert', 'Abgebrochen'];
@@ -59,9 +60,34 @@ function watchedAfter(current, change, total, monotonic) {
 // `episode_scores` (object episode -> 1..10) replaces the ratings, `null` removes them; above a known episode count dropped.
 // `rating_visibility` is the change's; without one the user's default (users.default_anime_visibility) applies to a new row
 // and to a row that gets its first score or episode score with this change, any other row keeps its visibility.
-function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
-    const anime = ctx.db.prepare('SELECT id, episodes, notes FROM animes WHERE id = ?').get(animeId);
+/** Last aired episode for ongoing shows without a known total, or null when uncapped or estimated. */
+function airedEpisodeLimit(anime) {
     if (!anime) return null;
+    const nextEp = anime.next_airing_episode !== undefined && anime.next_airing_episode !== null
+        ? anime.next_airing_episode
+        : anime.next_airing?.episode;
+    const estimated = Boolean(anime.next_airing_estimated || anime.next_airing?.estimated);
+    return !estimated && (!anime.episodes || anime.episodes <= 0) && nextEp > 1 ? nextEp - 1 : null;
+}
+
+function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
+    const anime = ctx.db.prepare('SELECT id, episodes, notes, next_airing_episode, next_airing_estimated FROM animes WHERE id = ?').get(animeId);
+    if (!anime) return null;
+    const airedMax = airedEpisodeLimit(anime);
+    if (airedMax !== null) {
+        if (change.episodes_watched !== undefined && change.episodes_watched !== null && change.episodes_watched > airedMax) {
+            throw badRequest('episode_above_aired');
+        }
+        if (Array.isArray(change.watched_episodes) && change.watched_episodes.some((n) => n > airedMax)) {
+            throw badRequest('episode_above_aired');
+        }
+        if (Array.isArray(change.add_episodes) && change.add_episodes.some((n) => n > airedMax)) {
+            throw badRequest('episode_above_aired');
+        }
+        if (change.episode_scores && typeof change.episode_scores === 'object' && Object.keys(change.episode_scores).map(Number).some((n) => n > airedMax)) {
+            throw badRequest('episode_above_aired');
+        }
+    }
     const stored = readProgress(ctx, animeId, userId);
     const current = stored
         || { status: 'Geplant', episodes_watched: 0, score: null, notes: null, started_at: null, finished_at: null, resume_url: null, resume_episode: null,
@@ -135,4 +161,4 @@ function saveProgress(ctx, animeId, userId, change, options = {}) {
     return ctx.db.transaction(() => writeProgress(ctx, animeId, userId, change, options));
 }
 
-module.exports = { writeProgress, saveProgress, readProgress, today, sqlNow, PROGRESS_STATUSES };
+module.exports = { writeProgress, saveProgress, readProgress, airedEpisodeLimit, today, sqlNow, PROGRESS_STATUSES };

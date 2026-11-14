@@ -486,6 +486,62 @@ export default function useVolumeActions({
     notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : null, trashId, () => fetchManga());
   };
 
+  const handleReturnCopy = async (volumeId, copyId) => {
+    if (!canEdit) return false;
+    try {
+      const res = await apiFetch(`/api/volumes/${volumeId}/copies/${copyId}`, {
+        method: 'PUT',
+        body: { lent: null }
+      });
+      const data = await readJson(res);
+      if (!res.ok) {
+        await reportFailure(res, t('Fehler beim Zurücknehmen des Exemplars'));
+        return false;
+      }
+      if (data?.copies) {
+        patchManga?.((detail) => ({
+          ...detail,
+          volumes: (detail.volumes || []).map((v) =>
+            String(v.id) === String(volumeId) ? { ...v, copies: data.copies } : v
+          )
+        }));
+      }
+      notify.success(t('Band als zurückgegeben markiert'));
+      return true;
+    } catch (err) {
+      notify.error(err, { fallback: t('Fehler beim Zurücknehmen des Exemplars') });
+      return false;
+    }
+  };
+
+  const handleLendCopy = async (volumeId, copyId, lent) => {
+    if (!canEdit) return false;
+    try {
+      const res = await apiFetch(`/api/volumes/${volumeId}/copies/${copyId}`, {
+        method: 'PUT',
+        body: { lent }
+      });
+      const data = await readJson(res);
+      if (!res.ok) {
+        await reportFailure(res, t('Fehler beim Verleihen des Exemplars'));
+        return false;
+      }
+      if (data?.copies) {
+        patchManga?.((detail) => ({
+          ...detail,
+          volumes: (detail.volumes || []).map((v) =>
+            String(v.id) === String(volumeId) ? { ...v, copies: data.copies } : v
+          )
+        }));
+      }
+      notify.success(t('Als verliehen markiert'));
+      return true;
+    } catch (err) {
+      notify.error(err, { fallback: t('Fehler beim Verleihen des Exemplars') });
+      return false;
+    }
+  };
+
   return {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
@@ -495,6 +551,7 @@ export default function useVolumeActions({
     readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
-    handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
+    handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit,
+    handleReturnCopy, handleLendCopy
   };
 }

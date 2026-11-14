@@ -504,3 +504,55 @@ describe('VolumePhotoManager: upload cancel', () => {
     expect(onCancelUpload).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('VolumeEditModal: duplicate field suppression with copies', () => {
+  it('suppresses volume-level price, condition, and purchase date when activeVolume has copies', () => {
+    routeFetch({});
+    const volWithCopies = volume({
+      copies: [
+        { id: 10, owner_user_id: 1, owner: 'ed', price: 7.5, purchase_date: '2026-03-01', condition: 'Sehr gut' }
+      ]
+    });
+    setup(volWithCopies);
+
+    // CopiesField is displayed
+    expect(screen.getByRole('list', { name: 'Exemplare' })).toBeTruthy();
+    expect(screen.getByText('7,50 € · 01.03.2026 · Sehr gut')).toBeTruthy();
+
+    // Volume-level fields are suppressed (null)
+    expect(screen.queryByLabelText('Kaufpreis (€)')).toBeNull();
+    expect(screen.queryByLabelText('Zustand')).toBeNull();
+    expect(screen.queryByLabelText('Kaufdatum')).toBeNull();
+
+    // Opening copy editor shows fields inside copy form
+    fireEvent.click(screen.getByRole('button', { name: /Bearbeiten – Exemplar von ed/ }));
+    expect(screen.getByLabelText(/Kaufpreis/)).toBeTruthy();
+    expect(screen.getByLabelText('Zustand')).toBeTruthy();
+    expect(screen.getByLabelText('Kaufdatum')).toBeTruthy();
+  });
+
+  it('preserves volume-level price, condition, and purchase date when activeVolume has no copies', () => {
+    routeFetch({});
+    setup(volume({ copies: [] }));
+
+    expect(screen.getByLabelText('Kaufpreis (€)')).toBeTruthy();
+    expect(screen.getByLabelText('Zustand')).toBeTruthy();
+    expect(screen.getByLabelText('Kaufdatum')).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Exemplare' })).toBeNull();
+  });
+
+  it('saving a volume with copies sends only modified fields and omits suppressed fields from PUT body', async () => {
+    const fetchMock = routeFetch({ 'PUT /api/volumes/7': () => json(200, { success: true }) });
+    const copy = { id: 10, owner: 'ed', owner_user_id: 1, price: 7.5, purchase_date: '2026-03-14', condition: 'Sehr gut' };
+    setup(volume({ copies: [copy], notes: 'alt' }));
+
+    fireEvent.change(screen.getByLabelText(/Notizen/), { target: { value: 'neu' } });
+    save();
+
+    const body = await putBody(fetchMock);
+    expect(body.notes).toBe('neu');
+    expect(body.price).toBeUndefined();
+    expect(body.condition).toBeUndefined();
+    expect(body.purchase_date).toBeUndefined();
+  });
+});

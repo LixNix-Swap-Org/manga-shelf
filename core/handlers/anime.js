@@ -9,7 +9,7 @@ const { escapeCell } = require('../csvExchange');
 const gateway = require('../anime/gateway');
 const store = require('../anime/store');
 const listSync = require('../anime/listSync');
-const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
+const { writeProgress, readProgress, airedEpisodeLimit, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
 const { SourceError } = require('../anime/request');
 const episodeMarks = require('../anime/episodes');
 const community = require('../anime/community');
@@ -619,6 +619,12 @@ function updateProgress(ctx, { params, body }) {
             const above = Object.keys(episodeScores).map(Number).find((n) => n > anime.episodes);
             if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
         }
+        const airedMax = airedEpisodeLimit(anime);
+        if (airedMax !== null) {
+            if (watched !== undefined && watched > airedMax) throw badRequest('episode_above_aired');
+            if (marks && marks.some((n) => n > airedMax)) throw badRequest('episode_above_aired');
+            if (episodeScores && Object.keys(episodeScores).map(Number).some((n) => n > airedMax)) throw badRequest('episode_above_aired');
+        }
         return writeProgress(ctx, id, userId, {
             status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle,
             rating_visibility: visibility, public_comment: publicComment
@@ -713,6 +719,8 @@ function applyWatched(ctx, id, userId, { episode, url, remember, complete }) {
     const anime = loadRow(ctx, id);
     const above = anime.episodes > 0 && episode > anime.episodes;
     if (above && !complete) throw episodeAboveTotal(episode, anime.episodes);
+    const airedMax = airedEpisodeLimit(anime);
+    if (airedMax !== null && episode > airedMax) throw badRequest('episode_above_aired');
     const before = readProgress(ctx, id, userId) || null;
     const single = !above && Boolean(before && episodeMarks.parseMarks(before.watched_episodes));
     const change = single ? { add_episodes: [episode] } : { episodes_watched: episode };

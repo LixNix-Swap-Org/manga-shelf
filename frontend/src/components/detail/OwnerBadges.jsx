@@ -1,5 +1,6 @@
-import { Handshake, Users } from 'lucide-react';
+import { Handshake, RotateCcw, Users } from 'lucide-react';
 import { t } from '../../i18n/index.js';
+import { canChangeCopy } from '../../utils/lendingHelpers';
 
 const OWNER_COLORS = ['#38bdf8', '#f472b6', '#a3e635', '#fb923c', '#c084fc', '#2dd4bf', '#facc15', '#f87171'];
 
@@ -44,11 +45,13 @@ export default function OwnerBadges({ vol, multiUser }) {
   );
 }
 
-/** "Verliehen" when a copy of the volume is lent out; the title names who has it. */
-export function LentBadge({ vol, className = '' }) {
+/** "Verliehen" when a copy of the volume is lent out; the title names who has it. Supports 1-click return when onReturn is provided. */
+export function LentBadge({ vol, onReturn, canReturn = Boolean(onReturn), user, canEdit, className = '' }) {
   const lent = (vol?.copies || []).filter(c => c.lent_to);
   if (lent.length === 0) return null;
   const names = lent.map(c => c.lent_to).join(', ');
+  const returnableCopy = onReturn ? lent.find(c => !user || canChangeCopy(c, user, canEdit ?? true)) : null;
+
   return (
     <span
       className={`inline-flex items-center gap-1 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-200 border border-violet-500/40 ${className}`}
@@ -57,6 +60,21 @@ export function LentBadge({ vol, className = '' }) {
     >
       <Handshake className="w-2.5 h-2.5" aria-hidden="true" />
       <span>{t('Verliehen')}</span>
+      {returnableCopy && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onReturn(returnableCopy);
+          }}
+          className="hit-44 ml-0.5 p-0.5 rounded hover:bg-violet-600/40 text-violet-200 hover:text-white transition-colors cursor-pointer"
+          title={t('Zurücknehmen')}
+          aria-label={t('Zurücknehmen')}
+          data-return-btn
+        >
+          <RotateCcw className="w-2.5 h-2.5" aria-hidden="true" />
+        </button>
+      )}
       <span className="sr-only">{t('Ausgeliehen an: {names}', { names })}</span>
     </span>
   );

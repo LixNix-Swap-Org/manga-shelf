@@ -1,4 +1,5 @@
-import { BookOpen, Plus, Truck, Calendar, BookCheck, PenLine, ShoppingCart, Trash } from 'lucide-react';
+import { useState } from 'react';
+import { BookOpen, Plus, Truck, Calendar, BookCheck, Handshake, PenLine, ShoppingCart, Trash } from 'lucide-react';
 import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges, { LentBadge } from './OwnerBadges';
@@ -9,6 +10,8 @@ import { conditionLabel } from '../../utils/enumLabels';
 import { formatMoney } from '../../utils/format';
 import { editionCurrency } from '../../utils/editions';
 import { VolumeLanguagePill } from '../common/LanguagePill';
+import { selectQuickLendCopy } from '../../utils/lendingHelpers';
+import QuickLendPopover from './QuickLendPopover';
 
 // i18n
 const TYPE_BADGES = {
@@ -38,8 +41,11 @@ export default function VolumeListView({
   canToggleOwned = canToggle,
   selectionMode = false,
   isSelected = () => false,
-  onSelectVolume
+  onSelectVolume,
+  handleReturnCopy,
+  handleLendCopy
 }) {
+  const [quickLendTarget, setQuickLendTarget] = useState(null);
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-800/80 bg-slate-950/60 shadow-xl mb-8 custom-scrollbar">
@@ -223,7 +229,13 @@ export default function VolumeListView({
                   <span className="ml-1.5 align-middle">
                     <OwnerBadges vol={vol} multiUser={(manga?.reader_stats?.length || 0) > 1} />
                   </span>
-                  <LentBadge vol={vol} className="ml-1.5 align-middle" />
+                  <LentBadge
+                    vol={vol}
+                    user={user}
+                    canEdit={canEdit}
+                    onReturn={handleReturnCopy ? (copy) => handleReturnCopy(vol.id, copy.id) : undefined}
+                    className="ml-1.5 align-middle"
+                  />
                   {vol.isbn && (
                     <span className="block text-[10px] text-slate-400 font-mono font-normal">
                       ISBN: {vol.isbn}
@@ -315,6 +327,35 @@ export default function VolumeListView({
                 {/* Actions */}
                 <td className="py-2 px-3 text-right">
                   <div className="flex items-center justify-end gap-1.5 [@media(pointer:coarse)]:gap-5">
+                    {(() => {
+                      const quickLendCopy = canEdit && !selectionMode ? selectQuickLendCopy(vol, user, canEdit) : null;
+                      if (!quickLendCopy) return null;
+                      return (
+                        <div className="relative inline-block text-left">
+                          <button
+                            type="button"
+                            onClick={() => setQuickLendTarget(prev => (prev?.vol?.id === vol.id ? null : { vol, copy: quickLendCopy }))}
+                            className="hit-44 p-1.5 rounded-lg bg-slate-800/80 hover:bg-violet-900/40 text-slate-300 hover:text-violet-200 transition-colors cursor-pointer"
+                            title={t('Exemplar verleihen')}
+                            aria-label={t('{volume} verleihen', { volume: getVolumeDisplayTitle(vol) })}
+                            data-quick-lend-btn
+                          >
+                            <Handshake className="w-3.5 h-3.5" />
+                          </button>
+                          {quickLendTarget?.vol?.id === vol.id && (
+                            <QuickLendPopover
+                              isOpen={true}
+                              onClose={() => setQuickLendTarget(null)}
+                              onLend={(lent) => handleLendCopy?.(vol.id, quickLendCopy.id, lent)}
+                              volumeTitle={getVolumeDisplayTitle(vol)}
+                              copy={quickLendCopy}
+                              user={user}
+                              accounts={manga?.reader_stats || []}
+                            />
+                          )}
+                        </div>
+                      );
+                    })()}
                     {canEdit && !selectionMode && (
                       <button
                         type="button"

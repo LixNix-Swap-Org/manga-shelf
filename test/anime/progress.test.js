@@ -242,6 +242,34 @@ test('single episodes: a monotonic "watched up to N" adds 1..N and never removes
     assert.deepEqual([row.status, row.episodes_watched, row.watched_episodes], ['Gesehen', 12, null]);
 });
 
+test('ongoing anime without total: progress bounded to aired episodes (next_airing_episode - 1)', () => {
+    const core = memoryWith(async (url) => { throw offline(url); });
+    const anime = Number(core.conn.prepare("INSERT INTO animes (title, episodes, next_airing_episode) VALUES ('Ongoing', null, 6)").run().lastInsertRowid);
+    const save = (change, options) => saveProgress(core.ctx, anime, 2, change, options);
+
+    // Up to 5 is accepted
+    let row = save({ episodes_watched: 5 });
+    assert.equal(row.episodes_watched, 5);
+
+    // Above 5 throws episode_above_aired
+    assert.throws(() => save({ episodes_watched: 6 }), (err) => err.status === 400 && err.message === 'episode_above_aired');
+    assert.throws(() => save({ watched_episodes: [1, 6] }), (err) => err.status === 400 && err.message === 'episode_above_aired');
+    assert.throws(() => save({ add_episodes: [6] }), (err) => err.status === 400 && err.message === 'episode_above_aired');
+    assert.throws(() => save({ episode_scores: { 6: 10 } }), (err) => err.status === 400 && err.message === 'episode_above_aired');
+
+    // Valid marks and scores accepted
+    row = save({ watched_episodes: [1, 2, 5], episode_scores: { 5: 9 } });
+    assert.equal(row.episodes_watched, 3);
+    assert.deepEqual(JSON.parse(row.watched_episodes), [1, 2, 5]);
+});
+
+test('ongoing anime with estimated next_airing_episode does not cap progress', () => {
+    const core = memoryWith(async (url) => { throw offline(url); });
+    const anime = Number(core.conn.prepare("INSERT INTO animes (title, episodes, next_airing_episode, next_airing_estimated) VALUES ('Estimated', null, 6, 1)").run().lastInsertRowid);
+    const row = saveProgress(core.ctx, anime, 2, { episodes_watched: 10 });
+    assert.equal(row.episodes_watched, 10);
+});
+
 function range(from, to) {
     return Array.from({ length: to - from + 1 }, (_, i) => from + i);
 }

@@ -152,3 +152,62 @@ describe('LentBadge and LentCard', () => {
     expect(container.textContent).toBe('');
   });
 });
+
+describe('1-Click Lending on Copy Rows and LentBadge', () => {
+  it('1-click return on copy row sends PUT with lent: null without entering edit mode', async () => {
+    let capturedBody = null;
+    const fetchMock = vi.fn(async (url, init = {}) => {
+      expect(String(url)).toContain('/api/volumes/5/copies/10');
+      expect(init.method).toBe('PUT');
+      capturedBody = JSON.parse(init.body);
+      return fakeResponse(200, { success: true, copies: [copy({ lent_to: null, lent_at: null })] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onChanged = vi.fn();
+
+    render(
+      <CopiesField
+        volumeId={5}
+        mangaId={2}
+        currentUser={anna}
+        canEdit
+        copies={[copy({ id: 10, lent_to: 'ben', lent_to_user_id: 2, lent_at: '2026-01-02' })]}
+        onChanged={onChanged}
+      />
+    );
+
+    // Assert 1-click return button exists on row
+    const returnBtn = screen.getByRole('button', { name: /Zurücknehmen/ });
+    expect(returnBtn).toBeTruthy();
+
+    fireEvent.click(returnBtn);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(capturedBody).toEqual({ lent: null });
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    // Verified that edit form was never opened
+    expect(screen.queryByLabelText('Ausgeliehen an')).toBeNull();
+  });
+
+  it('LentBadge renders 1-click return action when onReturn is provided', () => {
+    const onReturn = vi.fn();
+    render(
+      <LentBadge
+        vol={{ id: 5, copies: [copy({ id: 10, lent_to: 'ben' })] }}
+        canEdit
+        onReturn={onReturn}
+      />
+    );
+
+    const returnBtn = screen.getByRole('button', { name: /Zurücknehmen/ });
+    expect(returnBtn).toBeTruthy();
+    fireEvent.click(returnBtn);
+    expect(onReturn).toHaveBeenCalledWith(expect.objectContaining({ id: 10 }));
+  });
+
+  it('LentBadge without onReturn renders passive badge matching existing contract', () => {
+    render(<LentBadge vol={{ copies: [copy({ id: 10, lent_to: 'ben' })] }} />);
+    expect(screen.getByText('Verliehen')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Zurücknehmen/ })).toBeNull();
+  });
+});

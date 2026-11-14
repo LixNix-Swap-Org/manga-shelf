@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Flag } from 'lucide-react';
+import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Flag, Tv } from 'lucide-react';
 import { CalendarFeedPanel } from '../radar/PersonalSummary';
 import CoverImage from '../../common/CoverImage';
 import api from '../../../utils/api';
@@ -9,6 +9,15 @@ import { formatDayMonth, formatMonth, formatTime, getLocale } from '../../../uti
 import { t, tn } from '../../../i18n/index.js';
 
 const weekdayName = (date) => new Intl.DateTimeFormat(getLocale(), { weekday: 'short' }).format(date);
+
+function CoverFallback() {
+  return (
+    <span className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-400">
+      <Tv className="w-4 h-4 opacity-40 text-slate-400" aria-hidden="true" />
+      <span className="sr-only">{t('Kein Cover')}</span>
+    </span>
+  );
+}
 
 function Event({ event, onOpen }) {
   const { anime } = event;
@@ -20,7 +29,7 @@ function Event({ event, onOpen }) {
         className={`w-full text-left flex items-center gap-2 rounded-xl border p-1.5 hover:border-fuchsia-500/60 ${event.past ? 'opacity-80 ' : ''}${event.estimated ? 'border-dashed border-slate-700 bg-slate-900/40' : 'border-slate-700 bg-slate-900/80'}`}
       >
         <span className="w-8 h-11 shrink-0 rounded-md overflow-hidden bg-slate-900 border border-slate-800">
-          <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={<span className="block w-full h-full" />} />
+          <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={<CoverFallback />} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold text-white line-clamp-2 break-words">{displayTitle(anime)}</span>

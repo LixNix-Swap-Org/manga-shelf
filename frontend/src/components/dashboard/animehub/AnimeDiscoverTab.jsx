@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Plus, Sparkles, Sun } from 'lucide-react';
+import { Check, Plus, Sparkles, Sun, Tv } from 'lucide-react';
 import CoverImage from '../../common/CoverImage';
 import api, { TIMEOUTS } from '../../../utils/api';
 import { notify } from '../../../utils/notify';
@@ -14,12 +14,21 @@ const SEASON_LABELS = { WINTER: 'Winter', SPRING: 'Frühling', SUMMER: 'Sommer',
 const currentSeason = (now) => ({ season: SEASONS[Math.floor(now.getMonth() / 3)], year: now.getFullYear() });
 const titleOf = (hit) => hit.title?.preferred || hit.title?.romaji || hit.title?.english || hit.title?.native || t('Ohne Titel');
 
+function CoverFallback() {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-1 text-center">
+      <Tv className="w-6 h-6 opacity-40 text-slate-400" aria-hidden="true" />
+      <span className="text-[10px] text-slate-400 mt-1">{t('Kein Cover')}</span>
+    </div>
+  );
+}
+
 function Hit({ hit, because, canEdit, added, busy, onAdd, onOpen }) {
   const entryId = hit.in_collection_id || added;
   return (
     <li className="glass-card rounded-2xl border border-slate-800 p-3 flex gap-3">
       <div className="w-16 h-24 shrink-0 rounded-lg overflow-hidden bg-slate-900 border border-slate-800">
-        <CoverImage src={hit.cover_url} className="w-full h-full object-cover" fallback={<div className="w-full h-full" />} />
+        <CoverImage src={hit.cover_url} className="w-full h-full object-cover" fallback={<CoverFallback />} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-white line-clamp-2 break-words">{titleOf(hit)}</p>

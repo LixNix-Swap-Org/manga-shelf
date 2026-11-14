@@ -152,7 +152,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
     readDate, setReadDate,
     activeVolume, setActiveVolume, canToggleOthers,
     handleAddSingleVolume, handleUploadNewSingleCover, cancelNewCoverUpload,
-    handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit
+    handleToggleVolume, handleToggleVolumeRead, handleOpenEditVolume, handleDeleteVolume, handleBulkEdit,
+    handleReturnCopy, handleLendCopy
   } = useVolumeActions({ id, user, canEdit, canToggle, canToggleOwned, selectedReaderId, fetchManga, patchManga, volumes, onUnauthorized });
 
   const { lightboxData, setLightboxData, openVolumeGallery } = useVolumeGallery({ manga });
@@ -736,6 +737,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   handleToggleVolumeRead={handleToggleVolumeRead}
                   handleOpenEditVolume={handleOpenEditVolume}
                   handleDeleteVolume={handleDeleteVolume}
+                  handleReturnCopy={handleReturnCopy}
+                  handleLendCopy={handleLendCopy}
                   {...selectionProps}
                 />
               )}
@@ -753,6 +756,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   handleOpenEditVolume={handleOpenEditVolume}
                   handleToggleVolume={handleToggleVolume}
                   handleToggleVolumeRead={handleToggleVolumeRead}
+                  handleReturnCopy={handleReturnCopy}
+                  handleLendCopy={handleLendCopy}
                   manga={manga}
                   mpGapMap={mpGapMap}
                   openVolumeGallery={openVolumeGallery}

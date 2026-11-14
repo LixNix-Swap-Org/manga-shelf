@@ -1,4 +1,5 @@
-import { BookCheck, BookOpen, BuildingComplex, Calendar, Camera, Check, CircleExclamationPoint, Coins, FileText, Package, PenLine, Plus, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
+import { useState } from 'react';
+import { BookCheck, BookOpen, BuildingComplex, Calendar, Camera, Check, CircleExclamationPoint, Coins, FileText, Handshake, Package, PenLine, Plus, ShoppingCart, Sparkles, Truck, X } from 'lucide-react';
 import { getVolumeDisplayTitle, getRegularGapMeta, hasUserRead } from '../../utils/volumeHelpers';
 import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges, { LentBadge, ownerColor, readerInitials } from './OwnerBadges';
@@ -9,6 +10,8 @@ import { VolumeLanguagePill } from '../common/LanguagePill';
 import { assetImgProps } from '../../utils/api';
 import { t, tn } from '../../i18n/index.js';
 import { conditionLabel, statusLabel } from '../../utils/enumLabels';
+import { selectQuickLendCopy } from '../../utils/lendingHelpers';
+import QuickLendPopover from './QuickLendPopover';
 
 export { readerInitials };
 
@@ -33,8 +36,11 @@ export default function VolumeGridView({
   canToggleOwned = canToggle,
   selectionMode = false,
   isSelected = () => false,
-  onSelectVolume
+  onSelectVolume,
+  handleReturnCopy,
+  handleLendCopy
 }) {
+  const [quickLendTarget, setQuickLendTarget] = useState(null);
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1800px]:grid-cols-7 gap-3 sm:gap-3.5 mb-8">
@@ -270,12 +276,49 @@ export default function VolumeGridView({
                   )}
                   <VolumeLanguagePill volume={vol} manga={manga} />
                   <OwnerBadges vol={vol} multiUser={readers.length > 1} />
-                  <LentBadge vol={vol} />
+                  <LentBadge
+                    vol={vol}
+                    user={user}
+                    canEdit={canEdit}
+                    onReturn={handleReturnCopy ? (copy) => handleReturnCopy(vol.id, copy.id) : undefined}
+                  />
                 </div>
               </div>
 
               {canEdit && !selectionMode && (
                 <div className="flex items-center gap-1 [@media(pointer:coarse)]:gap-2.5 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
+                  {(() => {
+                    const quickLendCopy = selectQuickLendCopy(vol, user, canEdit);
+                    if (!quickLendCopy) return null;
+                    return (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQuickLendTarget(prev => (prev?.vol?.id === vol.id ? null : { vol, copy: quickLendCopy }));
+                          }}
+                          className="hit-44 p-1.5 [@media(pointer:coarse)]:p-2.5 text-slate-400 hover:text-violet-300 hover:bg-slate-800 rounded-md transition-all cursor-pointer"
+                          title={t('Exemplar verleihen')}
+                          aria-label={t('{volume} verleihen', { volume: getVolumeDisplayTitle(vol) })}
+                          data-quick-lend-btn
+                        >
+                          <Handshake className="w-3.5 h-3.5" aria-hidden="true" />
+                        </button>
+                        {quickLendTarget?.vol?.id === vol.id && (
+                          <QuickLendPopover
+                            isOpen={true}
+                            onClose={() => setQuickLendTarget(null)}
+                            onLend={(lent) => handleLendCopy?.(vol.id, quickLendCopy.id, lent)}
+                            volumeTitle={getVolumeDisplayTitle(vol)}
+                            copy={quickLendCopy}
+                            user={user}
+                            accounts={readers}
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
                   {!hasCover && (
                     <button
                       type="button"

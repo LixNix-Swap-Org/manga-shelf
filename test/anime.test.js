@@ -703,3 +703,40 @@ test('season chain endpoint: follows prequel and sequel live through AniList bey
         global.fetch = before;
     }
 });
+
+test('ongoing anime without total: progress bound to aired episodes; above rejected with 400 episode_above_aired', async () => {
+    const created = await admin('POST', '/anime', { title: 'Ongoing Anime', episodes: 0 });
+    assert.equal(created.status, 201);
+    const id = created.body.id;
+    db.prepare('UPDATE animes SET episodes = NULL, next_airing_episode = 8, next_airing_at = 1800000000 WHERE id = ?').run(id);
+
+    // Progress <= 7 succeeds
+    let res = await admin('PUT', `/anime/${id}/progress`, { episodes_watched: 7 });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.episodes_watched, 7);
+
+    // Progress > 7 fails with 400 and error 'episode_above_aired'
+    let bad = await admin('PUT', `/anime/${id}/progress`, { episodes_watched: 8 });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.body.error, 'episode_above_aired');
+
+    // Marked episodes above 7 fails
+    bad = await admin('PUT', `/anime/${id}/progress`, { watched_episodes: [1, 2, 8] });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.body.error, 'episode_above_aired');
+
+    // Episode scores above 7 fails
+    bad = await admin('PUT', `/anime/${id}/progress`, { episode_scores: { 8: 9 } });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.body.error, 'episode_above_aired');
+
+    // POST /watched above 7 fails
+    bad = await admin('POST', `/anime/${id}/watched`, { episode: 8 });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.body.error, 'episode_above_aired');
+
+    // Marked episodes within bound succeeds
+    res = await admin('PUT', `/anime/${id}/progress`, { watched_episodes: [1, 3, 7] });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.watched_episodes, [1, 3, 7]);
+});

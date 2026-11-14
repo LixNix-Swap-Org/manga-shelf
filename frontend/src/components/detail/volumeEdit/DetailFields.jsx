@@ -28,7 +28,8 @@ export default function DetailFields({
   autofillingVolume,
   handleAutofillVolumeData,
   manga,
-  mpLookup = isMpEdition(manga)
+  mpLookup = isMpEdition(manga),
+  hasCopies = false
 }) {
   const id = useId();
   const setValue = (key, value) => setEditVolForm(prev => ({ ...prev, [key]: value }));
@@ -64,25 +65,27 @@ export default function DetailFields({
                   </div>
 
                   {/* Row 3: Condition & Release Year */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor={`${id}-condition`} className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" /> {t('Zustand')}
-                      </label>
-                      <select
-                        id={`${id}-condition`}
-                        className="input-field bg-slate-950"
-                        value={editVolForm.condition ?? ''}
-                        onChange={setField('condition')}
-                      >
-                        <option value="">{t('-- Keine Angabe --')}</option>
-                        <option value="Neuwertig">{t('Neuwertig (Mint / Wie neu)')}</option>
-                        <option value="Sehr gut">{t('Sehr gut (Leichte Spuren)')}</option>
-                        <option value="Gut">{t('Gut (Normal gelesen)')}</option>
-                        <option value="Akzeptabel">{t('Akzeptabel (Vergilbt / Knicke)')}</option>
-                        <option value="Mängelexemplar">{t('Mängelexemplar / Stempel')}</option>
-                      </select>
-                    </div>
+                  <div className={hasCopies ? '' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
+                    {!hasCopies && (
+                      <div>
+                        <label htmlFor={`${id}-condition`} className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" /> {t('Zustand')}
+                        </label>
+                        <select
+                          id={`${id}-condition`}
+                          className="input-field bg-slate-950"
+                          value={editVolForm.condition ?? ''}
+                          onChange={setField('condition')}
+                        >
+                          <option value="">{t('-- Keine Angabe --')}</option>
+                          <option value="Neuwertig">{t('Neuwertig (Mint / Wie neu)')}</option>
+                          <option value="Sehr gut">{t('Sehr gut (Leichte Spuren)')}</option>
+                          <option value="Gut">{t('Gut (Normal gelesen)')}</option>
+                          <option value="Akzeptabel">{t('Akzeptabel (Vergilbt / Knicke)')}</option>
+                          <option value="Mängelexemplar">{t('Mängelexemplar / Stempel')}</option>
+                        </select>
+                      </div>
+                    )}
 
                     <div>
                       <label htmlFor={`${id}-year`} className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
@@ -159,7 +162,7 @@ export default function DetailFields({
                   </div>
 
                   {/* Row 5: Release date & Purchase date */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                  <div className={hasCopies ? '' : 'grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5'}>
                     <div>
                       <div className="mb-1 flex items-center justify-between">
                         <label htmlFor={`${id}-release-date`} className="text-xs font-semibold text-sky-400 flex items-center gap-1">
@@ -188,19 +191,21 @@ export default function DetailFields({
                       />
                       <PartialDateHint value={releaseDate} onClear={() => setValue('release_date', '')} className="text-sky-300/80" />
                     </div>
-                    <div>
-                      <label htmlFor={`${id}-purchase-date`} className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" /> {t('Kaufdatum')}
-                      </label>
-                      <input
-                        id={`${id}-purchase-date`}
-                        type="date"
-                        className="input-field bg-slate-950"
-                        value={isFullDate(purchaseDate) ? purchaseDate : ''}
-                        onChange={setField('purchase_date')}
-                      />
-                      <PartialDateHint value={purchaseDate} onClear={() => setValue('purchase_date', '')} className="text-slate-400" />
-                    </div>
+                    {!hasCopies && (
+                      <div>
+                        <label htmlFor={`${id}-purchase-date`} className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" /> {t('Kaufdatum')}
+                        </label>
+                        <input
+                          id={`${id}-purchase-date`}
+                          type="date"
+                          className="input-field bg-slate-950"
+                          value={isFullDate(purchaseDate) ? purchaseDate : ''}
+                          onChange={setField('purchase_date')}
+                        />
+                        <PartialDateHint value={purchaseDate} onClear={() => setValue('purchase_date', '')} className="text-slate-400" />
+                      </div>
+                    )}
                   </div>
 
                   {/* Row 6: Notes & Extras */}

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Handshake, Package, Pencil, Plus, Trash } from 'lucide-react';
+import { Handshake, Package, Pencil, Plus, RotateCcw, Trash } from 'lucide-react';
 import { ApiError, apiFetch, readJson } from '../../../utils/api';
 import { formatDate, formatMoney, currencySymbol } from '../../../utils/format';
 import { conditionLabel } from '../../../utils/enumLabels';
@@ -7,6 +7,7 @@ import { VOLUME_CONDITIONS } from '../../../utils/volumeHelpers';
 import { isValidPriceInput } from './editorUtils';
 import { t } from '../../../i18n/index.js';
 import { serverText } from '../../../i18n/serverText.js';
+import QuickLendPopover from '../QuickLendPopover';
 
 // today as YYYY-MM-DD in local time (the upper bound of "Seit"); radarHelpers would pull a chunk of its own in here
 const today = () => {
@@ -56,6 +57,7 @@ export function copyBody(form, copy) {
 export default function CopiesField({ volumeId, mangaId, copies: initialCopies, currentUser, canEdit, currency = 'EUR', ownersVersion = 0, onChanged }) {
   const [copies, setCopies] = useState(initialCopies || []);
   const [editing, setEditing] = useState(null);
+  const [quickLendCopyId, setQuickLendCopyId] = useState(null);
   const [form, setForm] = useState(null);
   const [accounts, setAccounts] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -187,6 +189,46 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
                 </div>
                 {changeable && editing !== copy.id && (
                   <div className="shrink-0 flex items-center gap-1.5">
+                    {copy.lent_to ? (
+                      <button
+                        type="button"
+                        onClick={() => request(`/api/volumes/${volumeId}/copies/${copy.id}`, { method: 'PUT', body: { lent: null } })}
+                        disabled={busy}
+                        data-return-copy
+                        className="hit-44 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-violet-700/60 bg-violet-950/40 text-violet-200 hover:bg-violet-900/60 hover:text-white transition-colors cursor-pointer"
+                        aria-label={t('Zurücknehmen – Exemplar von {owner}', { owner })}
+                        title={t('Als zurückgegeben markieren')}
+                      >
+                        <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                        <span>{t('Zurücknehmen')}</span>
+                      </button>
+                    ) : (
+                      <div className="relative inline-block text-left">
+                        <button
+                          type="button"
+                          onClick={() => setQuickLendCopyId(prev => (prev === copy.id ? null : copy.id))}
+                          disabled={busy}
+                          data-quick-lend-copy
+                          className="hit-44 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-700 text-slate-300 hover:text-violet-200 hover:border-violet-700/60 transition-colors cursor-pointer"
+                          aria-label={t('Verleihen – Exemplar von {owner}', { owner })}
+                          title={t('Exemplar verleihen')}
+                        >
+                          <Handshake className="w-3 h-3" aria-hidden="true" />
+                          <span>{t('Verleihen')}</span>
+                        </button>
+                        {quickLendCopyId === copy.id && (
+                          <QuickLendPopover
+                            isOpen={true}
+                            onClose={() => setQuickLendCopyId(null)}
+                            onLend={(lent) => request(`/api/volumes/${volumeId}/copies/${copy.id}`, { method: 'PUT', body: { lent } })}
+                            volumeTitle={owner}
+                            copy={copy}
+                            user={currentUser}
+                            accounts={accounts || []}
+                          />
+                        )}
+                      </div>
+                    )}
                     {several && (
                       <button
                         type="button"
