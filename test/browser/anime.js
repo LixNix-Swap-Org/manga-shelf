@@ -72,11 +72,12 @@ const cardSelector = async (page) => {
         await clickText(page, 'Gesehen', { selector: '[aria-label="Nach meinem Status filtern"] button' });
         await page.waitForSelector(card, { visible: true });
 
-        console.log('Step 5: reload keeps the view; four tabs fit 375 px');
+        console.log('Step 5: reload keeps the view; on a 375 px phone the header Anime button replaces the view tabs');
         await page.reload({ waitUntil: 'networkidle0' });
         await page.waitForSelector('[data-anime-id]', { visible: true });
         await page.setViewport({ width: 375, height: 812, isMobile: true, hasTouch: true });
-        await page.waitForSelector('#btn-nav-anime', { visible: true });
+        await page.waitForSelector('#btn-header-anime[aria-current="page"]', { visible: true });
+        await page.waitForFunction(() => !document.querySelector('#btn-nav-anime'), { timeout: 5000 });
         await assertNoHorizontalOverflow(page, 'anime tab at 375 px');
 
         console.log('Step 5b: "Link einfügen" without clipboard access opens the paste field; a shared title is found');
