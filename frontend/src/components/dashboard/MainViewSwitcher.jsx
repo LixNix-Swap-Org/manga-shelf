@@ -1,5 +1,6 @@
 import { Library, ShoppingCart, Calendar, Tv } from 'lucide-react';
 import { t } from '../../i18n/index.js';
+import { useIsNarrow } from '../common/BottomNav';
 
 const tabClass = (active) => `flex items-center gap-1.5 sm:gap-2 px-1.5 min-[430px]:px-2.5 sm:px-4 py-2 [@media(pointer:coarse)]:py-3.5 rounded-xl text-[11px] min-[430px]:text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-all ${
   active
@@ -26,6 +27,9 @@ const Label = ({ full, short }) => (
  */
 export default function MainViewSwitcher({ activeMainView, onSelectView, mangaCount, animeCount = 0, shoppingData, radarData }) {
   const isRadar = activeMainView === 'radar' || activeMainView === 'episodes';
+  // phones switch views in the bottom navigation (Anime: the header button), so the tabs would only repeat it
+  const narrow = useIsNarrow();
+  if (narrow) return isRadar ? <RadarKindSwitch activeMainView={activeMainView} onSelectView={onSelectView} top /> : null;
   return (
     <>
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-6">
@@ -126,9 +130,9 @@ const kindClass = (active) => `px-3 py-1.5 [@media(pointer:coarse)]:py-2.5 round
 }`;
 
 /** Manga releases or anime episodes inside the Radar tab: the two calendars that used to be two tabs. */
-export function RadarKindSwitch({ activeMainView, onSelectView }) {
+export function RadarKindSwitch({ activeMainView, onSelectView, top = false }) {
   return (
-    <div role="group" aria-label={t('Was der Radar zeigt')} className="-mt-3 mb-6 inline-flex items-center gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl">
+    <div role="group" aria-label={t('Was der Radar zeigt')} className={`${top ? 'mb-4' : '-mt-3 mb-6'} inline-flex items-center gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl`}>
       <button id="btn-radar-manga" type="button" aria-pressed={activeMainView === 'radar'} onClick={() => onSelectView('radar')} className={kindClass(activeMainView === 'radar')}>
         {t('Manga-Termine')}
       </button>
