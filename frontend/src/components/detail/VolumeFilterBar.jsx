@@ -130,7 +130,7 @@ export default function VolumeFilterBar({
         </div>
 
         {/* Gap detection toggle & Manga Passion pill */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {detectedGaps.length > 0 && (
             <button
               type="button"

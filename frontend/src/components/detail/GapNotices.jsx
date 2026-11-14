@@ -122,8 +122,8 @@ export default function GapNotices({
 
       {showGapBanner && (
         <div data-notice={formatCount(detectedGaps.length, 'Lücke', 'Lücken')} className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-amber-200">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+          <div className="flex items-start gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
             <span>
               <strong>{t('{count} entdeckt:', { count: formatCount(detectedGaps.length, 'Lücke', 'Lücken') })}</strong> {detectedGaps.slice(0, 8).map(gapLabel).join(', ')}{detectedGaps.length > 8 ? t(' (+ {count} weitere)', { count: detectedGaps.length - 8 }) : ''}{extraGapCount > 0 ? t(' · davon {count}', { count: formatCount(extraGapCount, 'Sonderausgabe/Schuber', 'Sonderausgaben/Schuber') }) : ''}
               {announcedGapCount > 0 && <span className="ml-1.5 text-amber-200/80">{tn('+ {n} angekündigt', '+ {n} angekündigt', announcedGapCount)}</span>}

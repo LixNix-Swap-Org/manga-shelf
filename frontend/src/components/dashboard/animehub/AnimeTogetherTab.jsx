@@ -1,10 +1,19 @@
 import { useMemo } from 'react';
-import { TriangleExclamationPoint, Users } from 'lucide-react';
+import { TriangleExclamationPoint, Tv, Users } from 'lucide-react';
 import CoverImage from '../../common/CoverImage';
 import { togetherRows } from '../../../utils/animeHub';
 import { displayTitle } from '../../../utils/animeHelpers';
 import { animeProgressLabel } from '../../../utils/enumLabels.js';
 import { t, tn } from '../../../i18n/index.js';
+
+function CoverFallback() {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-1 text-center">
+      <Tv className="w-5 h-5 opacity-40 text-slate-400" aria-hidden="true" />
+      <span className="text-[9px] text-slate-400 mt-0.5">{t('Kein Cover')}</span>
+    </div>
+  );
+}
 
 /** Tab "Gemeinsam": entries that two or more accounts follow, who is how far and where everybody can watch together. */
 export default function AnimeTogetherTab({ list, userId, username, onOpen }) {
@@ -22,7 +31,7 @@ export default function AnimeTogetherTab({ list, userId, username, onOpen }) {
       {rows.map(({ anime, people, reached, ahead, finished }) => (
         <li key={anime.id} className="glass-card rounded-2xl border border-slate-800 p-3 flex flex-wrap items-start gap-3">
           <div className="w-12 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-900 border border-slate-800">
-            <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={<div className="w-full h-full" />} />
+            <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={<CoverFallback />} />
           </div>
           <div className="min-w-0 flex-1 basis-56">
             <button type="button" onClick={() => onOpen(anime)} className="text-left font-semibold text-white hover:underline line-clamp-2 break-words">{displayTitle(anime)}</button>

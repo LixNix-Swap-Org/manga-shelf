@@ -899,14 +899,14 @@ describe('AnimeDetailModal', () => {
       </MemoryRouter>
     );
 
-    it('a running show: "Gesehen" is locked, the aired episodes show without capping the counter', async () => {
+    it('a running show: "Gesehen" is locked, the counter stops at the aired episodes', async () => {
       openEditable(onePiece());
       await act(async () => {});
       const select = screen.getByLabelText('Status');
       const option = within(select).getByRole('option', { name: 'Gesehen' });
       expect(option.disabled).toBe(true);
       expect(option.getAttribute('title')).toBe('Läuft noch');
-      expect(screen.getByLabelText('Gesehene Folgen (bisher 1180 ausgestrahlt)').getAttribute('max')).toBeNull();
+      expect(screen.getByLabelText('Gesehene Folgen (bisher 1180 ausgestrahlt)').getAttribute('max')).toBe('1180');
       expect(screen.getByText('12 / 1180+')).toBeTruthy();
     });
 

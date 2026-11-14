@@ -1,3 +1,5 @@
+process.env.TZ = 'UTC';
+
 import { afterEach } from 'vitest';
 import { cleanup, configure, getConfig } from '@testing-library/react';
 

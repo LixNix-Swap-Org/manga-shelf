@@ -59,6 +59,22 @@ function watchedAfter(current, change, total, monotonic) {
 // `episode_scores` (object episode -> 1..10) replaces the ratings, `null` removes them; above a known episode count dropped.
 // `rating_visibility` is the change's; without one the user's default (users.default_anime_visibility) applies to a new row
 // and to a row that gets its first score or episode score with this change, any other row keeps its visibility.
+/**
+ * The last episode that has aired of a show without a known episode count: the one before the announced next episode.
+ * null (no cap) when the count is known, the date is only estimated, nothing has aired yet, or the announced time has
+ * passed already (the snapshot lags behind, so the aired count is not known). Works on a row (next_airing_*) and on the API shape (next_airing).
+ */
+function airedEpisodeLimit(anime, nowMs = Date.now()) {
+    if (!anime || anime.episodes > 0) return null;
+    const next = anime.next_airing && typeof anime.next_airing === 'object'
+        ? anime.next_airing
+        : { episode: anime.next_airing_episode, at: anime.next_airing_at, estimated: anime.next_airing_estimated };
+    if (!(next.episode > 0) || next.estimated) return null;
+    // the announced episode is out by now and the snapshot has not caught up: how many aired since is unknown, no cap
+    if (next.at && next.at * 1000 <= nowMs) return null;
+    return next.episode > 1 ? next.episode - 1 : null;
+}
+
 function writeProgress(ctx, animeId, userId, change, { monotonic = false } = {}) {
     const anime = ctx.db.prepare('SELECT id, episodes, notes FROM animes WHERE id = ?').get(animeId);
     if (!anime) return null;
@@ -135,4 +151,4 @@ function saveProgress(ctx, animeId, userId, change, options = {}) {
     return ctx.db.transaction(() => writeProgress(ctx, animeId, userId, change, options));
 }
 
-module.exports = { writeProgress, saveProgress, readProgress, today, sqlNow, PROGRESS_STATUSES };
+module.exports = { writeProgress, saveProgress, readProgress, airedEpisodeLimit, today, sqlNow, PROGRESS_STATUSES };

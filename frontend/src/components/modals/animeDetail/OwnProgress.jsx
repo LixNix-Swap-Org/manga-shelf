@@ -1,7 +1,7 @@
 // Own progress of an anime: counter, status, rating, languages, note and who sees the rating (split from AnimeDetailModal.jsx).
 import { useEffect, useId, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
-import { PROGRESS_STATUSES, airedEpisodes, stillAiring, kindOf, seasonEpisodeText } from '../../../utils/animeHelpers';
+import { PROGRESS_STATUSES, airedEpisodes, airedEpisodeLimit, stillAiring, kindOf, seasonEpisodeText } from '../../../utils/animeHelpers';
 import { animeProgressLabel } from '../../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../../utils/editions';
 import episodeMarks from '../../../../../core/anime/episodes.js';
@@ -105,8 +105,12 @@ export function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyCh
   const episodeAt = seasonEpisodeText(anime, Number(episodes) || 0);
   const max = anime.episodes > 0 ? anime.episodes : undefined;
   const aired = airedEpisodes(anime);
+  // a show still airing: no more than the aired episodes (a typo like 9999), but a stored count ahead of them stays
+  const airedLimit = airedEpisodeLimit(anime);
+  const airedCap = airedLimit ? Math.max(airedLimit, progress?.episodes_watched ?? 0) : undefined;
+  const cap = max ?? airedCap;
   const airing = stillAiring(anime);
-  const clamp = (n) => Math.max(0, max ? Math.min(max, n) : n);
+  const clamp = (n) => Math.max(0, cap ? Math.min(cap, n) : n);
   const save = (e) => {
     e.preventDefault();
     setCapped(false);
@@ -133,18 +137,20 @@ export function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyCh
           <label htmlFor={`${ids}-ep`} className="block text-[11px] text-slate-400 mb-1">{max ? t('Gesehene Folgen (von {max})', { max }) : aired ? t('Gesehene Folgen (bisher {aired} ausgestrahlt)', { aired }) : t('Gesehene Folgen')}</label>
           <div className="flex items-center gap-1">
             <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge weniger')} onClick={() => { setCapped(false); setEpisodes((n) => clamp(Number(n) - 1)); }}><Minus className="w-3.5 h-3.5" aria-hidden="true" /></button>
-            <input id={`${ids}-ep`} type="number" min="0" max={max} inputMode="numeric" className="input-field text-base sm:text-sm w-20 text-center" value={episodes}
+            <input id={`${ids}-ep`} type="number" min="0" max={cap} inputMode="numeric" className="input-field text-base sm:text-sm w-20 text-center" value={episodes}
               aria-describedby={capped ? `${ids}-ep-capped` : undefined}
               onChange={(e) => {
                 const n = e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0;
                 // a number above the episode count is cut to it, and the hint says so (same rule as the chapter field)
-                setCapped(Boolean(max) && n !== '' && n > max);
+                setCapped(Boolean(cap) && n !== '' && n > cap);
                 setEpisodes(n === '' ? '' : clamp(n));
               }} />
             <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge mehr')} onClick={() => setEpisodes((n) => clamp(Number(n) + 1))}><Plus className="w-3.5 h-3.5" aria-hidden="true" /></button>
             {episodeAt && <span className="text-xs font-mono text-slate-300 ml-1">{episodeAt}</span>}
           </div>
-          {capped && <p id={`${ids}-ep-capped`} role="status" className="text-[11px] text-amber-300 mt-1">{tn('Dieser Eintrag hat {n} Folge – mehr geht nicht.', 'Dieser Eintrag hat {n} Folgen – mehr geht nicht.', max)}</p>}
+          {capped && <p id={`${ids}-ep-capped`} role="status" className="text-[11px] text-amber-300 mt-1">{max
+            ? tn('Dieser Eintrag hat {n} Folge – mehr geht nicht.', 'Dieser Eintrag hat {n} Folgen – mehr geht nicht.', max)
+            : tn('Bisher ist {n} Folge ausgestrahlt – mehr geht noch nicht.', 'Bisher sind {n} Folgen ausgestrahlt – mehr geht noch nicht.', cap)}</p>}
         </div>}
         <div>
           <label htmlFor={`${ids}-status`} className="block text-[11px] text-slate-400 mb-1">{t('Status')}</label>

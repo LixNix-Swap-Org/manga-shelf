@@ -1,6 +1,6 @@
 import { BookOpen, Plus, X } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
-import { assetImgProps } from '../../utils/api';
+import CoverImage from '../common/CoverImage';
 import { langFor } from '../common/lang';
 import { t } from '../../i18n/index.js';
 
@@ -50,9 +50,12 @@ export default function ScanCandidatesDialog({ candidates, bookTitle, canEdit, o
                 className="w-full flex items-center gap-3 p-2 rounded-xl border border-slate-800 bg-slate-900/60 hover:border-brand-500/60 hover:bg-slate-800/60 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
               >
                 <span className="w-9 h-12 rounded-md overflow-hidden bg-slate-950 border border-slate-800 shrink-0 flex items-center justify-center">
-                  {c.cover_image
-                    ? <img {...assetImgProps(c.cover_image)} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    : <BookOpen className="w-4 h-4 text-slate-500" aria-hidden="true" />}
+                  <CoverImage
+                    src={c.cover_image}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    fallback={<BookOpen className="w-4 h-4 text-slate-500" aria-hidden="true" />}
+                  />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-white truncate">{c.title}</span>

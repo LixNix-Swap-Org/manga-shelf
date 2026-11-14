@@ -161,7 +161,7 @@ export default function AnimeView({
         <h2 id="anime-view-heading" className="text-lg font-bold text-white flex items-center gap-2 shrink-0">
           <Tv className="w-5 h-5 text-fuchsia-400" aria-hidden="true" /> {showKinds ? t('Anime & Serien') : t('Anime')}
         </h2>
-        <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 flex-1 min-w-0 focus-within:ring-2 focus-within:ring-brand-400">
+        <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 flex-1 min-w-0 sm:min-w-[280px] focus-within:ring-2 focus-within:ring-brand-400">
           <Search className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
           <input
             id="anime-list-search"
@@ -173,9 +173,9 @@ export default function AnimeView({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 min-w-0">
           <label htmlFor="anime-sort" className="sr-only sm:not-sr-only text-xs text-slate-400 whitespace-nowrap">{t('Sortierung')}</label>
-          <select id="anime-sort" className="input-field text-base sm:text-xs py-1.5 min-w-0 flex-1 sm:flex-initial sm:w-auto" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <select id="anime-sort" className="input-field text-base sm:text-xs py-1.5 min-w-0 flex-1 sm:flex-initial w-full sm:w-auto" value={sort} onChange={(e) => setSort(e.target.value)}>
             {ANIME_SORTS.map((s) => <option key={s.id} value={s.id}>{t(s.label)}</option>)}
           </select>
           {!offline && onRefresh && (

@@ -245,3 +245,22 @@ test('single episodes: a monotonic "watched up to N" adds 1..N and never removes
 function range(from, to) {
     return Array.from({ length: to - from + 1 }, (_, i) => from + i);
 }
+
+test('airedEpisodeLimit: the aired episodes of a show without a known count, with the clock', () => {
+    const { airedEpisodeLimit } = require('../../core/anime/progress');
+    const now = 1_800_000_000_000;
+    const row = (at, extra = {}) => ({ episodes: null, next_airing_episode: 8, next_airing_at: at, next_airing_estimated: 0, ...extra });
+    assert.equal(airedEpisodeLimit(row(now / 1000 + 60), now), 7);
+    assert.equal(airedEpisodeLimit(row(now / 1000 - 60), now), null);
+    assert.equal(airedEpisodeLimit(row(now / 1000 + 60, { next_airing_estimated: 1 }), now), null);
+    assert.equal(airedEpisodeLimit(row(now / 1000 + 60, { episodes: 12 }), now), null);
+    assert.equal(airedEpisodeLimit(row(now / 1000 + 60, { next_airing_episode: 1 }), now), null);
+    assert.equal(airedEpisodeLimit({ episodes: 0, next_airing: { episode: 5, at: now / 1000 + 60, estimated: false } }, now), 4);
+    assert.equal(airedEpisodeLimit({ episodes: 0, next_airing: null }, now), null);
+});
+
+test('writeProgress (sync, AniList pull) is not capped at the aired episodes', () => {
+    const core = memoryWith(async (url) => { throw offline(url); });
+    const anime = Number(core.conn.prepare("INSERT INTO animes (title, episodes, next_airing_episode, next_airing_at) VALUES ('Ongoing', null, 6, 4000000000)").run().lastInsertRowid);
+    assert.equal(saveProgress(core.ctx, anime, 2, { episodes_watched: 9 }).episodes_watched, 9);
+});

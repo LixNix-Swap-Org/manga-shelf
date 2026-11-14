@@ -71,6 +71,19 @@ export const formatYearLine = (anime) => [formatLabel(anime?.format), anime?.sea
 export const airedEpisodes = (anime) => (anime?.episodes > 0 ? null
   : (anime?.next_airing && !anime.next_airing.estimated && anime.next_airing.episode > 1 ? anime.next_airing.episode - 1 : null));
 
+/**
+ * The last aired episode of a show without a known count: the one before the announced next episode. null (no cap) when
+ * the count is known, the date is estimated, nothing has aired yet, or the announced time has passed (the snapshot lags).
+ * Same rule as airedEpisodeLimit in core/anime/progress.js.
+ */
+export function airedEpisodeLimit(anime, nowMs = Date.now()) {
+  const next = anime?.next_airing;
+  if (!anime || anime.episodes > 0 || !next || next.estimated || !(next.episode > 0)) return null;
+  // the announced episode is out by now and the snapshot has not caught up: how many aired since is unknown, no cap
+  if (next.at && next.at * 1000 <= nowMs) return null;
+  return next.episode > 1 ? next.episode - 1 : null;
+}
+
 /** True while "Gesehen" is locked: an anime that airs or is not out yet, a TV show while an unaired episode is counted. */
 export function stillAiring(anime) {
   const kind = kindOf(anime);

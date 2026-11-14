@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import CopiesField, { canChangeCopy, copyBody } from '../components/detail/volumeEdit/CopiesField';
+import CopiesField, { canChangeCopy, copyBody, followsVolume } from '../components/detail/volumeEdit/CopiesField';
 import { LentBadge } from '../components/detail/OwnerBadges';
 import LentCard from '../components/modals/stats/LentCard';
 import { fakeResponse } from './fakeResponse';
@@ -16,6 +16,45 @@ const copy = (over = {}) => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe('CopiesField', () => {
+  it('the only copy with the volume\'s own price, date and condition leaves those fields to the volume form', async () => {
+    const fetchMock = vi.fn(async (url, init = {}) => {
+      if (init.method === 'PUT') return fakeResponse(200, { success: true, copies: [copy({ lent_to: 'Tom', lent_at: '2026-11-01' })] });
+      return fakeResponse(200, []);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const volume = { price: 7.5, purchase_date: '2025-03-01', condition: 'Gut' };
+    render(<CopiesField volumeId={5} mangaId={2} currentUser={anna} canEdit copies={[copy()]} volume={volume} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten – Exemplar von anna' }));
+    expect(screen.queryByLabelText(/^Kaufpreis/)).toBeNull();
+    expect(screen.queryByLabelText('Kaufdatum')).toBeNull();
+    expect(document.querySelector('[data-follows-volume]')).not.toBeNull();
+    fireEvent.change(screen.getByLabelText('Ausgeliehen an'), { target: { value: 'name' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Tom' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Exemplar speichern' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true));
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')[1];
+    const body = typeof put.body === 'string' ? JSON.parse(put.body) : put.body;
+    expect(body).not.toHaveProperty('price');
+    expect(body).not.toHaveProperty('condition');
+    expect(body.lent).toEqual({ name: 'Tom' });
+  });
+
+  it('followsVolume: only one copy holding exactly the volume values; several copies or own values keep their fields', () => {
+    const volume = { price: 7.5, purchase_date: '2025-03-01', condition: 'Gut' };
+    expect(followsVolume([copy()], volume)).toBe(true);
+    expect(followsVolume([copy({ price: 9 })], volume)).toBe(false);
+    expect(followsVolume([copy(), copy({ id: 11 })], volume)).toBe(false);
+    expect(followsVolume([copy({ price: null, purchase_date: null, condition: null })], { price: null })).toBe(true);
+    expect(followsVolume([copy()], null)).toBe(false);
+  });
+
+  it('a copy with values of its own still shows price, date and condition', () => {
+    render(<CopiesField volumeId={5} mangaId={2} currentUser={anna} canEdit copies={[copy({ price: 9 })]} volume={{ price: 7.5, purchase_date: '2025-03-01', condition: 'Gut' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten – Exemplar von anna' }));
+    expect(screen.getByLabelText(/^Kaufpreis/)).toBeTruthy();
+    expect(screen.getByLabelText('Kaufdatum')).toBeTruthy();
+  });
+
   it('"Weiteres Exemplar" adds a copy for an owner; a copy of several is numbered and can be removed alone', async () => {
     const two = [copy(), copy({ id: 13, price: null, purchase_date: null, condition: null })];
     const fetchMock = vi.fn(async (url, init = {}) => {

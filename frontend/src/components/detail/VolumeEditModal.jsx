@@ -129,6 +129,7 @@ function VolumeEditDialog({
                   canEdit={canEdit}
                   currency={editionCurrency(manga)}
                   ownersVersion={ownersVersion}
+                  volume={activeVolume}
                   onChanged={() => handleOwnersChanged({})}
                 />
 
