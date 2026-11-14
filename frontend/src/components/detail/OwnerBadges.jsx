@@ -1,5 +1,6 @@
 import { Handshake, Users } from 'lucide-react';
 import { t } from '../../i18n/index.js';
+import { formatNumber } from '../../utils/format';
 
 const OWNER_COLORS = ['#38bdf8', '#f472b6', '#a3e635', '#fb923c', '#c084fc', '#2dd4bf', '#facc15', '#f87171'];
 
@@ -18,28 +19,54 @@ export function readerInitials(name) {
   return word.charAt(0).toUpperCase() + word.charAt(1).toLowerCase();
 }
 
-/** Owners of a volume as coloured badges with the readers' initials; from two owners also "2×". Nothing with only one person. */
+/** How many copies each owner has of the volume: Map user id -> count (at least 1 per owner). */
+export function copiesPerOwner(vol) {
+  const counts = new Map();
+  for (const c of vol?.copies || []) {
+    const id = String(c.owner_user_id);
+    counts.set(id, (counts.get(id) || 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Owners of a volume: the people icon and one coloured circle with initials per owner, in an amber pill like the
+ * "Besitz" side of the reader/owner chip. A small number on a circle says that person has more than one copy.
+ * Nothing with only one person on the shelf.
+ */
 export default function OwnerBadges({ vol, multiUser }) {
   const owners = vol?.owners || [];
   if (!multiUser || owners.length === 0) return null;
-  const names = owners.map(o => o.username).join(', ');
+  const copies = copiesPerOwner(vol);
+  const copiesOf = (o) => Math.max(1, copies.get(String(o.user_id)) || 0);
+  const names = owners.map(o => (copiesOf(o) > 1 ? `${o.username} ×${formatNumber(copiesOf(o))}` : o.username)).join(', ');
   return (
-    <span role="img" aria-label={t('Besitzer: {names}', { names })} className="inline-flex items-center gap-1 shrink-0" title={t('Besitzer: {names}', { names })}>
-      {owners.length > 1 && (
-        <span aria-hidden="true" className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
-          <Users className="w-2.5 h-2.5" /> {owners.length}×
-        </span>
-      )}
-      {owners.map(o => (
-        <span
-          key={o.user_id}
-          aria-hidden="true"
-          className="px-1 h-4 min-w-4 rounded-full text-[9px] font-bold flex items-center justify-center text-slate-950"
-          style={{ background: ownerColor(o.user_id) }}
-        >
-          {readerInitials(o.username)}
-        </span>
-      ))}
+    <span
+      role="img"
+      aria-label={t('Besitzer: {names}', { names })}
+      title={t('Besitzer: {names}', { names })}
+      data-owner-badges
+      className="inline-flex items-center gap-1 shrink-0 rounded-full pl-1 pr-1.5 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300"
+    >
+      <Users className="w-2.5 h-2.5" aria-hidden="true" />
+      {owners.map(o => {
+        const n = copiesOf(o);
+        return (
+          <span
+            key={o.user_id}
+            aria-hidden="true"
+            className={`relative px-1 h-4 min-w-4 ${n > 1 ? 'mr-1.5' : ''} rounded-full text-[9px] font-bold flex items-center justify-center text-slate-950`}
+            style={{ background: ownerColor(o.user_id) }}
+          >
+            {readerInitials(o.username)}
+            {n > 1 && (
+              <span data-copy-count className="absolute -top-1.5 -right-2 min-w-3 h-3 px-0.5 rounded-full bg-slate-900 border border-amber-400 text-amber-300 text-[8px] leading-none flex items-center justify-center">
+                {formatNumber(n)}
+              </span>
+            )}
+          </span>
+        );
+      })}
     </span>
   );
 }

@@ -80,3 +80,13 @@ test('reader_stats count each person\'s own copies and what they read of them ("
     assert.deepEqual([me.read_count, me.total_owned, me.own_read, me.own_owned], [2, 5, 1, 3]);
     assert.deepEqual([felix.own_read, felix.own_owned], [0, 2]);
 });
+
+test('the series list names every owner with the number of volumes they own (owner row of the collection card)', async () => {
+    const { id } = (await editor('POST', '/mangas', { title: 'Wer hat wie viele' })).body;
+    assert.equal((await editor('POST', '/volumes/batch', { manga_id: id, from: 1, to: 3 })).body.created, 3);
+    const volId = (await admin('GET', `/mangas/${id}`)).body.volumes.find((v) => v.volume_number === '1').id;
+    assert.equal((await admin('POST', `/volumes/${volId}/owners`, { owned: true })).status, 200);
+    const row = (await admin('GET', '/mangas')).body.find((m) => m.id === id);
+    const owners = Object.fromEntries(row.owners.split('\n').map((line) => { const [, name, count] = line.split('\t'); return [name, Number(count)]; }));
+    assert.deepEqual(owners, { admin: 1, ed: 3 });
+});

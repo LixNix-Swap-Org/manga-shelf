@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.0.1
 
 ### Before updating
 - **Database migration 59** runs at the first start, after the usual backup: it adds the loan period per account (90 days for everybody, as before). 4.0.0 cannot open the migrated database; going back restores that backup.
@@ -10,6 +10,19 @@
 
 ### Phone
 - **Smaller filter bar in the collection:** on phones the bar shows the status tabs, the shelf/person chip, a "Filter" button and the view toggle in two rows instead of up to six. Publisher, series state, genre, language, sort and grouping open below "Filter"; its badge counts the ones set apart from the default, and chips of an active genre or author filter and "Zurücksetzen" stay in view. Tablets and desktops look as before.
+- **No duplicate view tabs:** below 640 px the bottom bar already switches Sammlung, Einkauf and Radar, so the tabs at the top are gone; only the Radar kind switch stays there. A small Anime button next to the app name keeps Anime one tap away; it stays in "Mehr" too. Tablets and desktops look as before.
+
+### Volumes
+- **Asks before copies go:** leaving "Vorhanden" in "Band bearbeiten" removes every copy of the volume with its owners, prices, dates, conditions and lendings. The save now asks first when a copy holds any of that; a household placeholder without values goes without asking.
+
+### Verwaltung
+- **Back to the Verwaltung:** closing a tool opened from the Verwaltung (Einstellungen or any other) opens the Verwaltung again instead of dropping you on the main page. A series opened from a tool stays open.
+
+### Owners at a glance
+- **Volume card on the series page:** the owners of a volume sit in an amber pill with the people icon, like the "Besitz" side of the reader/owner chip, so they no longer look like the reader circles below. The pill also shows a single owner. The amber "2×" badge is gone: it counted people but read like two copies.
+- **Second copy on the card:** a person with more than one copy of a volume gets a small amber number on their circle, and the label says "alex ×2". Before, a second copy showed only under "Band bearbeiten". The list view uses the same pill.
+- **Readers marked:** the green book icon stands in front of the reader circles on the volume card.
+- **Collection card:** on a shelf with more than one person, each series card names who owns volumes of it and how many, most first ("Ma 7 · Le 3", at most three people, then "+n"); the label names everybody. `owners` of `GET /api/mangas` now carries the number of volumes per person.
 
 ## 4.0.0
 

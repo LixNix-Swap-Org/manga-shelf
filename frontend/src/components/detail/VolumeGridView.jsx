@@ -460,6 +460,8 @@ export default function VolumeGridView({
 
                 {readers.length > 0 && (
                   <div role="group" aria-label={t('Lesestatus der Leser – {volume}', { volume: getVolumeDisplayTitle(vol) })} className="flex items-center gap-1 flex-wrap justify-end">
+                    {/* the green book like the "liest" side of the reader/owner chip: these circles are readers, the amber pill above is ownership */}
+                    <BookOpen data-readers-icon className="w-3.5 h-3.5 text-emerald-400 shrink-0 mr-0.5" aria-hidden="true" />
                     {readers.map(r => {
                       const isReaderDone = hasUserRead(vol, r.user_id, user?.id);
                       const name = r.display_name || r.username || t('Unbekannt');
