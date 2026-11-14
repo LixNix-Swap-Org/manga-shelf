@@ -5,7 +5,7 @@
 ### Before updating
 - **Database migrations 40 to 58** run at the first start, after the usual backup `backups/vor-update-v<old>-auf-v<new>-…zip`. Migration 40 checks the value columns: volumes without a type become regular volumes, a second household shelf (there should never be one) loses that mark, and triggers refuse a volume status, volume type, collecting status or series format outside the known values. Migration 41 builds the **global catalog**: every edition and every volume of it exists once, however many shelves hold it (same Manga Passion edition, a shared ISBN, or the same title, language, format and publisher). Nothing in the shelves changes; what the merge papered over (different volume counts, two ISBNs for one volume) is listed in the table `catalog_merge_log`. Migration 42 gives `mangas`, `trash`, `shelves` and `animes` the foreign keys they lacked: a series or trash entry pointing to a shelf that no longer exists moves into the household shelf, a reference to a deleted account is cleared, and the start log names how many rows that were. Migration 43 moves reading marks and webtoon chapter progress onto the catalog (see below): marks of the same edition in two shelves merge into one, keeping the earliest read and the highest chapter. Migration 44 turns ownership into **copies** (see below). Migration 45 moves the series link of every anime onto its work (see below): a linked series without a work gets one of its own. Migration 46 makes the catalog the source of the edition data (see below); a series or volume keeps every value it has, and what differs from its catalog entry counts as its own. Migration 47 adds who borrowed a copy (see Copies); nothing is lent after it. Migration 48 adds the setting to share the anime list (see Privacy). Migration 49 makes anime tags and notes personal (see Anime): every existing tag stays and anyone may still remove it, and the note of an entry goes into the own note of everybody who has it on their list. Migration 50 moves calendar feed addresses into a table of their own; every address keeps working. Migration 51 stores the Manga Passion edition data once per edition instead of once per shelf. Migration 52 makes the database refuse an account role outside the four known ones. Migration 53 adds the table for saved filters. Migration 54 adds the per-account switch for "Zu erledigen". Migration 55 adds who last changed a volume and when (empty for every existing volume). Migration 56 allows a second copy of the same volume per person; every existing copy stays as it is. Migration 57 adds wishlists per person: every series on the old shared wishlist stays wished, as the household's wish. Migration 58 lets a person share their own wishlist as a read-only link; every calendar address keeps working. Because the schema changes, 3.7.0 cannot open the migrated database; going back to 3.7.0 restores that backup, and everything changed since is lost.
 
-- **Going back to 3.7.0 restores the backup from before the update, and everything changed since is lost.** 3.7.0 cannot open a database at migration 47.
+- **Going back to 3.7.0 restores the backup from before the update, and everything changed since is lost.** 3.7.0 cannot open a database at migration 40 or later.
 
 ### Database
 - **Checked values:** the database itself refuses a volume status, volume type, collecting status or series format outside the lists the app knows (the legacy status "Gelesen" stays allowed for the data-quality fix). Stored rows with another value stay and remain editable; the start log names how many there are.
@@ -38,8 +38,11 @@
 - **Share your wishlist:** "Meine Wunschliste teilen" on the shopping list makes a read-only link for family and friends without an account ("Wunschliste von Lena": title, publisher, cover, priority and how many volumes are known to be missing; no prices, shelves or other people's wishes). A new link ends the old one, "Nicht mehr teilen" ends it, and like the calendar addresses it also ends with a password change, when an admin ends all sessions or deletes the account (migration 58, `GET /api/wishlist/shared`).
 
 ### Shelves
-- **Admins see that private shelves exist:** "Regale" lists, for an admin, the shelves he is no member of under "Andere Regale", with name, Verwalter and the number of series, never their content (`GET /api/shelves/others`).
+- **Admins see that private shelves exist:** "Regale" lists, for an admin, the shelves they are not a member of under "Andere Regale", with name, Verwalter and the number of series, never their content (`GET /api/shelves/others`).
 - **Aktivität:** a new tab on the statistics page lists what happened in the chosen shelf in the last 30 days, by day: who read, now owns, added or changed which volumes and series ("Lena hat Bände 1–3 von „Frieren“ gelesen"). It reads the dates the collection already keeps, so each volume shows only its latest change and deletions do not appear (`GET /api/activity`).
+- Deleting a shelf now says which members had no other shelf and got an empty one of their own.
+- A visitor or guest account never becomes the owner of an empty household shelf, so the shelf always keeps someone who can manage it.
+- A new series without a chosen shelf lands in a shelf you own today, also after a shelf was handed over to you or away from you.
 
 ### Copies
 - **Reading progress of your own copies:** in the reader chip of a series, a person who owns only some of its volumes also sees how many of their own they read ("2 von deinen 8"), beside the count over all volumes of the shelf. `reader_stats` carries `own_owned` and `own_read`.
@@ -50,6 +53,7 @@
 - **Claiming a household copy keeps its details:** marking yourself as owner of a volume the household owns takes over that copy with its price, condition and lending instead of replacing it; undoing the change brings condition and lending back too.
 - The card "Verliehen & ausgeliehen" follows the shelf filter (`GET /api/copies/lent?shelf_id=`) and names the shelf of each copy in the overview of all shelves.
 - A purchase date set on a copy also fills an empty purchase date of the volume, so statistics and CSV see it.
+- **No second set of fields:** when a volume has a single copy with the volume's own price, date and condition, the copy's form no longer repeats them; they are set with the volume above, as before. Several copies or a copy with values of its own keep their fields.
 
 ### Shopping list
 - **No second purchase by mistake:** a missing volume whose edition is already owned or ordered in another of your shelves says so on the shopping list and in the shop scan: "Schon vorhanden in: Wohnzimmer (lena)" or "Schon bestellt in: …". It stays bookable (a second copy can be wanted). Only your own shelves count. `GET /api/shopping-list` and `GET /api/lookup/isbn` carry it as `owned_elsewhere`.
@@ -62,7 +66,7 @@
 - New card "Lesestand pro Regal" in the statistics tab "Lesen": per shelf its owned volumes, how many of them a member has read, and each member with their reads there. It shows with two or more shelves or a shelf shared by several members, and follows the shelf filter. `GET /api/stats` carries it as `shelf_reading`.
 
 ### Ownership
-- Ownership is stored as copies of a volume: a copy belongs to a person or, when nobody is named, to the household. The status "Vorhanden" now always follows the copies in the database itself, so status and owners can no longer disagree (the check "Besitzer bei nicht vorhandenem Band" stays empty). Nothing changes in the app yet; several copies per person and a purchase price per copy follow later.
+- Ownership is stored as copies of a volume: a copy belongs to a person or, when nobody is named, to the household. The status "Vorhanden" now always follows the copies in the database itself, so status and owners can no longer disagree (the check "Besitzer bei nicht vorhandenem Band" stays empty). Several copies per person, a price per copy and lending are described under Volumes and Copies.
 - A volume marked "Vorhanden" whose owners are gone (or that had none) keeps a household copy instead of looking unowned; restoring it from the trash keeps it owned when it had no owner, as before an admin restoring it becomes its owner.
 - **Undo for shelf changes:** removing a member, leaving a shelf and moving a series to a shelf where some owners are no members show a toast with "Rückgängig" for 10 seconds (15 for a move). It brings the membership or the series back together with the copies that went, with their price, date, condition and lending (`POST /api/shelves/undo`). A move now also names the people whose copies it removed. The undo is refused once the shelf changed in between (the member was added again, the series moved again, or someone bought a copy in the new shelf who is no member of the old one).
 
@@ -73,18 +77,23 @@
 - **Notes are your own:** the note of a title (`PUT /api/anime/:id` with `notes`, and the note of a new manual entry) is now your own note, the one the detail dialog already shows; nobody else can read or overwrite it. The CSV export is unchanged.
 - **Linked series per shelf:** an anime is linked to a work, not to one series. Everybody sees their own edition of it, and every shelf decides for itself: linking an edition pins it for that shelf, "Keine Verknüpfung" hides the link there. The link for everyone changes only while every edition of the work is in shelves you can edit. The note "Über deine Ausgabe dieses Werks verknüpft" and the lock on links into foreign shelves are gone, so `manga_via_work` and `manga_linked_elsewhere` are no longer in the anime answers.
 - Switching an anime's linked series to an edition in another of your shelves takes effect at once; the earlier pin in your other shelf is cleared.
+- **No unaired episodes by mistake:** for a show still airing without a known episode count, the episode field stops at the episodes aired so far ("Bisher sind 1.180 Folgen ausgestrahlt – mehr geht noch nicht."), and the server refuses such a count in `PUT /api/anime/:id/progress` (`EPISODE_NOT_AIRED`). A count you already have stays, there is no limit once the next episode is due by its announced time, and the history sync, the AniList pull and "Folge gesehen" from a link are never limited.
 
 ### Scanning
 - When the same edition stands in two of your shelves, the ISBN scan and the title match pick the volume that is still open instead of one already owned, and no longer give up as ambiguous.
 
 ### Interface
 - "Reihe verschieben" shows an arrow instead of a trash can, because nothing is deleted; the question stays red since owners outside the target shelf lose their ownership marks.
+- The search fields in the header, the radar and the anime list are wider, so their placeholder is no longer cut off.
+- A missing or broken cover in the anime calendar, "Entdecken", "Gemeinsam" and the scan results shows an icon instead of an empty box.
+- On phones the shopping list, the gap notice, the filter bars and the anime list need less room and wrap cleanly.
 
 ### Security
 - **Updates without advisories:** Electron 44.10.2, `lucide-react` 1.69.0 (icons under their new names), `express-rate-limit` 8.7.3, `sigstore` 5.0.1, ESLint 10.14.0, Vitest 5.1.0, and current GitHub Actions.
 
 ### Development
 - Optional CI steps stop on their own after a time limit instead of cancelling their job, and the local test runs stay green under load and inside a git worktree.
+- Tests no longer depend on the time zone of the machine, the Windows path separator, Node 26 (which binds `undefined` as NULL) or a fast CPU for the upload cleanup.
 
 ### Privacy
 - **Share your anime list or not:** the anime list stays shared by every account, across shelves. A new setting in the account dialog ("Meine Anime-Liste mit Namen zeigen", on by default) hides from everyone else, admins included, what you watch, plan and have seen, your episodes, your line in the anime statistics and the name on your public ratings. The community average and the number of watchers still count you, without a name.
@@ -92,11 +101,6 @@
 - **Account names:** a new account whose name differs from an existing one only in upper and lower case of letters such as Ä, Ö, Ü or É ("Ärik" and "ärik") is refused, like "Max" and "max" already were. Names are stored in one Unicode form.
 - **The user directory lists only people you share a shelf with** (an admin sees all). Adding a member by typing the name works as before.
 - The text of the shelf mode "Eigenes Regal" now says that backups still contain the collection.
-
-### Shelves
-- Deleting a shelf now says which members had no other shelf and got an empty one of their own.
-- A visitor or guest account never becomes the owner of an empty household shelf, so the shelf always keeps someone who can manage it.
-- A new series without a chosen shelf lands in a shelf you own today, also after a shelf was handed over to you or away from you.
 
 ### Navigation
 - **Fewer buttons at the top:** the desktop header keeps search, "Neuer Manga", "Statistiken", "App installieren" and an account menu (the initial at the top right). The menu holds "Verwaltung", "Einstellungen" and logout.
@@ -115,13 +119,14 @@
 - **"+ Band n gelesen" on the series page:** the reader bar has a button that marks the next owned volume the shown reader has not read yet, with undo in the message, like the tick on the volume.
 - **Reader and owner in one chip on the series page:** the reader bar and the ownership bar are now one row. A chip ("Max liest | Alle Bände") opens the choice of reader, whose volumes to show (with "Nur zeigen, was noch fehlt") and the "Gelesen am" date; the chip names a picked date and owner filter. "+ Band n gelesen" and the reading progress stay in the row.
 - **Clearer gap texts:** "Edition & Abgleich" counts missing volumes and missing extras (Schuber, special volumes) apart ("Nicht im Regal: 2 Bände und 10 Extras wie Schuber oder Sonderbände") instead of "Fehlende Bandnummern: 12", and "Zu erledigen" writes runs of volumes as a range ("21–113").
-- **"Zu erledigen" can be switched off per person:** "Konto & Sprache" has a box "„Zu erledigen“ in der Sammlung zeigen" (on by default). It is stored with the account (`users.show_todo`, migration 54), so it applies on every device and only to that person; the notices on the series stay.
+- **"Zu erledigen" can be switched off per person:** Einstellungen → Allgemein has a box "„Zu erledigen“ in der Sammlung zeigen" (on by default). It is stored with the account (`users.show_todo`, migration 54), so it applies on every device and only to that person; the notices on the series stay.
 - **"Hinweise (n)" on the series page:** when two or more notices stand above the volumes (gaps, edition to confirm, volume count, duplicates, volumes from another shelf), they fold into one row with a badge for each; a badge opens the row and jumps to that notice. A single notice shows as before.
 - **Shelf chip on the radar:** with several shelves the personal release radar shows the same shelf chip as the collection, so the shelf can be changed or cleared right there (before: only a badge to clear it).
 - **Statistics as a page:** "Statistiken" opens a page instead of a dialog, with its own address (`/statistik`, `/statistik/finanzen`, …), so a tab can be bookmarked and the browser's Back button works. The cards are spread over the tabs Überblick, Finanzen, Pro Person, Lesen, Leseverlauf, Verlage, Verliehen and Anime; nothing was dropped. The shelf chip on the page changes the shelf, and the tools (Papierkorb, Sammlung aufräumen, Regale, Verlage zusammenführen) stay at its foot.
 - **Shelf and person chip:** the first chip of the toolbar says whose collection you see ("Familie · Ich", or "Meine Sammlung" with one shelf and nobody else). It opens the shelf choice, the new person filter (only the series in which this person owns a volume) and the saved filters.
 - **Saved filters:** "Aktuelle Auswahl merken" in the shelf and person chip keeps the current shelf, person, status, publisher, collecting state, author, tags, language, sort and grouping as a chip that sets them again with one click. Up to 8 per account, kept on the server, so they follow the account to every device (filters saved by an earlier test build on this device are taken over on the first load).
 - **Zu erledigen:** a card on the shelf lists what is open in the collection, each with a link to its series: missing volumes already owned in another of your shelves, pre-orders whose release date has passed, and gaps. The quick access has an entry for it. New endpoint `GET /api/todo`.
+- **"Erklärtexte anzeigen"** (Einstellungen, Allgemein, for this device) shows or hides the short explaining sentences under the headings of the shopping list and the radar; on by default.
 
 ## 3.7.0
 
