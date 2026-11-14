@@ -1,7 +1,7 @@
 import { buildVolumeForm } from '../../../utils/volumeFormHelpers';
 import { apiFetch, readJson } from '../../../utils/api';
 import { formatDate } from '../../../utils/format';
-import { t } from '../../../i18n/index.js';
+import { t, tn } from '../../../i18n/index.js';
 import { serverText } from '../../../i18n/serverText.js';
 
 // i18n
@@ -91,6 +91,28 @@ const trimmedNumber = (form) => String(form?.volume_number ?? '').trim();
  * PUT body: only the fields that differ from `base`, the form as the server last stored it. A field the user left
  * alone is never sent, so a value another user or device stored meanwhile is not overwritten with an older copy.
  */
+/**
+ * The question before a save that takes the volume out of "Vorhanden": the status change removes every copy of the
+ * volume (trg_volumes_copies_status), with the owners' prices, dates, conditions and lendings. Null when nothing of
+ * that would go: the status stays owned, or the only copies are household placeholders without values of their own.
+ */
+export const statusLossText = (form, base, copies) => {
+  if (base?.status !== 'Vorhanden' || !form?.status || form.status === 'Vorhanden') return null;
+  const list = Array.isArray(copies) ? copies : [];
+  const filled = (v) => v !== null && v !== undefined && v !== '';
+  const worth = list.filter((c) => c.owner_user_id != null || filled(c.price) || filled(c.purchase_date) || filled(c.condition) || filled(c.lent_to));
+  if (worth.length === 0) return null;
+  const parts = [tn(
+    'Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.',
+    'Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.',
+    list.length
+  )];
+  const lent = [...new Set(list.filter((c) => filled(c.lent_to)).map((c) => c.lent_to))];
+  if (lent.length) parts.push(t('Auch die Ausleihe an {names} geht verloren.', { names: lent.join(', ') }));
+  parts.push(t('Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.'));
+  return parts.join(' ');
+};
+
 export const buildSaveBody = (form, base) => {
   const body = {};
   for (const [key, value] of Object.entries(form)) {

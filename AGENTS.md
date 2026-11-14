@@ -394,7 +394,8 @@ manga-shelf/
 │       │   ├── usePwaInstall.js  # "App installieren", iOS notice, watchServiceWorkerUpdates, warmLanguages/warmLanguageCache (WARM_LANGUAGE), workerHasFile (HAS_FILE)
 │       │   ├── usePullToRefresh.js # pull to refresh, useForegroundRefresh
 │       │   ├── useDashboardKeyboard.js # / and Escape (respects data-busy and open dialogs)
-│       │   ├── useDialogA11y.js  # focus, tab trap, focus return, history entry per dialog, afterDialogEntriesDropped
+│       │   ├── useDialogA11y.js  # focus, tab trap, focus return, history entry per dialog, afterDialogEntriesDropped, onDialogsChange/openDialogCount
+│       │   ├── useReturnAfterDialogs.js # "Zurück zur Verwaltung": arm() before a hub entry opens its dialog, reopen once every dialog closed (same page only)
 │       │   ├── useKeyboardOpen.js # useKeyboardOpen (hide bottom bars while the keyboard is open), useRevealFocusedField, isTypingTarget
 │       │   ├── useTabList.js     # ARIA tabs (roving tabIndex, arrow keys)
 │       │   ├── useLatestRequest.js # begin() aborts the previous request ({ signal, isCurrent })

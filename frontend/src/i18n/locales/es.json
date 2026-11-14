@@ -289,6 +289,7 @@
   "Art des Eintrags": "Tipo de entrada",
   "Artbook": "Artbook",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Tu cuenta «{name}» tampoco tiene contraseña en ella: después, una nueva solo puede establecerla otro administrador en la gestión de usuarios o el comando de consola «{command}» en el servidor.",
+  "Auch die Ausleihe an {names} geht verloren.": "El préstamo a {names} también se pierde.",
   "Auch für automatische Aktualisierungen verwenden": "Usar también para las actualizaciones automáticas",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "one": "También {n} Special Edition/estuche",
@@ -1898,6 +1899,11 @@
   "Mit Server verbinden": "Conectar con un servidor",
   "Mit Vorbestellungen": "Con reservas",
   "Mit dem Server verbinden": "Conectar con el servidor",
+  "Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.|Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.": {
+    "many": "Con el nuevo estado, el tomo deja de estar en posesión: se eliminan sus {n} ejemplares, con propietarios, precios de compra, fechas de compra y estado.",
+    "one": "Con el nuevo estado, el tomo deja de estar en posesión: se elimina su ejemplar, con propietario, precio de compra, fecha de compra y estado.",
+    "other": "Con el nuevo estado, el tomo deja de estar en posesión: se eliminan sus {n} ejemplares, con propietarios, precios de compra, fechas de compra y estado."
+  },
   "Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).": "Con claves propias, este servidor obtiene su propio límite en MyAnimeList y Google Books en lugar de compartir el anónimo con todos. Todo funciona también sin ellas; puedes añadirlas más tarde en el cuadro de la cuenta (icono del candado).",
   "Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.": "¿Conectar con un servidor? La colección sin servidor sigue guardada en este dispositivo y puedes volver a abrirla aquí en cualquier momento.",
   "Mit einem eigenen Manga-Shelf-Server verbinden. Die Sammlung auf diesem Gerät bleibt erhalten.": "Conectar con tu propio servidor de Manga Shelf. La colección de este dispositivo se conserva.",
@@ -2093,6 +2099,7 @@
   "Nur Lesezugriff für Besucher/Gäste gestattet": "Los visitantes e invitados solo tienen acceso de lectura",
   "Nur Print-Bände": "Solo tomos impresos",
   "Nur Schuber ({count})": "Solo estuches ({count})",
+  "Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.": "Para quitar solo la posesión de una persona, usa mejor «Propietarios»: eso se puede deshacer.",
   "Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.": "Solo mercado alemán (Manga Passion): las ediciones en otros idiomas aparecen únicamente en «Mis reservas y presupuesto», con las fechas que introduzcas tú.",
   "Nur du": "Solo tú",
   "Nur ein Administrator kann eine Sammlung auf den Server übertragen. Für ein anderes Konto „Zusammenführen“ verwenden.": "Solo un administrador puede pasar una colección al servidor. Con otra cuenta, usa «Combinar».",
@@ -2568,6 +2575,7 @@
   "Status für {title}": "Estado de {title}",
   "Status und Besitzer bitte getrennt ändern": "Cambia por separado el estado y los propietarios",
   "Status wählen": "Elegir estado",
+  "Status ändern": "Cambiar estado",
   "Status-Filter": "Filtro de estado",
   "Status: Erscheint bald (Erinnerung im Release-Radar)": "Estado: próximamente (recordatorio en el Release Radar)",
   "Status: Fehlt noch (erscheint im Buchladen-Modus)": "Estado: aún falta (aparece en el modo tienda)",
@@ -2666,6 +2674,7 @@
   "Trotzdem als komplett markieren": "Marcar como completo igualmente",
   "Trotzdem anzeigen": "Mostrar igualmente",
   "Trotzdem einspielen (nicht empfohlen)": "Restaurar igualmente (no recomendado)",
+  "Trotzdem speichern": "Guardar de todos modos",
   "Typ": "Tipo",
   "Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben": "Introduce el tipo (tomo suelto, Special Edition, estuche o especial), el número, el estado y, si quieres, precio o foto de portada",
   "Typ, Details, Preis und Sammlerangaben für diesen Eintrag": "Tipo, detalles, precio y datos de coleccionista de esta entrada",

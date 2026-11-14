@@ -284,6 +284,7 @@
   "Art des Eintrags": "Entry type",
   "Artbook": "Artbook",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Your account “{name}” has no password in it either: afterwards only another admin in user management, or the console command “{command}” on the server, can set a new one.",
+  "Auch die Ausleihe an {names} geht verloren.": "The loan to {names} is lost too.",
   "Auch für automatische Aktualisierungen verwenden": "Also use for automatic updates",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "one": "Also {n} special edition/box set",
@@ -1864,6 +1865,10 @@
   "Mit Server verbinden": "Connect to server",
   "Mit Vorbestellungen": "With pre-orders",
   "Mit dem Server verbinden": "Connect to the server",
+  "Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.|Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.": {
+    "one": "With the new status the volume is no longer owned: its copy is removed, with owner, purchase price, purchase date and condition.",
+    "other": "With the new status the volume is no longer owned: its {n} copies are removed, with owners, purchase prices, purchase dates and condition."
+  },
   "Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).": "With its own keys this server gets its own limit at MyAnimeList and Google Books instead of sharing the anonymous one with everyone. Everything also works without them; you can add them later in the account dialog (lock icon).",
   "Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.": "Connect to a server? The collection without a server stays saved on this device and can be reopened here at any time.",
   "Mit einem eigenen Manga-Shelf-Server verbinden. Die Sammlung auf diesem Gerät bleibt erhalten.": "Connect to your own Manga Shelf server. The collection on this device is kept.",
@@ -2058,6 +2063,7 @@
   "Nur Lesezugriff für Besucher/Gäste gestattet": "Visitors and guests have read-only access",
   "Nur Print-Bände": "Print volumes only",
   "Nur Schuber ({count})": "Box sets only ({count})",
+  "Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.": "To end one person's ownership only, use “Owners” instead; that can be undone.",
   "Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.": "German market only (Manga Passion): editions in other languages appear only under “My pre-orders & budget”, with the dates you enter yourself.",
   "Nur du": "Only you",
   "Nur ein Administrator kann eine Sammlung auf den Server übertragen. Für ein anderes Konto „Zusammenführen“ verwenden.": "Only an administrator can transfer a collection to the server. For another account, use “Merge”.",
@@ -2526,6 +2532,7 @@
   "Status für {title}": "Status for {title}",
   "Status und Besitzer bitte getrennt ändern": "Please change status and owner separately",
   "Status wählen": "Choose status",
+  "Status ändern": "Change status",
   "Status-Filter": "Status filter",
   "Status: Erscheint bald (Erinnerung im Release-Radar)": "Status: Coming soon (reminder in the Release Radar)",
   "Status: Fehlt noch (erscheint im Buchladen-Modus)": "Status: Still missing (appears in shop mode)",
@@ -2623,6 +2630,7 @@
   "Trotzdem als komplett markieren": "Mark as complete anyway",
   "Trotzdem anzeigen": "Show anyway",
   "Trotzdem einspielen (nicht empfohlen)": "Restore anyway (not recommended)",
+  "Trotzdem speichern": "Save anyway",
   "Typ": "Type",
   "Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben": "Enter type (single volume, special edition, box set or special), number, status and optionally a price or cover photo",
   "Typ, Details, Preis und Sammlerangaben für diesen Eintrag": "Type, details, price and collector information for this entry",

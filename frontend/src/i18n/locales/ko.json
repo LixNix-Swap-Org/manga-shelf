@@ -279,6 +279,7 @@
   "Art des Eintrags": "항목 종류",
   "Artbook": "아트북",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "“{name}” 계정에도 비밀번호가 없어요. 이후에 새 비밀번호는 다른 관리자가 사용자 관리에서 설정하거나, 서버에서 콘솔 명령 “{command}”로만 설정할 수 있어요.",
+  "Auch die Ausleihe an {names} geht verloren.": "{names}에게 빌려준 기록도 사라집니다.",
   "Auch für automatische Aktualisierungen verwenden": "자동 업데이트에도 사용",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "other": "특별판/박스 세트도 {n}개"
@@ -1830,6 +1831,9 @@
   "Mit Server verbinden": "서버에 연결",
   "Mit Vorbestellungen": "예약 구매 있음",
   "Mit dem Server verbinden": "서버에 연결",
+  "Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.|Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.": {
+    "other": "새 상태에서는 이 권을 더 이상 소장하지 않습니다. {n}개의 소장본이 소유자, 구매 가격, 구매일, 상태와 함께 삭제됩니다."
+  },
   "Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).": "개인 키를 사용하면 이 서버가 모두와 공유하는 익명 한도 대신 MyAnimeList와 Google Books에서 자체 한도를 받아요. 없어도 모두 작동하며, 나중에 계정 대화상자(자물쇠 아이콘)에서 설정할 수 있어요.",
   "Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.": "서버에 연결할까요? 서버 없는 컬렉션은 이 기기에 저장된 채로 남아 있고 언제든 여기서 다시 열 수 있어요.",
   "Mit einem eigenen Manga-Shelf-Server verbinden. Die Sammlung auf diesem Gerät bleibt erhalten.": "나만의 Manga Shelf 서버에 연결해요. 이 기기의 컬렉션은 그대로 유지돼요.",
@@ -2023,6 +2027,7 @@
   "Nur Lesezugriff für Besucher/Gäste gestattet": "방문자/게스트는 읽기만 가능해요",
   "Nur Print-Bände": "인쇄본만",
   "Nur Schuber ({count})": "박스 세트만 ({count})",
+  "Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.": "한 사람의 소장만 해제하려면 대신 '소유자'를 사용하세요. 그쪽은 되돌릴 수 있습니다.",
   "Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.": "독일 시장 전용(Manga Passion): 다른 언어의 판은 직접 입력한 일정과 함께 “내 예약 구매 & 예산”에만 표시돼요.",
   "Nur du": "나만",
   "Nur ein Administrator kann eine Sammlung auf den Server übertragen. Für ein anderes Konto „Zusammenführen“ verwenden.": "컬렉션을 서버로 옮기는 것은 관리자만 할 수 있어요. 다른 계정은 “병합”을 사용해 주세요.",
@@ -2484,6 +2489,7 @@
   "Status für {title}": "{title}의 상태",
   "Status und Besitzer bitte getrennt ändern": "상태와 보유자는 따로 변경해 주세요",
   "Status wählen": "상태 선택",
+  "Status ändern": "상태 변경",
   "Status-Filter": "상태 필터",
   "Status: Erscheint bald (Erinnerung im Release-Radar)": "상태: 발매 예정 (Release Radar에서 알림)",
   "Status: Fehlt noch (erscheint im Buchladen-Modus)": "상태: 아직 없음 (매장 모드에 표시돼요)",
@@ -2580,6 +2586,7 @@
   "Trotzdem als komplett markieren": "그래도 전편 시청 완료로 표시",
   "Trotzdem anzeigen": "그래도 보기",
   "Trotzdem einspielen (nicht empfohlen)": "그래도 복원 (권장하지 않음)",
+  "Trotzdem speichern": "그래도 저장",
   "Typ": "종류",
   "Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben": "종류(단행본, Special Edition, 박스 세트 또는 스페셜), 번호, 상태를 입력하고 가격이나 표지 사진은 선택 사항이에요",
   "Typ, Details, Preis und Sammlerangaben für diesen Eintrag": "이 항목의 종류, 상세 정보, 가격, 수집가 정보",

@@ -5,6 +5,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const net = require('net');
 const { spawn } = require('child_process');
 
 const OUT = path.resolve(__dirname, '..', 'dist', 'installers');
@@ -36,11 +37,24 @@ function smokeCommand(binary, { port, dataDir, userDataDir, platform = process.p
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** A port nobody listens on right now (the system picks it; a random one could already be taken on the runner). */
+function freePort() {
+    return new Promise((resolve, reject) => {
+        const probe = net.createServer();
+        probe.unref();
+        probe.on('error', reject);
+        probe.listen(0, () => {
+            const { port } = probe.address();
+            probe.close(() => resolve(port));
+        });
+    });
+}
+
 async function main() {
     const binary = findUnpackedBinary(OUT);
     if (!binary) throw new Error(`Keine entpackte App in ${OUT} (erst "npm run build:dir")`);
     const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'manga-shelf-smoke-'));
-    const port = 39000 + Math.floor(Math.random() * 1000);
+    const port = await freePort();
     const { command, args } = smokeCommand(binary, { port, dataDir: path.join(temp, 'data'), userDataDir: path.join(temp, 'user') });
     console.log(`[smoke] ${command} ${args.join(' ')}`);
     const child = spawn(command, args, { stdio: 'inherit' });
@@ -78,4 +92,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { findUnpackedBinary, smokeCommand, electronCommand };
+module.exports = { findUnpackedBinary, smokeCommand, electronCommand, freePort };
