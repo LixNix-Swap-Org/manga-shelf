@@ -150,6 +150,20 @@ function pressEscape(node) {
  * Modal basics: focus in on open, Tab stays inside, focus returns to the opener. Attach the returned ref to the dialog
  * root. The dialog owns a history entry (Back closes it; `history: false` opts out); a viewport resize keeps the field visible.
  */
+// every mounted dialog of this hook (with or without a history entry), for watchers like "back to Verwaltung"
+let mountedDialogs = 0;
+const dialogListeners = new Set();
+const announceDialogs = () => dialogListeners.forEach((fn) => fn(mountedDialogs));
+
+/** How many dialogs of this hook are open right now. */
+export const openDialogCount = () => mountedDialogs;
+
+/** Calls `fn(count)` whenever a dialog of this hook opens or closes; returns the unsubscribe. */
+export function onDialogsChange(fn) {
+  dialogListeners.add(fn);
+  return () => dialogListeners.delete(fn);
+}
+
 export default function useDialogA11y(open, { returnFocusRef, onClose, history = true } = {}) {
   const ref = useRef(null);
   const openerRef = useRef(null);
@@ -203,7 +217,11 @@ export default function useDialogA11y(open, { returnFocusRef, onClose, history =
       });
     };
     viewport?.addEventListener('resize', keepFieldVisible);
+    mountedDialogs++;
+    announceDialogs();
     return () => {
+      mountedDialogs--;
+      announceDialogs();
       node.removeEventListener('keydown', onKeyDown);
       viewport?.removeEventListener('resize', keepFieldVisible);
       cancelAnimationFrame(frame);

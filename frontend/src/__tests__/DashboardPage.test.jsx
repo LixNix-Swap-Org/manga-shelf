@@ -611,6 +611,32 @@ describe('Dashboard: shelves and the tools menu', () => {
     await waitFor(() => expect(currentUrl()).toBe('/manga/2'));
     expect(screen.getByText('Detailseite')).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: /Sammlung aufräumen/ })).toBeNull();
+    await new Promise((r) => setTimeout(r, 150));
+    expect(screen.queryByRole('dialog', { name: 'Verwaltung' }), 'a series opened from the tool stays open, no Verwaltung on top').toBeNull();
+  });
+
+  it('closing Einstellungen opened from Verwaltung leads back to Verwaltung', async () => {
+    renderDashboard('/');
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-account'));
+    const settings = await screen.findByRole('dialog', { name: 'Einstellungen' });
+    fireEvent.keyDown(settings, { key: 'Escape' });
+    expect(await screen.findByRole('dialog', { name: 'Verwaltung' })).toBeTruthy();
+  });
+
+  it('closing a dialog opened from Verwaltung leads back to Verwaltung; closing Verwaltung itself ends there', async () => {
+    renderDashboard('/');
+    await openAdmin();
+    fireEvent.click(document.getElementById('btn-admin-cleanup'));
+    const dialog = await screen.findByRole('dialog', { name: /Sammlung aufräumen/ });
+    expect(screen.queryByRole('dialog', { name: 'Verwaltung' })).toBeNull();
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Schließen' })[0]);
+    const hub = await screen.findByRole('dialog', { name: 'Verwaltung' });
+    expect(screen.queryByRole('dialog', { name: /Sammlung aufräumen/ })).toBeNull();
+    fireEvent.click(within(hub).getAllByRole('button', { name: 'Schließen' })[0]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await new Promise((r) => setTimeout(r, 150));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('the shelf chip narrows the shelf and the lists; "Zurücksetzen" and a missing shelf go back to every shelf', async () => {

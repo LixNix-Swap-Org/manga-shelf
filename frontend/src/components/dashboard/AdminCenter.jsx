@@ -2,7 +2,8 @@ import { ShieldCheck } from 'lucide-react';
 import ToolDialog from '../modals/ToolDialog';
 import { t } from '../../i18n/index.js';
 
-/** "Verwaltung": the sections of adminSections as one dialog; each entry closes it and opens its own dialog. */
+/** "Verwaltung": the sections of adminSections as one dialog; each entry closes it and opens its own dialog (DashboardHeader
+ *  brings the Verwaltung back once that dialog is closed). */
 export default function AdminCenter({ onClose, sections }) {
   // the entry's dialog replaces this one; it opens after this one has closed
   const open = (run) => {

@@ -13,6 +13,7 @@ import { adminSections } from './adminSections';
 import QuickAccessPanel, { quickAccessEntries, quickOptionId, QUICK_LISTBOX_ID } from './QuickAccess';
 import { getRecentSeries } from '../../utils/recentSeries';
 import { t } from '../../i18n/index.js';
+import useReturnAfterDialogs from '../../hooks/useReturnAfterDialogs';
 
 const SystemModal = lazy(() => import('../modals/SystemModal'));
 const BackupExportModal = lazy(() => import('../modals/BackupExportModal'));
@@ -197,6 +198,8 @@ export default function DashboardHeader({
   const [systemOpen, setSystemOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  // an entry opened from the Verwaltung leads back to it once its dialog is closed
+  const armAdminReturn = useReturnAfterDialogs(() => setAdminOpen(true));
   const accountRef = useRef(null);
   const accountButtonRef = useRef(null);
   // without a server: no users, snapshots or system page (adminSections); the backup entry exports/imports a ZIP on the device
@@ -297,6 +300,17 @@ export default function DashboardHeader({
     }
     return list;
   }, [canEdit, handleOpenModal, handleOpenStats, setView, adminEntries, todoCount]);
+  // in the Verwaltung every entry that opens a dialog of its own returns there; "App installieren" opens none
+  const hubEntries = adminEntries.map((section) => ({
+    ...section,
+    entries: section.entries.map((entry) => (entry.id === 'btn-admin-install' ? entry : {
+      ...entry,
+      run: () => {
+        armAdminReturn();
+        entry.run();
+      }
+    }))
+  }));
   const quick = useMemo(
     () => (quickOpen ? quickAccessEntries({ query: search, mangas, recentIds: getRecentSeries(user?.id), actions: quickActions }) : { sections: [], items: [] }),
     [quickOpen, search, mangas, user?.id, quickActions]
@@ -696,7 +710,7 @@ export default function DashboardHeader({
       )}
       {adminOpen && createPortal(
         <Suspense fallback={null}>
-          <AdminCenter sections={adminEntries} onClose={() => setAdminOpen(false)} />
+          <AdminCenter sections={hubEntries} onClose={() => setAdminOpen(false)} />
         </Suspense>,
         document.body
       )}
