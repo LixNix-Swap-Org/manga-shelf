@@ -357,6 +357,18 @@ test('deleting an account gives its volumes to a member of their shelf, not to t
     assert.equal(db.prepare('SELECT count(*) AS n FROM shelf_members WHERE shelf_id = ? AND user_id = ?').get(fritzShelf, adminId).n, 0);
 });
 
+test('deleting the only member of a private shelf with series hands the shelf to the deleting admin, no shelf without members', async () => {
+    const jonas = await account('a9_jonas');
+    const shelf = (await ownShelf(jonas)).id;
+    const vol = await volume(jonas, await series(jonas, 'A9 Allein'), '1', { status: 'Vorhanden', price: 7 });
+    assert.equal((await admin('DELETE', `/users/${jonas.id}`)).status, 200);
+    assert.equal(db.prepare("SELECT role FROM shelf_members WHERE shelf_id = ? AND user_id = ?").get(shelf, adminId)?.role, 'owner');
+    assert.equal(db.prepare('SELECT owner_user_id FROM shelves WHERE id = ?').get(shelf).owner_user_id, adminId);
+    assert.deepEqual(ownersOf(vol), [adminId], 'the volume stays owned');
+    assert.equal(db.prepare(`SELECT count(*) AS n FROM shelves s WHERE NOT EXISTS (SELECT 1 FROM shelf_members m WHERE m.shelf_id = s.id)`).get().n, 0);
+    assert.equal((await admin('GET', `/shelves/${shelf}`)).status, 200, 'the admin can open it');
+});
+
 test('a CSV import names owners and readers of the target shelf only', async () => {
     await account('a10_olaf');
     const hilde = await account('a10_hilde', 'editor', {});

@@ -284,6 +284,7 @@
   "Art des Eintrags": "Kayıt tipi",
   "Artbook": "Artbook",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Senin “{name}” hesabında da parola yok: bundan sonra yeni bir parolayı yalnızca başka bir yönetici kullanıcı yönetiminden ya da sunucudaki “{command}” konsol komutuyla belirleyebilir.",
+  "Auch die Ausleihe an {names} geht verloren.": "{names} kişisine verilen ödünç de kaybolur.",
   "Auch für automatische Aktualisierungen verwenden": "Otomatik güncellemeler için de kullan",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "one": "Ayrıca {n} özel baskı/kutu seti",
@@ -1864,6 +1865,10 @@
   "Mit Server verbinden": "Sunucuya bağlan",
   "Mit Vorbestellungen": "Ön siparişli",
   "Mit dem Server verbinden": "Sunucuya bağlan",
+  "Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.|Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.": {
+    "one": "Yeni durumla cilt artık sahiplikte değil: kopyası sahibi, satın alma fiyatı, satın alma tarihi ve durumuyla birlikte kaldırılır.",
+    "other": "Yeni durumla cilt artık sahiplikte değil: {n} kopyası sahipleri, satın alma fiyatları, satın alma tarihleri ve durumlarıyla birlikte kaldırılır."
+  },
   "Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).": "Kendi anahtarlarınla bu sunucu, anonim sınırı herkesle paylaşmak yerine MyAnimeList ve Google Books'ta kendi sınırına sahip olur. Her şey onlarsız da çalışır; daha sonra hesap penceresinden (kilit simgesi) eklenebilir.",
   "Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.": "Bir sunucuya bağlanılsın mı? Sunucusuz koleksiyon bu cihazda kayıtlı kalır ve buradan istediğin zaman yeniden açılabilir.",
   "Mit einem eigenen Manga-Shelf-Server verbinden. Die Sammlung auf diesem Gerät bleibt erhalten.": "Kendi Manga Shelf sunucuna bağlan. Bu cihazdaki koleksiyon korunur.",
@@ -2058,6 +2063,7 @@
   "Nur Lesezugriff für Besucher/Gäste gestattet": "Ziyaretçiler/misafirler için yalnızca okuma erişimine izin verilir",
   "Nur Print-Bände": "Yalnızca basılı ciltler",
   "Nur Schuber ({count})": "Yalnızca kutu setleri ({count})",
+  "Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.": "Yalnızca bir kişinin sahipliğini bitirmek için bunun yerine „Sahipler“ bölümünü kullan: bu geri alınabilir.",
   "Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.": "Yalnızca Alman pazarı (Manga Passion): Diğer dillerdeki baskılar yalnızca “Ön siparişlerim ve bütçe” altında, kendi girdiğin tarihlerle görünür.",
   "Nur du": "Yalnızca sen",
   "Nur ein Administrator kann eine Sammlung auf den Server übertragen. Für ein anderes Konto „Zusammenführen“ verwenden.": "Bir koleksiyonu sunucuya yalnızca yönetici aktarabilir. Başka bir hesap için “Birleştir”i kullan.",
@@ -2526,6 +2532,7 @@
   "Status für {title}": "{title} için durum",
   "Status und Besitzer bitte getrennt ändern": "Lütfen durumu ve sahibi ayrı ayrı değiştir",
   "Status wählen": "Durum seç",
+  "Status ändern": "Durumu değiştir",
   "Status-Filter": "Durum filtresi",
   "Status: Erscheint bald (Erinnerung im Release-Radar)": "Durum: Yakında (Release Radar'da hatırlatma)",
   "Status: Fehlt noch (erscheint im Buchladen-Modus)": "Durum: Hâlâ eksik (mağaza modunda görünür)",
@@ -2623,6 +2630,7 @@
   "Trotzdem als komplett markieren": "Yine de tamamlandı olarak işaretle",
   "Trotzdem anzeigen": "Yine de göster",
   "Trotzdem einspielen (nicht empfohlen)": "Yine de geri yükle (önerilmez)",
+  "Trotzdem speichern": "Yine de kaydet",
   "Typ": "Tip",
   "Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben": "Tip (tek cilt, özel baskı, kutu seti veya special), numara, durum ve isteğe bağlı fiyat veya kapak fotoğrafı gir",
   "Typ, Details, Preis und Sammlerangaben für diesen Eintrag": "Bu kayıt için tip, ayrıntılar, fiyat ve koleksiyon bilgileri",

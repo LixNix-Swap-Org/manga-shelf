@@ -289,6 +289,7 @@
   "Art des Eintrags": "Type d'entrée",
   "Artbook": "Artbook",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "Ton compte « {name} » n'y a pas non plus de mot de passe : ensuite, seul un autre administrateur dans la gestion des utilisateurs ou la commande console « {command} » sur le serveur pourra en définir un nouveau.",
+  "Auch die Ausleihe an {names} geht verloren.": "Le prêt à {names} est perdu aussi.",
   "Auch für automatische Aktualisierungen verwenden": "Utiliser aussi pour les mises à jour automatiques",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "one": "Aussi {n} édition spéciale/coffret",
@@ -1898,6 +1899,11 @@
   "Mit Server verbinden": "Se connecter à un serveur",
   "Mit Vorbestellungen": "Avec précommandes",
   "Mit dem Server verbinden": "Se connecter au serveur",
+  "Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.|Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.": {
+    "many": "Avec le nouveau statut, le volume n’est plus possédé : ses {n} exemplaires sont supprimés, avec propriétaires, prix d’achat, dates d’achat et état.",
+    "one": "Avec le nouveau statut, le volume n’est plus possédé : son exemplaire est supprimé, avec propriétaire, prix d’achat, date d’achat et état.",
+    "other": "Avec le nouveau statut, le volume n’est plus possédé : ses {n} exemplaires sont supprimés, avec propriétaires, prix d’achat, dates d’achat et état."
+  },
   "Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).": "Avec des clés personnelles, ce serveur obtient sa propre limite chez MyAnimeList et Google Books au lieu de partager la limite anonyme avec tout le monde. Tout fonctionne aussi sans ; tu pourras les ajouter plus tard dans la fenêtre du compte (icône de cadenas).",
   "Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.": "Se connecter à un serveur ? La collection sans serveur reste enregistrée sur cet appareil et peut être rouverte ici à tout moment.",
   "Mit einem eigenen Manga-Shelf-Server verbinden. Die Sammlung auf diesem Gerät bleibt erhalten.": "Se connecter à son propre serveur Manga Shelf. La collection de cet appareil est conservée.",
@@ -2093,6 +2099,7 @@
   "Nur Lesezugriff für Besucher/Gäste gestattet": "Accès en lecture seule pour les visiteurs/invités",
   "Nur Print-Bände": "Tomes papier uniquement",
   "Nur Schuber ({count})": "Coffrets seuls ({count})",
+  "Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.": "Pour retirer seulement la possession d’une personne, utilise plutôt « Propriétaires » : cela peut être annulé.",
   "Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.": "Marché allemand uniquement (Manga Passion) : les éditions dans d'autres langues n'apparaissent que sous « Mes précommandes et budget », avec les dates que tu saisis toi-même.",
   "Nur du": "Toi seul",
   "Nur ein Administrator kann eine Sammlung auf den Server übertragen. Für ein anderes Konto „Zusammenführen“ verwenden.": "Seul un administrateur peut transférer une collection vers le serveur. Pour un autre compte, utilise « Fusionner ».",
@@ -2568,6 +2575,7 @@
   "Status für {title}": "Statut de {title}",
   "Status und Besitzer bitte getrennt ändern": "Modifie le statut et les propriétaires séparément",
   "Status wählen": "Choisir le statut",
+  "Status ändern": "Changer le statut",
   "Status-Filter": "Filtre de statut",
   "Status: Erscheint bald (Erinnerung im Release-Radar)": "Statut : bientôt disponible (rappel dans le Release Radar)",
   "Status: Fehlt noch (erscheint im Buchladen-Modus)": "Statut : encore manquant (apparaît en mode librairie)",
@@ -2666,6 +2674,7 @@
   "Trotzdem als komplett markieren": "Marquer quand même comme complet",
   "Trotzdem anzeigen": "Afficher quand même",
   "Trotzdem einspielen (nicht empfohlen)": "Restaurer quand même (déconseillé)",
+  "Trotzdem speichern": "Enregistrer quand même",
   "Typ": "Type",
   "Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben": "Saisis le type (tome seul, Special Edition, coffret ou special), le numéro, le statut et éventuellement un prix ou une photo de couverture",
   "Typ, Details, Preis und Sammlerangaben für diesen Eintrag": "Type, détails, prix et infos de collectionneur pour cette entrée",

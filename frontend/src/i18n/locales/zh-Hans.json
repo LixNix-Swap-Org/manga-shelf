@@ -279,6 +279,7 @@
   "Art des Eintrags": "条目类型",
   "Artbook": "画集",
   "Auch dein Konto „{name}“ hat darin kein Passwort: ein neues setzt danach nur ein anderer Admin in der Benutzerverwaltung oder der Konsolenbefehl „{command}“ auf dem Server.": "你的账户“{name}”在其中同样没有密码：之后只能由其他管理员在用户管理中设置，或在服务器上执行控制台命令“{command}”来设置新密码。",
+  "Auch die Ausleihe an {names} geht verloren.": "借给 {names} 的记录也会丢失。",
   "Auch für automatische Aktualisierungen verwenden": "同时用于自动更新",
   "Auch {n} Sonderausgabe/Schuber|Auch {n} Sonderausgaben/Schuber": {
     "other": "另加 {n} 个Special Edition/套盒"
@@ -1830,6 +1831,9 @@
   "Mit Server verbinden": "连接服务器",
   "Mit Vorbestellungen": "有预订",
   "Mit dem Server verbinden": "连接服务器",
+  "Mit dem neuen Status ist der Band nicht mehr im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum und Zustand.|Mit dem neuen Status ist der Band nicht mehr im Besitz: Seine {n} Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten und Zustand.": {
+    "other": "使用新状态后，此卷不再属于收藏：{n} 本藏本将连同所有者、购买价格、购买日期和品相一起删除。"
+  },
   "Mit eigenen Schlüsseln bekommt dieser Server ein eigenes Limit bei MyAnimeList und Google Books, statt sich das anonyme mit allen zu teilen. Alles funktioniert auch ohne; später geht es im Konto-Dialog (Schloss-Symbol).": "使用自己的密钥后，该服务器会在 MyAnimeList 和 Google Books 获得独立的限额，而不必与所有人共用匿名限额。不填也能正常使用；以后可在账户对话框（锁形图标）中添加。",
   "Mit einem Server verbinden? Die Sammlung ohne Server bleibt auf diesem Gerät gespeichert und lässt sich hier jederzeit wieder öffnen.": "要连接服务器吗？无服务器的收藏会保留在此设备上，随时可以在这里重新打开。",
   "Mit einem eigenen Manga-Shelf-Server verbinden. Die Sammlung auf diesem Gerät bleibt erhalten.": "连接到你自己的 Manga Shelf 服务器。此设备上的收藏会保留。",
@@ -2023,6 +2027,7 @@
   "Nur Lesezugriff für Besucher/Gäste gestattet": "访客只有只读权限",
   "Nur Print-Bände": "仅纸质卷",
   "Nur Schuber ({count})": "仅套盒（{count}）",
+  "Nur den Besitz einer Person beendest du besser unter „Besitzer“, das lässt sich rückgängig machen.": "如果只想取消某个人的拥有，请改用“所有者”，那里可以撤销。",
   "Nur deutscher Markt (Manga Passion): Ausgaben in anderen Sprachen erscheinen nur unter „Meine Vorbestellungen & Budget“, mit den Terminen, die du selbst einträgst.": "仅限德国市场（Manga Passion）：其他语言的版本只会出现在“我的预订与预算”中，日期由你自己填写。",
   "Nur du": "仅自己",
   "Nur ein Administrator kann eine Sammlung auf den Server übertragen. Für ein anderes Konto „Zusammenführen“ verwenden.": "只有管理员可以把收藏传输到服务器。其他账户请使用“合并”。",
@@ -2484,6 +2489,7 @@
   "Status für {title}": "{title} 的状态",
   "Status und Besitzer bitte getrennt ändern": "请分别更改状态和拥有者",
   "Status wählen": "选择状态",
+  "Status ändern": "更改状态",
   "Status-Filter": "状态筛选",
   "Status: Erscheint bald (Erinnerung im Release-Radar)": "状态：即将发售（在 Release Radar 中提醒）",
   "Status: Fehlt noch (erscheint im Buchladen-Modus)": "状态：仍缺失（会出现在书店模式中）",
@@ -2580,6 +2586,7 @@
   "Trotzdem als komplett markieren": "仍然标记为已全部看完",
   "Trotzdem anzeigen": "仍然显示",
   "Trotzdem einspielen (nicht empfohlen)": "仍然恢复（不推荐）",
+  "Trotzdem speichern": "仍然保存",
   "Typ": "类型",
   "Typ (Einzelband, Special Edition, Schuber oder Special), Nummer, Status und optional Preis oder Coverfoto eingeben": "输入类型（单行本、Special Edition、套盒或特别篇）、编号、状态，以及可选的价格或封面照片",
   "Typ, Details, Preis und Sammlerangaben für diesen Eintrag": "该条目的类型、详情、价格和收藏信息",

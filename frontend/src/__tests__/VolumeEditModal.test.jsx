@@ -156,6 +156,55 @@ describe('VolumeEditModal: owner toggle and status', () => {
   });
 });
 
+describe('VolumeEditModal: leaving Vorhanden asks before the copies go', () => {
+  const copy = (over = {}) => ({ id: 70, owner_user_id: 1, owner: 'ed', price: 7.5, purchase_date: '2026-03-14', condition: null, lent_to_user_id: null, lent_to: null, lent_at: null, ...over });
+
+  it('a no keeps the form open and sends nothing; the text names the copies and the lending', async () => {
+    const fetchMock = routeFetch({ 'PUT /api/volumes/7': () => json(200, { success: true }) });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { onClose } = setup(volume({ copies: [copy(), copy({ id: 71, owner_user_id: 2, owner: 'anna', lent_to: 'tim', lent_at: '2026-01-02' })] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fehlt noch' }));
+    save();
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    const text = confirm.mock.calls[0][0];
+    expect(text).toContain('Seine 2 Exemplare werden entfernt');
+    expect(text).toContain('Auch die Ausleihe an tim geht verloren.');
+    expect(callsTo(fetchMock, 'PUT /api/volumes/')).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it('a yes saves the new status', async () => {
+    const fetchMock = routeFetch({ 'PUT /api/volumes/7': () => json(200, { success: true }) });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    setup(volume({ copies: [copy()] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vorbestellt' }));
+    save();
+    expect((await putBody(fetchMock)).status).toBe('Vorbestellt');
+    expect(confirm).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
+  });
+
+  it('no question for an empty household copy, for other edits, or when the volume was not owned', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const household = { id: 72, owner_user_id: null, owner: null, price: null, purchase_date: null, condition: null, lent_to: null };
+    let fetchMock = routeFetch({ 'PUT /api/volumes/7': () => json(200, { success: true }) });
+    const first = setup(volume({ copies: [household] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fehlt noch' }));
+    save();
+    expect((await putBody(fetchMock)).status).toBe('Fehlt');
+    first.unmount();
+
+    fetchMock = routeFetch({ 'PUT /api/volumes/7': () => json(200, { success: true }) });
+    setup(volume({ copies: [copy()], isbn: '' }));
+    fireEvent.change(screen.getByLabelText('Kaufdatum'), { target: { value: '2026-04-01' } });
+    save();
+    expect(await putBody(fetchMock)).not.toHaveProperty('status');
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+});
+
 describe('VolumeEditModal: labels', () => {
   it('clicking the release date caption does not start the autofill', () => {
     const fetchMock = routeFetch({});
