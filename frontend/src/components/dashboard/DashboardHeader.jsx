@@ -392,6 +392,27 @@ export default function DashboardHeader({
             </div>
           </div>
 
+          {/* phones: Anime is not in the bottom navigation and the view tabs are hidden, so it gets one tap here */}
+          {narrow && (
+            <button
+              id="btn-header-anime"
+              type="button"
+              aria-current={activeMainView === 'anime' ? 'page' : undefined}
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setView('anime');
+              }}
+              className={`hit-44 shrink-0 flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                activeMainView === 'anime'
+                  ? 'bg-fuchsia-500/20 border-fuchsia-500/50 text-white'
+                  : 'bg-slate-900/80 border-slate-700/80 text-slate-300 hover:text-white'
+              }`}
+            >
+              <Tv className="w-4 h-4 text-fuchsia-400" aria-hidden="true" />
+              <span>{t('Anime')}</span>
+            </button>
+          )}
+
           {/* sm to xl: add and menu; the views are the tabs below the header (phones: the bottom navigation) */}
           {!narrow && (
           <div className="flex xl:hidden items-center gap-1 sm:gap-1.5 shrink-0">

@@ -5,6 +5,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
 import BottomNav, { NARROW_QUERY } from '../components/common/BottomNav';
+import MainViewSwitcher from '../components/dashboard/MainViewSwitcher';
 
 /** matchMedia stand-in whose phone query answers `narrow`; `set()` fires a change. */
 function stubMatchMedia(narrow) {
@@ -191,5 +192,41 @@ describe('bottom navigation on phones', () => {
     }
     expect(document.getElementById('btn-bottom-scan').className).toContain('w-14 h-14');
     expect(document.getElementById('btn-mobile-radar').getAttribute('aria-current')).toBe('page');
+  });
+
+  it('phones get a one-tap Anime button in the header that marks the open view', () => {
+    stubMatchMedia(true);
+    render(<Header />);
+    const button = document.getElementById('btn-header-anime');
+    expect(button).not.toBeNull();
+    expect(button.getAttribute('aria-current')).toBeNull();
+    fireEvent.click(button);
+    expect(screen.getByTestId('view').textContent).toBe('anime');
+    expect(document.getElementById('btn-header-anime').getAttribute('aria-current')).toBe('page');
+    // the menu entry stays as a second way in
+    fireEvent.click(document.getElementById('btn-mobile-menu-toggle'));
+    expect(document.getElementById('btn-mobile-menu-anime')).not.toBeNull();
+  });
+
+  it('wider screens keep the view tabs and have no header Anime button', () => {
+    stubMatchMedia(false);
+    render(<Header />);
+    expect(document.getElementById('btn-header-anime')).toBeNull();
+    render(<MainViewSwitcher activeMainView="shelf" onSelectView={vi.fn()} mangaCount={4} shoppingData={null} radarData={null} />);
+    expect(screen.getByRole('navigation', { name: 'Hauptansicht' })).toBeTruthy();
+  });
+
+  it('phones drop the duplicate view tabs but keep the radar kind switch', () => {
+    stubMatchMedia(true);
+    const { rerender } = render(<MainViewSwitcher activeMainView="shelf" onSelectView={vi.fn()} mangaCount={4} shoppingData={null} radarData={null} />);
+    expect(screen.queryByRole('navigation', { name: 'Hauptansicht' })).toBeNull();
+    expect(document.getElementById('btn-nav-anime')).toBeNull();
+    const onSelectView = vi.fn();
+    rerender(<MainViewSwitcher activeMainView="radar" onSelectView={onSelectView} mangaCount={4} shoppingData={null} radarData={null} />);
+    expect(screen.queryByRole('navigation', { name: 'Hauptansicht' })).toBeNull();
+    const kind = screen.getByRole('group', { name: 'Was der Radar zeigt' });
+    expect(kind.className).not.toContain('-mt-3');
+    fireEvent.click(document.getElementById('btn-radar-anime'));
+    expect(onSelectView).toHaveBeenCalledWith('episodes');
   });
 });
