@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Owners at a glance
+- **Volume card on the series page:** the owners of a volume sit in an amber pill with the people icon, like the "Besitz" side of the reader/owner chip, so they no longer look like the reader circles below. The pill also shows a single owner. The amber "2×" badge is gone: it counted people but read like two copies.
+- **Second copy on the card:** a person with more than one copy of a volume gets a small amber number on their circle, and the label says "alex ×2". Before, a second copy showed only under "Band bearbeiten". The list view uses the same pill.
+- **Readers marked:** the green book icon stands in front of the reader circles on the volume card.
+- **Collection card:** on a shelf with more than one person, each series card names who owns volumes of it and how many, most first ("Ma 7 · Le 3", at most three people, then "+n"); the label names everybody. `owners` of `GET /api/mangas` now carries the number of volumes per person.
+
 ## 4.0.0
 
 ### Before updating

@@ -653,6 +653,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
           readOnlyShelves={readOnlyShelves}
           onAuthorClick={handleAuthorClick}
           searchExtras={searchExtras}
+          showOwners={availablePersons.length > 1}
         />
       </>
     )}

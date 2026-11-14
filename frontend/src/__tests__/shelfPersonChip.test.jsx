@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ShelfPersonChip from '../components/dashboard/ShelfPersonChip';
+import { SeriesOwnerRow } from '../components/dashboard/MangaCard';
 import { seriesOwners, getAvailablePersons, filterAndSortMangas } from '../utils/collectionHelpers';
 
 beforeEach(() => { localStorage.clear(); });
@@ -14,7 +15,8 @@ const mangas = [
 
 describe('person helpers', () => {
   it('reads the owners of a row and lists everybody with their series count, me first', () => {
-    expect(seriesOwners(mangas[0])).toEqual([{ id: 1, name: 'anna' }, { id: 2, name: 'ben' }]);
+    expect(seriesOwners(mangas[0])).toEqual([{ id: 1, name: 'anna', count: null }, { id: 2, name: 'ben', count: null }]);
+    expect(seriesOwners({ owners: '1\tanna\t7\n2\tben\t3' })).toEqual([{ id: 1, name: 'anna', count: 7 }, { id: 2, name: 'ben', count: 3 }]);
     expect(seriesOwners(mangas[2])).toEqual([]);
     expect(getAvailablePersons(mangas)).toEqual([{ id: 1, name: 'anna', count: 1 }, { id: 2, name: 'ben', count: 2 }]);
     expect(getAvailablePersons(mangas, { id: 2, name: 'ben' }).map((p) => p.id)).toEqual([2, 1]);
@@ -57,5 +59,27 @@ describe('ShelfPersonChip', () => {
     expect(screen.queryByLabelText('Person filtern')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Aktuelle Auswahl merken/ }));
     expect(screen.getByRole('button', { name: 'Carlsen' })).toBeTruthy();
+  });
+});
+
+describe('SeriesOwnerRow on the collection card', () => {
+  it('lists each owner with their volume count, most first, and names everybody in the label', () => {
+    const { container } = render(<SeriesOwnerRow manga={{ owners: '1\tanna\t3\n2\tben\t7' }} />);
+    const row = screen.getByRole('img', { name: 'Besitzer: ben: 7 Bände, anna: 3 Bände' });
+    expect(row.textContent).toBe('Be7An3');
+    expect(container.querySelector('svg')).toBeTruthy();
+  });
+
+  it('shows at most three people and "+n" for the rest', () => {
+    const owners = [1, 2, 3, 4, 5].map((id) => `${id}\tuser${id}\t${10 - id}`).join('\n');
+    render(<SeriesOwnerRow manga={{ owners }} />);
+    expect(screen.getByRole('img').textContent).toMatch(/\+2$/);
+  });
+
+  it('renders nothing without owners and leaves out the count of a list saved before counts existed', () => {
+    const { container } = render(<SeriesOwnerRow manga={{ owners: null }} />);
+    expect(container.innerHTML).toBe('');
+    render(<SeriesOwnerRow manga={{ owners: '1\tanna' }} />);
+    expect(screen.getByRole('img', { name: 'Besitzer: anna' }).textContent).toBe('An');
   });
 });

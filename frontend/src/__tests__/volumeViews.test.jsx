@@ -423,6 +423,31 @@ describe('OwnerBadges', () => {
     render(<OwnerBadges multiUser vol={{ owners: [{ user_id: 1, username: 'alex' }, { user_id: 2, username: 'mia' }] }} />);
     expect(screen.getByRole('img', { name: 'Besitzer: alex, mia' })).toBeTruthy();
   });
+
+  it('sits in one pill with the people icon, without the old "2×" owner count', () => {
+    const { container } = render(<OwnerBadges multiUser vol={{ owners: [{ user_id: 1, username: 'alex' }, { user_id: 2, username: 'mia' }] }} />);
+    const pill = container.querySelector('[data-owner-badges]');
+    expect(pill.querySelector('svg')).toBeTruthy();
+    expect(pill.textContent).not.toContain('×');
+    expect(container.querySelector('[data-copy-count]')).toBeNull();
+  });
+
+  it('marks a person with more than one copy on their circle and in the label', () => {
+    const vol = {
+      owners: [{ user_id: 1, username: 'alex' }, { user_id: 2, username: 'mia' }],
+      copies: [{ id: 1, owner_user_id: 1 }, { id: 2, owner_user_id: 1 }, { id: 3, owner_user_id: 2 }]
+    };
+    const { container } = render(<OwnerBadges multiUser vol={vol} />);
+    expect(screen.getByRole('img', { name: 'Besitzer: alex ×2, mia' })).toBeTruthy();
+    const counts = container.querySelectorAll('[data-copy-count]');
+    expect(counts).toHaveLength(1);
+    expect(counts[0].textContent).toBe('2');
+  });
+
+  it('shows one owner too, in the same pill', () => {
+    const { container } = render(<OwnerBadges multiUser vol={{ owners: [{ user_id: 1, username: 'alex' }] }} />);
+    expect(container.querySelector('[data-owner-badges]').textContent).toBe('Al');
+  });
 });
 
 describe('selection mode of the volume views', () => {

@@ -233,7 +233,8 @@ function MangaCollectionGrid({
   setShelfFilter,
   readOnlyShelves = null,
   onAuthorClick,
-  searchExtras = null
+  searchExtras = null,
+  showOwners = false
 }) {
   const isList = viewMode === 'list';
   const { visible, total, shown, hasMore, showMore, sentinelRef } = useProgressiveList(filtered, {
@@ -318,7 +319,7 @@ function MangaCollectionGrid({
 
   const renderCard = (manga) => (
     <div key={manga.id} className={CARD_WRAPPER_CLASS}>
-      <MangaCard manga={manga} getStatusBadge={getStatusBadge} onAuthorClick={onAuthorClick} />
+      <MangaCard manga={manga} getStatusBadge={getStatusBadge} onAuthorClick={onAuthorClick} showOwners={showOwners} />
       {isWishedSeries(manga) && <WishBadge manga={manga} />}
       {canDelete(manga) && (
         <button
