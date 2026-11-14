@@ -1,9 +1,10 @@
 import { memo } from 'react';
-import { BookCheck, BookOpen, BuildingComplex, Coins } from 'lucide-react';
+import { BookCheck, BookOpen, BuildingComplex, Coins, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CoverImage from '../common/CoverImage';
 import { getSeriesProgress, getChapterProgress, isWebtoon } from '../../utils/volumeHelpers';
-import { getReadState } from '../../utils/collectionHelpers';
+import { getReadState, seriesOwners } from '../../utils/collectionHelpers';
+import { ownerColor, readerInitials } from '../detail/OwnerBadges';
 import { formatCount, formatMoney, formatNumber } from '../../utils/format';
 import { splitAuthors } from '../../utils/seriesMeta';
 import { langFor } from '../common/lang';
@@ -77,7 +78,37 @@ export function AuthorButtons({ names, onAuthorClick, buttonClassName = '' }) {
  * One grid card inside the grid's wrapper, which draws the card frame. The link covers the whole card (::after), the
  * author buttons sit above it inside the frame (no button inside a link).
  */
-function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
+/** Most people the owner row names before "+n". */
+const OWNER_ROW_MAX = 3;
+
+/**
+ * Who owns volumes of the series and how many: the people icon, then the person's circle and volume count, most first
+ * ("Ma 7 · Le 3 · +2"). Only on a shelf with more than one person; the title names everybody.
+ */
+export function SeriesOwnerRow({ manga }) {
+  const owners = seriesOwners(manga).sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+  if (owners.length === 0) return null;
+  const names = owners.map(o => (o.count == null ? o.name : `${o.name}: ${formatCount(o.count, 'Band', 'Bände')}`)).join(', ');
+  const shown = owners.slice(0, OWNER_ROW_MAX);
+  const rest = owners.length - shown.length;
+  return (
+    <p role="img" aria-label={t('Besitzer: {names}', { names })} title={t('Besitzer: {names}', { names })} data-series-owners
+      className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-slate-200 min-w-0">
+      <Users className="w-3 h-3 text-amber-400 shrink-0" aria-hidden="true" />
+      {shown.map(o => (
+        <span key={o.id} aria-hidden="true" className="inline-flex items-center gap-1">
+          <span className="px-1 h-4 min-w-4 rounded-full text-[9px] font-bold flex items-center justify-center text-slate-950" style={{ background: ownerColor(o.id) }}>
+            {readerInitials(o.name)}
+          </span>
+          {o.count != null && <span className="font-mono leading-none">{formatNumber(o.count)}</span>}
+        </span>
+      ))}
+      {rest > 0 && <span aria-hidden="true" className="text-amber-300">+{formatNumber(rest)}</span>}
+    </p>
+  );
+}
+
+function MangaCard({ manga, getStatusBadge, onAuthorClick, showOwners = false }) {
   const progress = getSeriesProgress(manga);
   const { owned, total, extras, pct } = progress;
   // a webtoon counts chapters: its badge, bar and footer follow the caller's chapter progress
@@ -173,6 +204,7 @@ function MangaCard({ manga, getStatusBadge, onAuthorClick }) {
               <span className="truncate">{manga.publisher}</span>
             </p>
           )}
+          {showOwners && <SeriesOwnerRow manga={manga} />}
         </div>
 
         <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">

@@ -254,11 +254,23 @@ export const formatTagFilter = (tags) => parseTagFilter(tags).join(',');
 
 // Search, filters and sort of the series list (tags: AND). A search ranks title-prefix, title, other-field and typo
 // hits in that order; the chosen sort orders each group.
-/** The people who own a volume of the series: [{ id, name }] from the list row's `owners` ("id<TAB>name" per line). */
+/**
+ * The people who own a volume of the series: [{ id, name, count }] from the list row's `owners` ("id<TAB>name<TAB>volumes"
+ * per line; count is the number of volumes the person owns, null in a list saved before it was sent).
+ */
 export const seriesOwners = (m) => String(m?.owners || '').split('\n').map((line) => {
   const tab = line.indexOf('\t');
   const id = Number(tab > 0 ? line.slice(0, tab) : NaN);
-  return Number.isSafeInteger(id) && id > 0 ? { id, name: line.slice(tab + 1) } : null;
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  let name = line.slice(tab + 1);
+  let count = null;
+  const last = name.lastIndexOf('\t');
+  if (last >= 0) {
+    const n = Number(name.slice(last + 1));
+    if (Number.isSafeInteger(n) && n >= 0) count = n;
+    name = name.slice(0, last);
+  }
+  return { id, name, count };
 }).filter(Boolean);
 
 /** Everybody who owns something in the list, plus `me` ({ id, name }) first: [{ id, name, count }] by name. */
