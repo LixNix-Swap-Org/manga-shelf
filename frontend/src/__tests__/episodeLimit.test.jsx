@@ -32,4 +32,41 @@ describe('AnimeDetailModal: episode count', () => {
     expect(updateProgress).toHaveBeenCalledWith(1, { episodes_watched: 28 });
     expect(screen.queryByText(/mehr geht nicht/)).toBeNull();
   });
+
+  it('a show still airing without a count: no more than the aired episodes, a stored count ahead of them stays', async () => {
+    const inAWeek = Math.floor(Date.now() / 1000) + 7 * 86400;
+    const airing = { ...anime, episodes: null, status: 'RELEASING', next_airing: { episode: 8, at: inAWeek, estimated: false },
+      my_progress: { status: 'Schaue', episodes_watched: 5, score: null, notes: null } };
+    const renderWith = async (entry) => {
+      const view = render(
+        <MemoryRouter>
+          <AnimeDetailModal isOpen animeId={1} fallback={entry} onClose={vi.fn()} canEdit
+            fetchDetail={vi.fn(async () => entry)} updateProgress={vi.fn(async () => entry.my_progress)} removeFromMyList={vi.fn(async () => true)} update={vi.fn(async () => entry)}
+            refresh={vi.fn()} remove={vi.fn()} onAdd={vi.fn()} onOpenAnime={vi.fn()} />
+        </MemoryRouter>
+      );
+      await act(async () => {});
+      return view;
+    };
+    const view = await renderWith(airing);
+    let field = screen.getByLabelText('Gesehene Folgen (bisher 7 ausgestrahlt)');
+    fireEvent.change(field, { target: { value: '9999' } });
+    expect(field.value).toBe('7');
+    expect(screen.getByText('Bisher sind 7 Folgen ausgestrahlt – mehr geht noch nicht.')).toBeTruthy();
+    view.unmount();
+
+    // a stored count above the aired ones (a sync) is kept, only going further is cut
+    const ahead = await renderWith({ ...airing, my_progress: { ...airing.my_progress, episodes_watched: 10 } });
+    field = screen.getByLabelText('Gesehene Folgen (bisher 7 ausgestrahlt)');
+    expect(field.value).toBe('10');
+    fireEvent.change(field, { target: { value: '11' } });
+    expect(field.value).toBe('10');
+    ahead.unmount();
+
+    // the announced episode is out already and the data lags behind: no cap
+    await renderWith({ ...airing, next_airing: { ...airing.next_airing, at: Math.floor(Date.now() / 1000) - 60 } });
+    field = screen.getByLabelText('Gesehene Folgen (bisher 7 ausgestrahlt)');
+    fireEvent.change(field, { target: { value: '9' } });
+    expect(field.value).toBe('9');
+  });
 });

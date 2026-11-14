@@ -30,6 +30,7 @@ import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
 import ScanListPanel, { KIND_STYLE } from './shopping/ScanListPanel';
 import OthersOwnSection from './shopping/OthersOwnSection';
+import { useHelpTexts } from '../../utils/helpTexts';
 import { FROM_SHOPPING, COVER_FALLBACK, PrintSheet, ListProgress, WishedSeriesSection } from './shopping/ShoppingSections';
 
 const PAGE_STEP = 50;
@@ -520,9 +521,10 @@ export default function ShoppingListView({
     </div>
   );
   const liveScan = liveScanSupported();
+  const helpTexts = useHelpTexts();
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-3.5 sm:space-y-6 animate-fade-in">
       {printSheet && (
         <PrintSheet items={visibleItems} wished={visibleWished} normalizePubName={normalizePubName} filtered={filtersActive} summary={printSummary} />
       )}
@@ -624,7 +626,7 @@ export default function ShoppingListView({
       )}
 
       {/* Shopping Summary Card */}
-      <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-emerald-950/20">
+      <div className="glass-panel p-3.5 sm:p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-emerald-950/20">
         <div className="flex items-center gap-4 min-w-0">
           <div className="hidden sm:flex w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 items-center justify-center shrink-0">
             <ShoppingCart className="w-6 h-6 text-emerald-400" aria-hidden="true" />
@@ -638,9 +640,11 @@ export default function ShoppingListView({
                 </span>
               )}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {t('Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden')}
-            </p>
+            {helpTexts && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {t('Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden')}
+              </p>
+            )}
             <ShelfScopeBadge name={shelfName} onClear={onClearShelf} className="mt-2" />
           </div>
         </div>
@@ -710,7 +714,7 @@ export default function ShoppingListView({
       </div>
 
       {/* Shopping Filters Bar */}
-      <div className="glass-panel p-4 rounded-2xl border border-slate-800/80 flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div className="glass-panel p-3 sm:p-4 rounded-2xl border border-slate-800/80 flex flex-col sm:flex-row justify-between items-center gap-3">
         {/* Search */}
         <div className="relative flex items-center gap-2 bg-slate-950/70 border border-slate-800 rounded-xl pr-3 w-full sm:w-72 sm:shrink-0 focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-brand-400">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" aria-hidden="true" />

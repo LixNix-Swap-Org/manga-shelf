@@ -9,7 +9,7 @@ const { escapeCell } = require('../csvExchange');
 const gateway = require('../anime/gateway');
 const store = require('../anime/store');
 const listSync = require('../anime/listSync');
-const { writeProgress, readProgress, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
+const { writeProgress, readProgress, airedEpisodeLimit, sqlNow, PROGRESS_STATUSES } = require('../anime/progress');
 const { SourceError } = require('../anime/request');
 const episodeMarks = require('../anime/episodes');
 const community = require('../anime/community');
@@ -619,6 +619,7 @@ function updateProgress(ctx, { params, body }) {
             const above = Object.keys(episodeScores).map(Number).find((n) => n > anime.episodes);
             if (above !== undefined) throw episodeAboveTotal(above, anime.episodes);
         }
+        checkAired(ctx, anime, userId, { watched: marks ? undefined : watched, marks, episodeScores });
         return writeProgress(ctx, id, userId, {
             status: body.status, episodes_watched: marks ? undefined : watched, watched_episodes: marks, episode_scores: episodeScores, score, notes, audio_language: audio, subtitle_language: subtitle,
             rating_visibility: visibility, public_comment: publicComment
@@ -627,6 +628,30 @@ function updateProgress(ctx, { params, body }) {
     listSync.schedulePush(ctx, userId, id);
     const progress = store.progressOf(saved);
     return { body: forOther ? community.othersView(progress, saved) : progress };
+}
+
+/**
+ * A show still airing without a known episode count: PUT progress may not count an episode that has not aired yet (a typo
+ * like 9999). Only what the change adds is checked, so a row ahead of the aired count (a sync, an older snapshot) can still
+ * be saved as it is. The history sync, the AniList pull and "Folge gesehen" from a link are not capped here.
+ */
+function checkAired(ctx, anime, userId, { watched, marks, episodeScores }) {
+    const aired = airedEpisodeLimit(anime, ctx.now().getTime());
+    if (aired === null) return;
+    const stored = readProgress(ctx, anime.id, userId);
+    const storedMarks = new Set(episodeMarks.parseMarks(stored?.watched_episodes) || []);
+    const storedScores = new Set(Object.keys(episodeMarks.parseScores(stored?.episode_scores) || {}).map(Number));
+    const before = stored?.episodes_watched ?? 0;
+    const above = [
+        watched !== undefined && watched > aired && watched > before ? watched : undefined,
+        (marks || []).find((n) => n > aired && !storedMarks.has(n)),
+        Object.keys(episodeScores || {}).map(Number).find((n) => n > aired && !storedScores.has(n))
+    ].find((n) => n !== undefined);
+    if (above === undefined) return;
+    throw badRequest(aired === 1
+        ? msg('Folge {episode} ist noch nicht erschienen (bisher ist eine Folge ausgestrahlt).', { episode: above, aired })
+        : msg('Folge {episode} ist noch nicht erschienen (bisher sind {aired} Folgen ausgestrahlt).', { episode: above, aired }),
+    'EPISODE_NOT_AIRED', { aired });
 }
 
 /** `watched_episodes` of PUT progress: undefined (unchanged), null (back to the plain counter) or the watched episode numbers. */

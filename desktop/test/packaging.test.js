@@ -27,12 +27,13 @@ test('every local module the main process loads is inside the packaged "files"',
     const covered = (rel) => patterns.some((p) => (p.endsWith('/**') ? rel.startsWith(p.slice(0, -2)) : rel === p));
     const seen = new Set();
     const visit = (rel) => {
+        rel = rel.split(path.sep).join('/');
         if (seen.has(rel)) return;
         seen.add(rel);
         assert.ok(covered(rel), `${rel} fehlt in electron-builder.yml files`);
         const source = fs.readFileSync(path.join(desktop, rel), 'utf8');
         for (const [, dep] of source.matchAll(/require\('(\.{1,2}\/[^']+)'\)/g)) {
-            const target = path.relative(desktop, path.resolve(path.dirname(path.join(desktop, rel)), dep));
+            const target = path.relative(desktop, path.resolve(path.dirname(path.join(desktop, rel)), dep)).split(path.sep).join('/');
             visit(target.endsWith('.js') ? target : `${target}.js`);
         }
     };

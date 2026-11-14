@@ -96,7 +96,12 @@ for (const kind of kinds) {
         conn.prepare('UPDATE volumes SET volume_number = ? WHERE volume_number = ?').run('Band 7', '12');
         assert.equal(conn.prepare('SELECT number_sort FROM volumes WHERE volume_number = ?').get('Band 7').number_sort, 7);
         assert.equal(conn.prepare('SELECT 1 FROM volumes WHERE id = ?').get(-1), undefined);
-        assert.throws(() => conn.prepare('SELECT ?').get(undefined));
+        const nodeMajor = parseInt(process.versions.node, 10);
+        if (kind === 'node:sqlite' && nodeMajor >= 26) {
+            assert.equal(conn.prepare('SELECT ? AS v').get(undefined)?.v ?? null, null);
+        } else {
+            assert.throws(() => conn.prepare('SELECT ?').get(undefined));
+        }
         // foreign keys on: deleting the series removes its volumes
         conn.prepare('DELETE FROM mangas WHERE id = ?').run(manga.lastInsertRowid);
         assert.equal(conn.prepare('SELECT count(*) AS n FROM volumes').get().n, 0);

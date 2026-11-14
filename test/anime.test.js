@@ -703,3 +703,33 @@ test('season chain endpoint: follows prequel and sequel live through AniList bey
         global.fetch = before;
     }
 });
+
+test('a show still airing without a known count: PUT progress refuses an episode that has not aired yet', async () => {
+    const id = (await admin('POST', '/anime', { title: 'Weekly Show', episodes: 0 })).body.id;
+    const inAWeek = Math.floor(Date.now() / 1000) + 7 * 86400;
+    db.prepare('UPDATE animes SET episodes = NULL, next_airing_episode = 8, next_airing_at = ?, next_airing_estimated = 0 WHERE id = ?').run(inAWeek, id);
+
+    assert.equal((await admin('PUT', `/anime/${id}/progress`, { episodes_watched: 7 })).status, 200);
+    let res = await admin('PUT', `/anime/${id}/progress`, { episodes_watched: 9999 });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, 'EPISODE_NOT_AIRED');
+    assert.equal(res.body.aired, 7);
+    assert.match(res.body.error, /Folge 9999 ist noch nicht erschienen \(bisher sind 7 Folgen ausgestrahlt\)/);
+    assert.equal((await admin('PUT', `/anime/${id}/progress`, { watched_episodes: [1, 8] })).body.code, 'EPISODE_NOT_AIRED');
+    assert.equal((await admin('PUT', `/anime/${id}/progress`, { episode_scores: { 8: 9 } })).body.code, 'EPISODE_NOT_AIRED');
+
+    // the announced episode is out already and the snapshot lags behind: no cap until it is refreshed
+    db.prepare('UPDATE animes SET next_airing_at = ? WHERE id = ?').run(Math.floor(Date.now() / 1000) - 3600, id);
+    res = await admin('PUT', `/anime/${id}/progress`, { episodes_watched: 9 });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    db.prepare('UPDATE animes SET next_airing_at = ? WHERE id = ?').run(Math.floor(Date.now() / 1000) + 3600, id);
+
+    // a stored count ahead of the aired ones (a sync) does not block saving other fields
+    db.prepare('UPDATE anime_progress SET episodes_watched = 12 WHERE anime_id = ?').run(id);
+    res = await admin('PUT', `/anime/${id}/progress`, { episodes_watched: 12, notes: 'weiter' });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+
+    // an estimated date sets no cap; "Folge gesehen" from a link is not capped either
+    db.prepare('UPDATE animes SET next_airing_estimated = 1 WHERE id = ?').run(id);
+    assert.equal((await admin('PUT', `/anime/${id}/progress`, { episodes_watched: 30 })).status, 200);
+});

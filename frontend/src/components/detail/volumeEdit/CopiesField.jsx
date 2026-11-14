@@ -32,13 +32,16 @@ const formOf = (copy) => ({
   lend_at: copy.lent_at || ''
 });
 
-/** The PUT body of a form: price, date and condition always, the lending only when it changed. */
-export function copyBody(form, copy) {
-  const body = {
+/**
+ * The PUT body of a form: price, date and condition (left out with `purchase: false`, when the volume fields above edit
+ * them), the lending only when it changed.
+ */
+export function copyBody(form, copy, { purchase = true } = {}) {
+  const body = purchase ? {
     price: form.price.trim() === '' ? null : form.price.trim(),
     purchase_date: form.purchase_date || null,
     condition: form.condition || null
-  };
+  } : {};
   const before = formOf(copy);
   const lendChanged = form.lend !== before.lend || form.lend_name.trim() !== before.lend_name || form.lend_at !== before.lend_at;
   if (!lendChanged) return body;
@@ -48,12 +51,27 @@ export function copyBody(form, copy) {
   return body;
 }
 
+const same = (a, b) => (a ?? null) === (b ?? null) || (a != null && b != null && Number(a) === Number(b) && !Number.isNaN(Number(a)));
+
+/**
+ * True when the only copy of the volume holds exactly the volume's price, purchase date and condition: a change of those
+ * volume fields carries over to it (followVolumeValue on the server), so the copy form leaves them out instead of showing
+ * the same three fields a second time. Several copies, or a copy with values of its own, keep their fields.
+ */
+export function followsVolume(copies, volume) {
+  if (!volume || (copies || []).length !== 1) return false;
+  const [copy] = copies;
+  return same(copy.price, volume.price) && (copy.purchase_date || null) === (volume.purchase_date || null)
+    && (copy.condition || null) === (volume.condition || null);
+}
+
 /**
  * Every copy of a volume (volume_copies): owner (or the household), purchase price, date and condition, and who borrowed
  * it. A copy the user may change opens a small form; it saves with PUT /api/volumes/:id/copies/:copyId. `ownersVersion`
- * changes after an owners toggle: the copies are then read again from the series.
+ * changes after an owners toggle: the copies are then read again from the series. `volume` (its saved price, purchase_date
+ * and condition) lets the form of a copy that follows the volume fields leave them out (followsVolume).
  */
-export default function CopiesField({ volumeId, mangaId, copies: initialCopies, currentUser, canEdit, currency = 'EUR', ownersVersion = 0, onChanged }) {
+export default function CopiesField({ volumeId, mangaId, copies: initialCopies, currentUser, canEdit, currency = 'EUR', ownersVersion = 0, onChanged, volume = null }) {
   const [copies, setCopies] = useState(initialCopies || []);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(null);
@@ -115,7 +133,7 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
     setBusy(true);
     setError('');
     try {
-      const res = await apiFetch(`/api/volumes/${volumeId}/copies/${copy.id}`, { method: 'PUT', body: copyBody(form, copy) });
+      const res = await apiFetch(`/api/volumes/${volumeId}/copies/${copy.id}`, { method: 'PUT', body: copyBody(form, copy, { purchase: !mirrored }) });
       const data = (await readJson(res)) ?? {};
       if (!res.ok) throw new ApiError(serverText(data) || t('Fehler beim Speichern'), { status: res.status, ref: data.ref ?? null });
       setCopies(data.copies || []);
@@ -151,6 +169,7 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
   const canAdd = Boolean(canEdit && currentUser && ownCount > 0 && ownCount < MAX_COPIES_PER_PERSON);
 
   const symbol = currencySymbol(currency);
+  const mirrored = followsVolume(copies, volume);
   const others = (accounts || []).filter(a => a.id !== (copies.find(c => c.id === editing)?.owner_user_id));
 
   return (
@@ -223,26 +242,30 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
                     if (e.key === 'Escape' && !busy) { e.preventDefault(); e.stopPropagation(); close(); }
                   }}
                 >
-                  <div>
-                    <label htmlFor={`${id}-price`} className="block text-[11px] text-slate-400 mb-1">{t('Kaufpreis ({symbol})', { symbol })}</label>
-                    <input ref={firstField} id={`${id}-price`} type="text" inputMode="decimal" className="input-field" value={form.price} onChange={setField('price')} />
-                  </div>
-                  <div>
-                    <label htmlFor={`${id}-date`} className="block text-[11px] text-slate-400 mb-1">{t('Kaufdatum')}</label>
-                    <input id={`${id}-date`} type="date" className="input-field" value={form.purchase_date} onChange={setField('purchase_date')} />
-                  </div>
-                  <div>
-                    <label htmlFor={`${id}-condition`} className="block text-[11px] text-slate-400 mb-1">{t('Zustand')}</label>
-                    <select id={`${id}-condition`} className="input-field bg-slate-950" value={form.condition} onChange={setField('condition')}>
-                      <option value="">{t('Keine Angabe')}</option>
-                      {[...VOLUME_CONDITIONS, ...(form.condition && !VOLUME_CONDITIONS.includes(form.condition) ? [form.condition] : [])].map(c => (
-                        <option key={c} value={c}>{conditionLabel(c)}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {mirrored ? (
+                    <p className="sm:col-span-3 text-[11px] text-slate-400" data-follows-volume>{t('Kaufpreis, Kaufdatum und Zustand dieses Exemplars stellst du oben beim Band ein.')}</p>
+                  ) : (<>
+                    <div>
+                      <label htmlFor={`${id}-price`} className="block text-[11px] text-slate-400 mb-1">{t('Kaufpreis ({symbol})', { symbol })}</label>
+                      <input ref={firstField} id={`${id}-price`} type="text" inputMode="decimal" className="input-field" value={form.price} onChange={setField('price')} />
+                    </div>
+                    <div>
+                      <label htmlFor={`${id}-date`} className="block text-[11px] text-slate-400 mb-1">{t('Kaufdatum')}</label>
+                      <input id={`${id}-date`} type="date" className="input-field" value={form.purchase_date} onChange={setField('purchase_date')} />
+                    </div>
+                    <div>
+                      <label htmlFor={`${id}-condition`} className="block text-[11px] text-slate-400 mb-1">{t('Zustand')}</label>
+                      <select id={`${id}-condition`} className="input-field bg-slate-950" value={form.condition} onChange={setField('condition')}>
+                        <option value="">{t('Keine Angabe')}</option>
+                        {[...VOLUME_CONDITIONS, ...(form.condition && !VOLUME_CONDITIONS.includes(form.condition) ? [form.condition] : [])].map(c => (
+                          <option key={c} value={c}>{conditionLabel(c)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>)}
                   <div className="sm:col-span-2">
                     <label htmlFor={`${id}-lend`} className="block text-[11px] text-slate-400 mb-1">{t('Ausgeliehen an')}</label>
-                    <select id={`${id}-lend`} className="input-field bg-slate-950" value={form.lend} onChange={setField('lend')}>
+                    <select ref={mirrored ? firstField : undefined} id={`${id}-lend`} className="input-field bg-slate-950" value={form.lend} onChange={setField('lend')}>
                       <option value={NOT_LENT}>{t('Nicht verliehen')}</option>
                       {others.map(a => <option key={a.id} value={String(a.id)}>{a.username}</option>)}
                       {form.lend !== NOT_LENT && form.lend !== OTHER_PERSON && !others.some(a => String(a.id) === form.lend) && (
