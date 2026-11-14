@@ -1,6 +1,7 @@
 // Own progress of an anime: counter, status, rating, languages, note and who sees the rating (split from AnimeDetailModal.jsx).
 import { useEffect, useId, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
+import { formatNumber } from '../../../utils/format';
 import { PROGRESS_STATUSES, airedEpisodes, airedEpisodeLimit, stillAiring, kindOf, seasonEpisodeText } from '../../../utils/animeHelpers';
 import { animeProgressLabel } from '../../../utils/enumLabels';
 import { EDITION_LANGUAGES, languageName, withCurrent } from '../../../utils/editions';
@@ -134,7 +135,7 @@ export function OwnProgress({ anime, progress, onSave, onRemove, busy, onDirtyCh
     <form onSubmit={save} className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         {!movie && <div>
-          <label htmlFor={`${ids}-ep`} className="block text-[11px] text-slate-400 mb-1">{max ? t('Gesehene Folgen (von {max})', { max }) : aired ? t('Gesehene Folgen (bisher {aired} ausgestrahlt)', { aired }) : t('Gesehene Folgen')}</label>
+          <label htmlFor={`${ids}-ep`} className="block text-[11px] text-slate-400 mb-1">{max ? t('Gesehene Folgen (von {max})', { max: formatNumber(max) }) : aired ? t('Gesehene Folgen (bisher {aired} ausgestrahlt)', { aired: formatNumber(aired) }) : t('Gesehene Folgen')}</label>
           <div className="flex items-center gap-1">
             <button type="button" className="btn-secondary p-2" aria-label={t('Eine Folge weniger')} onClick={() => { setCapped(false); setEpisodes((n) => clamp(Number(n) - 1)); }}><Minus className="w-3.5 h-3.5" aria-hidden="true" /></button>
             <input id={`${ids}-ep`} type="number" min="0" max={cap} inputMode="numeric" className="input-field text-base sm:text-sm w-20 text-center" value={episodes}

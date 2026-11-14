@@ -30,6 +30,7 @@ import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
 import ScanListPanel, { KIND_STYLE } from './shopping/ScanListPanel';
 import OthersOwnSection from './shopping/OthersOwnSection';
+import { useHelpTexts } from '../../utils/helpTexts';
 import { FROM_SHOPPING, COVER_FALLBACK, PrintSheet, ListProgress, WishedSeriesSection } from './shopping/ShoppingSections';
 
 const PAGE_STEP = 50;
@@ -520,6 +521,7 @@ export default function ShoppingListView({
     </div>
   );
   const liveScan = liveScanSupported();
+  const helpTexts = useHelpTexts();
 
   return (
     <div className="space-y-3.5 sm:space-y-6 animate-fade-in">
@@ -638,9 +640,11 @@ export default function ShoppingListView({
                 </span>
               )}
             </h2>
-            <p className="hidden sm:block text-xs text-slate-400 mt-0.5">
-              {t('Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden')}
-            </p>
+            {helpTexts && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {t('Alle Bände mit Status „Fehlt“, sortiert nach Verlag zum schnellen Finden und Abhaken im Laden')}
+              </p>
+            )}
             <ShelfScopeBadge name={shelfName} onClear={onClearShelf} className="mt-2" />
           </div>
         </div>

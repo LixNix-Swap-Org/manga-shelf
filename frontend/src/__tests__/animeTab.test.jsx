@@ -906,7 +906,7 @@ describe('AnimeDetailModal', () => {
       const option = within(select).getByRole('option', { name: 'Gesehen' });
       expect(option.disabled).toBe(true);
       expect(option.getAttribute('title')).toBe('Läuft noch');
-      expect(screen.getByLabelText('Gesehene Folgen (bisher 1180 ausgestrahlt)').getAttribute('max')).toBe('1180');
+      expect(screen.getByLabelText('Gesehene Folgen (bisher 1.180 ausgestrahlt)').getAttribute('max')).toBe('1180');
       expect(screen.getByText('12 / 1180+')).toBeTruthy();
     });
 

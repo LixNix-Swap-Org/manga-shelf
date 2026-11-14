@@ -5,6 +5,7 @@ import { notify } from '../../../utils/notify';
 import { formatCount, formatEuro, formatRelative } from '../../../utils/format';
 import { t } from '../../../i18n/index.js';
 import { rich } from '../../../i18n/react.jsx';
+import { useHelpTexts } from '../../../utils/helpTexts';
 import OtherCurrencies from '../../common/OtherCurrencies';
 
 const euro = (value) => formatEuro(value || 0);
@@ -148,6 +149,7 @@ export default function PersonalSummary({
   fetchReleaseRadar
 }) {
   const [feedOpen, setFeedOpen] = useState(false);
+  const helpTexts = useHelpTexts();
   return (
     <>
       <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-sky-950/30">
@@ -164,9 +166,11 @@ export default function PersonalSummary({
                 </span>
               )}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {t('Verfolge deine offenen Vorbestellungen und behalte dein geplantes Manga-Budget im Blick')}
-            </p>
+            {helpTexts && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {t('Verfolge deine offenen Vorbestellungen und behalte dein geplantes Manga-Budget im Blick')}
+              </p>
+            )}
           </div>
         </div>
 

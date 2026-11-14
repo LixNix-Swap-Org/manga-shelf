@@ -1,11 +1,12 @@
 // Parts of the settings dialog (AccountModal) that are not account fields of their own: the section heading, "Ansicht
 // zurücksetzen", the overview "Wer sieht was", the calendar addresses and the devices of the account.
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { CalendarPlus, LogOut, RotateCcw } from 'lucide-react';
 import useAccountDefaults from '../../hooks/useAccountDefaults';
 import { apiFetch, isAppMode, readJson, rememberToken } from '../../utils/api';
 import { notify } from '../../utils/notify';
 import { resetViewPreferences } from '../../utils/viewReset';
+import { setHelpTexts, useHelpTexts } from '../../utils/helpTexts';
 import { markReopenAccount } from '../../i18n/preference.js';
 import { serverText } from '../../i18n/serverText.js';
 import { t } from '../../i18n/index.js';
@@ -45,7 +46,23 @@ export function ResetViewField({ reload = reloadPage }) {
         <RotateCcw className="w-4 h-4" aria-hidden="true" /> {t('Ansicht zurücksetzen')}
       </button>
       <p className="text-xs text-slate-400">{t('Die Seite lädt danach neu. Gemerkte Filter bleiben erhalten.')}</p>
+      <HelpTextsField />
     </SettingsSection>
+  );
+}
+
+/** "Erklärtexte anzeigen": the explaining sentences under the headings of the shopping list and the radar, on this device. */
+export function HelpTextsField() {
+  const id = useId();
+  const on = useHelpTexts();
+  return (
+    <div className="space-y-2 pt-1">
+      <label htmlFor={`${id}-help`} className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+        <input id={`${id}-help`} type="checkbox" className="h-4 w-4 accent-brand-500" checked={on} onChange={(e) => setHelpTexts(e.target.checked)} />
+        {t('Erklärtexte anzeigen')}
+      </label>
+      <p className="text-xs text-slate-400">{t('Die kurzen Erklärsätze unter den Überschriften, etwa in der Einkaufsliste und im Radar. Ausgeschaltet ist die Seite vor allem auf dem Handy kompakter.')}</p>
+    </div>
   );
 }
 
