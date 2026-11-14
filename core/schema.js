@@ -1503,6 +1503,16 @@ function migrationList(log = silentLog) {
                     : replaceOnce(sql, /CHECK\s*\(\s*scope\s+IN\s*\(\s*'radar'\s*,\s*'anime'\s*\)\s*\)/i,
                         "CHECK (scope IN ('radar', 'anime', 'wishlist'))", 'calendar_feeds.scope')));
             }
+        },
+        {
+            version: 59,
+            name: 'add_lent_reminder_days',
+            up: (d) => {
+                // after how many days a lent copy shows up in "Zu erledigen" for this account (core/lib/locales.js
+                // LENT_REMINDER_CHOICES); 90 was the fixed value before
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (!cols.has('lent_reminder_days')) d.exec('ALTER TABLE users ADD COLUMN lent_reminder_days INTEGER NOT NULL DEFAULT 90;');
+            }
         }
     ];
 }

@@ -337,6 +337,7 @@
   "Ausgeliehen an {name}": "Lent to {name}",
   "Ausgeliehen an {name} seit {date}": "Lent to {name} since {date}",
   "Ausgeliehen an: {names}": "Lent to: {names}",
+  "Ausleihfrist": "Loan period",
   "Ausstehend: {changes}": "Pending: {changes}",
   "Auswahl": "Selection",
   "Auswahl aufheben": "Clear selection",
@@ -824,7 +825,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "The ISBN lookup needs a connection to the server.",
   "Die Kamera ließ sich nicht starten.": "The camera could not be started.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "The camera is currently being used by another app.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "The list gathers gaps, volumes in other shelves and pre-orders that should be out. Switched off, it disappears only for you; the notices on the series stay.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "The list gathers gaps, volumes in other shelves, pre-orders that should be out and long loans. Switched off, it disappears only for you; the notices on the series stay.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "The list is served from this device's local storage (as of {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "The list is served from this device's local storage.",
   "Die Liste wird noch geladen…": "The list is still loading…",
@@ -999,6 +1000,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "One shelf, one person: nothing to switch here. Your saved filters are below.",
   "Ein Tag hat 1 bis {max} Zeichen": "A tag has 1 to {max} characters",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "A typo or a spelling that should be merged?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "A lent volume shows up under “To do” once it has been away this long. Applies only to you.",
   "Eine Folge mehr": "One more episode",
   "Eine Folge mehr gesehen": "Watched one more episode",
   "Eine Folge weniger": "One episode fewer",
@@ -1174,7 +1176,9 @@
   "Filme": "Movies",
   "Filme & Specials": "Films & specials",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Movies and TV series in the anime tab's search, with posters, seasons and an IMDb link. Without a key there are no TMDB results.",
+  "Filter": "Filters",
   "Filter & Suche zurücksetzen": "Reset filters & search",
+  "Filter ({n} geändert)": "Filters ({n} changed)",
   "Filter und Suche zurücksetzen": "Reset filters and search",
   "Filter zurücksetzen": "Reset filters",
   "Finanzen": "Finances",
@@ -2320,6 +2324,7 @@
   "Scanner ist geöffnet…": "Scanner is open…",
   "Scanner schließen": "Close scanner",
   "Scanner starten": "Start scanner",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Switch on “To do” for the reminder to appear.",
   "Schaue": "Watching",
   "Schauen": "Watching",
   "Schauen auch: {names}": "Also watching: {names}",
@@ -2673,6 +2678,7 @@
   "Ungültige Angabe zum Verleihen": "Invalid lending details",
   "Ungültige AniList-ID": "Invalid AniList ID",
   "Ungültige Anmeldedaten": "Invalid credentials",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Invalid loan period (allowed: {allowed} days)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Invalid selection (1 to {max_ids} volume IDs)",
   "Ungültige Backup-Datenbank: {reason}": "Invalid backup database: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Invalid volume number (a number from 0 to {max})",
@@ -3481,6 +3487,10 @@
     "one": "{n} account needs a password reset after the restore (no password in the backup): {names}.",
     "other": "{n} accounts need a password reset after the restore (no password in the backup): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} month",
+    "other": "{n} months"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} new release today",
     "other": "{n} new releases today"
@@ -3516,6 +3526,10 @@
   "{n} Treffer|{n} Treffer": {
     "one": "{n} match",
     "other": "{n} matches"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} week",
+    "other": "{n} weeks"
   },
   "{n} abgeschlossen": "{n} completed",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3593,11 +3607,19 @@
     "one": "{title}: volume {volume} lent to {name} for {n} month",
     "other": "{title}: volume {volume} lent to {name} for {n} months"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: volume {volume} lent to {name} for {n} week",
+    "other": "{title}: volume {volume} lent to {name} for {n} weeks"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: volume {volume} should be out by now",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: volume {volume} is already on the shelf “{shelf}”",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: volumes {volumes} lent to {name} for {n} month",
     "other": "{title}: volumes {volumes} lent to {name} for {n} months"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: volumes {volumes} lent to {name} for {n} week",
+    "other": "{title}: volumes {volumes} lent to {name} for {n} weeks"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: volumes {volumes} should be out by now",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: volumes {volumes} are already on the shelf “{shelf}”",

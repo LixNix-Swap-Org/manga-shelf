@@ -337,6 +337,7 @@
   "Ausgeliehen an {name}": "Uitgeleend aan {name}",
   "Ausgeliehen an {name} seit {date}": "Uitgeleend aan {name} sinds {date}",
   "Ausgeliehen an: {names}": "Uitgeleend aan: {names}",
+  "Ausleihfrist": "Uitleentermijn",
   "Ausstehend: {changes}": "In afwachting: {changes}",
   "Auswahl": "Selectie",
   "Auswahl aufheben": "Selectie wissen",
@@ -824,7 +825,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "Het opzoeken van een ISBN vereist een verbinding met de server.",
   "Die Kamera ließ sich nicht starten.": "De camera kon niet worden gestart.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "De camera wordt momenteel door een andere app gebruikt.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "De lijst verzamelt gaten, delen in andere kasten en voorbestellingen die al uit zouden moeten zijn. Uitgeschakeld verdwijnt hij alleen voor jou; de meldingen bij de reeksen blijven.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "De lijst verzamelt gaten, delen in andere kasten, voorbestellingen die al uit zouden moeten zijn en lange uitleningen. Uitgeschakeld verdwijnt hij alleen voor jou; de meldingen bij de reeksen blijven.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "De lijst wordt geleverd uit de lokale opslag van dit apparaat (stand: {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "De lijst wordt geleverd uit de lokale opslag van dit apparaat.",
   "Die Liste wird noch geladen…": "De lijst wordt nog geladen…",
@@ -999,6 +1000,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Eén plank, één persoon: hier valt niets te wisselen. Je bewaarde filters staan hieronder.",
   "Ein Tag hat 1 bis {max} Zeichen": "Een tag heeft 1 tot {max} tekens",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "Een typfout of een schrijfwijze die moet worden samengevoegd?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Een uitgeleend deel verschijnt onder ‘Te doen’ als het zo lang weg is. Geldt alleen voor jou.",
   "Eine Folge mehr": "Eén aflevering meer",
   "Eine Folge mehr gesehen": "Eén aflevering meer gezien",
   "Eine Folge weniger": "Eén aflevering minder",
@@ -1174,7 +1176,9 @@
   "Filme": "Films",
   "Filme & Specials": "Films en specials",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Films en series in de zoekfunctie van het anime-tabblad, met posters, seizoenen en IMDb-link. Zonder sleutel zijn er geen TMDB-resultaten.",
+  "Filter": "Filters",
   "Filter & Suche zurücksetzen": "Filters en zoekopdracht wissen",
+  "Filter ({n} geändert)": "Filters ({n} gewijzigd)",
   "Filter und Suche zurücksetzen": "Filters en zoekopdracht wissen",
   "Filter zurücksetzen": "Filters wissen",
   "Finanzen": "Financiën",
@@ -2320,6 +2324,7 @@
   "Scanner ist geöffnet…": "Scanner is geopend…",
   "Scanner schließen": "Scanner sluiten",
   "Scanner starten": "Scanner starten",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Zet ‘Te doen’ aan zodat de herinnering verschijnt.",
   "Schaue": "Aan het kijken",
   "Schauen": "Kijken",
   "Schauen auch: {names}": "Kijken ook: {names}",
@@ -2673,6 +2678,7 @@
   "Ungültige Angabe zum Verleihen": "Ongeldige uitleengegevens",
   "Ungültige AniList-ID": "Ongeldige AniList-ID",
   "Ungültige Anmeldedaten": "Ongeldige inloggegevens",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Ongeldige uitleentermijn (toegestaan: {allowed} dagen)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Ongeldige selectie (1 tot {max_ids} deel-ID's)",
   "Ungültige Backup-Datenbank: {reason}": "Ongeldige back-updatabase: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Ongeldig volumenummer (een getal van 0 tot {max})",
@@ -3481,6 +3487,10 @@
     "one": "{n} account heeft na het herstel een wachtwoordreset nodig (geen wachtwoord in de back-up): {names}.",
     "other": "{n} accounts hebben na het herstel een wachtwoordreset nodig (geen wachtwoord in de back-up): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} maand",
+    "other": "{n} maanden"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} nieuwe uitgave vandaag",
     "other": "{n} nieuwe uitgaven vandaag"
@@ -3516,6 +3526,10 @@
   "{n} Treffer|{n} Treffer": {
     "one": "{n} treffer",
     "other": "{n} treffers"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} week",
+    "other": "{n} weken"
   },
   "{n} abgeschlossen": "{n} afgerond",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3593,11 +3607,19 @@
     "one": "{title}: deel {volume} al {n} maand uitgeleend aan {name}",
     "other": "{title}: deel {volume} al {n} maanden uitgeleend aan {name}"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: deel {volume} al {n} week uitgeleend aan {name}",
+    "other": "{title}: deel {volume} al {n} weken uitgeleend aan {name}"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: deel {volume} zou verschenen moeten zijn",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: deel {volume} staat al op de plank ‘{shelf}’",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: delen {volumes} al {n} maand uitgeleend aan {name}",
     "other": "{title}: delen {volumes} al {n} maanden uitgeleend aan {name}"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: delen {volumes} al {n} week uitgeleend aan {name}",
+    "other": "{title}: delen {volumes} al {n} weken uitgeleend aan {name}"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: delen {volumes} zouden verschenen moeten zijn",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: delen {volumes} staan al op de plank ‘{shelf}’",

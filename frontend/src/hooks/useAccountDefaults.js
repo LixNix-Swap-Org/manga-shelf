@@ -8,6 +8,8 @@ const KEY = 'account-defaults';
 const LOADING_KEY = 'account-defaults:loading';
 
 export const ANIME_VISIBILITIES = ['public', 'anonymous', 'private'];
+// after how many days a lent copy is listed in "Zu erledigen" (users.lent_reminder_days, core/lib/locales.js)
+export const LENT_REMINDER_CHOICES = [14, 30, 60, 90, 180, 365];
 
 const listeners = new Set();
 let loading = false;
@@ -25,7 +27,8 @@ export function rememberAccountDefaults(user) {
   const visibility = ANIME_VISIBILITIES.includes(user.default_anime_visibility) ? user.default_anime_visibility : null;
   const shareAnime = typeof user.share_anime_activity === 'boolean' ? user.share_anime_activity : null;
   const showTodo = typeof user.show_todo === 'boolean' ? user.show_todo : null;
-  writeCache(null, KEY, { animeVisibility: visibility, shareAnime, showTodo });
+  const lentReminderDays = LENT_REMINDER_CHOICES.includes(user.lent_reminder_days) ? user.lent_reminder_days : null;
+  writeCache(null, KEY, { animeVisibility: visibility, shareAnime, showTodo, lentReminderDays });
   emit();
 }
 
@@ -52,7 +55,7 @@ function load(fresh) {
 /**
  * `{ animeVisibility, shareAnime, loaded }`: the default visibility of new anime ratings (users.default_anime_visibility)
  * , whether others see the own anime list by name (users.share_anime_activity) and whether the shelf shows "Zu erledigen"
- * (users.show_todo), null while unknown. Asked once per session; `fresh` asks again (the account dialog), `enabled: false` asks nothing.
+ * (users.show_todo) and after how many days a lending is listed there (users.lent_reminder_days), null while unknown. Asked once per session; `fresh` asks again (the account dialog), `enabled: false` asks nothing.
  */
 export default function useAccountDefaults({ enabled = true, fresh = false } = {}) {
   const [state, setState] = useState(() => {
@@ -70,5 +73,5 @@ export default function useAccountDefaults({ enabled = true, fresh = false } = {
     if (enabled) load(fresh);
   }, [enabled, fresh]);
 
-  return { animeVisibility: state.defaults?.animeVisibility ?? null, shareAnime: state.defaults?.shareAnime ?? null, showTodo: state.defaults?.showTodo ?? null, loaded: state.loaded };
+  return { animeVisibility: state.defaults?.animeVisibility ?? null, shareAnime: state.defaults?.shareAnime ?? null, showTodo: state.defaults?.showTodo ?? null, lentReminderDays: state.defaults?.lentReminderDays ?? null, loaded: state.loaded };
 }

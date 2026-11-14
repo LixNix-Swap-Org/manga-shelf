@@ -1,4 +1,5 @@
-import { ArrowUpDown, BuildingComplex, ChevronDown, Languages, Layers, LayoutGrid, List, ListFilter, Tag, UserPen, X } from 'lucide-react';
+import { useId, useState } from 'react';
+import { ArrowUpDown, BuildingComplex, ChevronDown, Languages, Layers, LayoutGrid, List, ListFilter, SlidersHorizontal, Tag, UserPen, X } from 'lucide-react';
 import { COLLECT_FILTERS, GROUP_OPTIONS, SORT_OPTIONS, collectFilterLabel, getStatusTabs } from '../../utils/collectionHelpers';
 import { formatCount } from '../../utils/format';
 import { t as tr } from '../../i18n/index.js';
@@ -10,11 +11,15 @@ import { languageName } from '../../utils/editions';
 // truncates inside its chip.
 export const CHIP_LABEL = 'basis-[calc(50%-0.25rem)] grow sm:grow-0 lg:basis-[calc(25%-0.375rem)] xl:basis-auto min-w-0 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group';
 const CHIP_SELECT = 'font-medium text-slate-200 group-hover:text-white truncate min-w-0 w-full xl:w-auto';
+// phones: the selects wait behind the button "Filter" and open as their own rows below; from sm on they sit in the bar
+const PHONE_PANEL = (open) => `${open ? 'flex' : 'hidden'} order-last basis-full flex-wrap gap-2 sm:contents`;
 const VIEW_TOGGLE = 'hit-44 p-1.5 rounded-lg transition-all [@media(pointer:coarse)]:p-2.5 [@media(pointer:coarse)]:px-[15px]';
 
 // Status tabs, filter/sort/grouping selects, author and genre chips, view-mode toggle; presentational, state via props. The genre
 // filter (AND over tags) shows when `setTagFilter` is given (`availableTags` [{ tag, count }]); the edition language chip when
-// `availableLanguages` [{ code, count }] holds more than one language.
+// `availableLanguages` [{ code, count }] holds more than one language. On phones the status tabs, the shelf/person chip, the
+// view toggle and the chips of active filters stay in view; publisher, series state, genre, language, sort and grouping
+// open behind "Filter" (its badge counts the ones set apart from the default).
 export default function CollectionToolbar({
   availablePublishers,
   filterCounts,
@@ -60,6 +65,10 @@ export default function CollectionToolbar({
     || chosenTags.length > 0 || languageFilter !== 'ALL' || shelfFilter !== 'ALL' || personFilter !== 'ALL';
   const showShelves = Boolean(setShelfFilter) && (availableShelves.length > 1 || shelfFilter !== 'ALL');
   const showLanguages = Boolean(setLanguageFilter) && (availableLanguages.length > 1 || languageFilter !== 'ALL');
+  const [panelOpen, setPanelOpen] = useState(false);
+  const panelId = useId();
+  const hiddenSet = [publisherFilter !== 'ALL', collectFilter !== 'ALL', languageFilter !== 'ALL', groupBy !== 'none', sortBy !== 'title_asc']
+    .filter(Boolean).length;
   return (
     <div className="flex flex-col xl:flex-row flex-wrap items-stretch xl:items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 bg-slate-950/70 rounded-2xl border border-slate-800/80">
       {/* Status Tabs with Count Badges */}
@@ -100,6 +109,24 @@ export default function CollectionToolbar({
             saved={saved}
           />
         )}
+        <button
+          type="button"
+          id="btn-phone-filters"
+          aria-expanded={panelOpen}
+          aria-controls={`${panelId}-a ${panelId}-b`}
+          aria-label={hiddenSet ? tr('Filter ({n} geändert)', { n: hiddenSet }) : tr('Filter')}
+          onClick={() => setPanelOpen((v) => !v)}
+          className={`sm:hidden shrink-0 flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold ${panelOpen || hiddenSet ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-brand-400 shrink-0" aria-hidden="true" />
+          <span>{tr('Filter')}</span>
+          {hiddenSet > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold leading-none bg-brand-700 text-white" aria-hidden="true">{hiddenSet}</span>
+          )}
+          <ChevronDown className={`w-3 h-3 text-slate-400 shrink-0 transition-transform ${panelOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
+
+        <div id={`${panelId}-a`} className={PHONE_PANEL(panelOpen)}>
         {/* Publisher Filter */}
         <label className={CHIP_LABEL}>
           <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
@@ -176,6 +203,7 @@ export default function CollectionToolbar({
             <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
           </label>
         )}
+        </div>
 
         {setTagFilter && chosenTags.map(tag => (
           <button
@@ -192,6 +220,7 @@ export default function CollectionToolbar({
           </button>
         ))}
 
+        <div id={`${panelId}-b`} className={PHONE_PANEL(panelOpen)}>
         {/* Sort Control */}
         <label className={CHIP_LABEL}>
           <ArrowUpDown className="w-3.5 h-3.5 text-sky-400 shrink-0" />
@@ -223,6 +252,7 @@ export default function CollectionToolbar({
             <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-200 pointer-events-none shrink-0" aria-hidden="true" />
           </label>
         )}
+        </div>
 
         {authorFilter && setAuthorFilter && (
           <button
@@ -263,7 +293,7 @@ export default function CollectionToolbar({
           </button>
         )}
 
-        <div className="basis-full xl:basis-auto flex items-center justify-between gap-2">
+        <div className="ml-auto sm:ml-0 sm:basis-full xl:basis-auto flex items-center justify-between gap-2">
           <div role="group" aria-label={tr('Ansicht')} className="flex items-center bg-slate-900/90 border border-slate-800 p-0.5 rounded-xl shadow-sm shrink-0">
             <button
               id="btn-view-grid"

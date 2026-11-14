@@ -343,6 +343,7 @@
   "Ausgeliehen an {name}": "Prestado a {name}",
   "Ausgeliehen an {name} seit {date}": "Prestado a {name} desde el {date}",
   "Ausgeliehen an: {names}": "Prestado a: {names}",
+  "Ausleihfrist": "Plazo de préstamo",
   "Ausstehend: {changes}": "Pendiente: {changes}",
   "Auswahl": "Selección",
   "Auswahl aufheben": "Anular selección",
@@ -844,7 +845,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "La búsqueda de ISBN necesita conexión con el servidor.",
   "Die Kamera ließ sich nicht starten.": "No se pudo iniciar la cámara.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "Otra app está usando la cámara en este momento.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "La lista reúne huecos, tomos de otras estanterías y reservas que ya deberían haber salido. Desactivada, solo desaparece para ti; los avisos de las series se mantienen.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "La lista reúne huecos, tomos de otras estanterías, reservas que ya deberían haber salido y préstamos largos. Desactivada, solo desaparece para ti; los avisos de las series se mantienen.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "La lista se sirve desde el almacenamiento local de este dispositivo (a fecha de {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "La lista se sirve desde el almacenamiento local de este dispositivo.",
   "Die Liste wird noch geladen…": "La lista aún se está cargando…",
@@ -1021,6 +1022,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Una estantería, una persona: aquí no hay nada que cambiar. Tus filtros guardados están abajo.",
   "Ein Tag hat 1 bis {max} Zeichen": "Una etiqueta tiene de 1 a {max} caracteres",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "¿Una errata o una grafía que debería combinarse?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Un tomo prestado aparece en «Pendiente» cuando lleva fuera este tiempo. Solo se aplica a ti.",
   "Eine Folge mehr": "Un episodio más",
   "Eine Folge mehr gesehen": "Un episodio más visto",
   "Eine Folge weniger": "Un episodio menos",
@@ -1197,7 +1199,9 @@
   "Filme": "Películas",
   "Filme & Specials": "Películas y especiales",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Películas y series en la búsqueda de la pestaña de anime, con pósteres, temporadas y enlace a IMDb. Sin clave no hay resultados de TMDB.",
+  "Filter": "Filtros",
   "Filter & Suche zurücksetzen": "Restablecer filtros y búsqueda",
+  "Filter ({n} geändert)": "Filtros ({n} cambiados)",
   "Filter und Suche zurücksetzen": "Restablecer filtros y búsqueda",
   "Filter zurücksetzen": "Restablecer filtros",
   "Finanzen": "Finanzas",
@@ -2359,6 +2363,7 @@
   "Scanner ist geöffnet…": "El escáner está abierto…",
   "Scanner schließen": "Cerrar escáner",
   "Scanner starten": "Iniciar escáner",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Activa «Pendiente» para que aparezca el recordatorio.",
   "Schaue": "Viendo",
   "Schauen": "Viendo",
   "Schauen auch: {names}": "También lo ven: {names}",
@@ -2717,6 +2722,7 @@
   "Ungültige Angabe zum Verleihen": "Datos de préstamo no válidos",
   "Ungültige AniList-ID": "ID de AniList no válido",
   "Ungültige Anmeldedaten": "Credenciales no válidas",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Plazo de préstamo no válido (permitido: {allowed} días)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Selección no válida (de 1 a {max_ids} ID de tomo)",
   "Ungültige Backup-Datenbank: {reason}": "Base de datos de copia no válida: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Número de tomo no válido (un número de 0 a {max})",
@@ -3566,6 +3572,11 @@
     "many": "{n} cuentas necesitan restablecer la contraseña tras la restauración (no hay contraseña en la copia): {names}.",
     "other": "{n} cuentas necesitan restablecer la contraseña tras la restauración (no hay contraseña en la copia): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} mes",
+    "many": "{n} meses",
+    "other": "{n} meses"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} novedad hoy",
     "many": "{n} novedades hoy",
@@ -3610,6 +3621,11 @@
     "one": "{n} resultado",
     "many": "{n} de resultados",
     "other": "{n} resultados"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} semana",
+    "many": "{n} semanas",
+    "other": "{n} semanas"
   },
   "{n} abgeschlossen": "{n} completados",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3696,12 +3712,22 @@
     "many": "{title}: tomo {volume} prestado a {name} desde hace {n} meses",
     "other": "{title}: tomo {volume} prestado a {name} desde hace {n} meses"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: tomo {volume} prestado a {name} desde hace {n} semana",
+    "many": "{title}: tomo {volume} prestado a {name} desde hace {n} semanas",
+    "other": "{title}: tomo {volume} prestado a {name} desde hace {n} semanas"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: el tomo {volume} ya debería haber salido",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: el tomo {volume} ya está en la estantería «{shelf}»",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: tomos {volumes} prestados a {name} desde hace {n} mes",
     "many": "{title}: tomos {volumes} prestados a {name} desde hace {n} meses",
     "other": "{title}: tomos {volumes} prestados a {name} desde hace {n} meses"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: tomos {volumes} prestados a {name} desde hace {n} semana",
+    "many": "{title}: tomos {volumes} prestados a {name} desde hace {n} semanas",
+    "other": "{title}: tomos {volumes} prestados a {name} desde hace {n} semanas"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: los tomos {volumes} ya deberían haber salido",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: los tomos {volumes} ya están en la estantería «{shelf}»",

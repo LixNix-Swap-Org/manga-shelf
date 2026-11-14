@@ -28,6 +28,15 @@ describe('todoText', () => {
     expect(todoText({ kind: 'lent', manga_id: 5, title: 'Naruto', count: 3, volumes: ['4', '5', '6'], lent_to: 'Mia', days: 400 }))
       .toBe('Naruto: Bände 4–6 seit 13 Monaten an Mia verliehen');
   });
+
+  it('counts weeks below a month (short loan periods)', () => {
+    expect(todoText({ kind: 'lent', manga_id: 5, title: 'Naruto', count: 1, volumes: ['4'], lent_to: 'Mia', days: 15 }))
+      .toBe('Naruto: Band 4 seit 2 Wochen an Mia verliehen');
+    expect(todoText({ kind: 'lent', manga_id: 5, title: 'Naruto', count: 2, volumes: ['4', '5'], lent_to: 'Mia', days: 8 }))
+      .toBe('Naruto: Bände 4, 5 seit 1 Woche an Mia verliehen');
+    expect(todoText({ kind: 'lent', manga_id: 5, title: 'Naruto', count: 1, volumes: ['4'], lent_to: 'Mia', days: 31 }))
+      .toBe('Naruto: Band 4 seit 1 Monat an Mia verliehen');
+  });
 });
 
 describe('compactVolumes', () => {

@@ -343,6 +343,7 @@
   "Ausgeliehen an {name}": "Emprestado a {name}",
   "Ausgeliehen an {name} seit {date}": "Emprestado a {name} desde {date}",
   "Ausgeliehen an: {names}": "Emprestado a: {names}",
+  "Ausleihfrist": "Prazo de empréstimo",
   "Ausstehend: {changes}": "Pendente: {changes}",
   "Auswahl": "Seleção",
   "Auswahl aufheben": "Limpar seleção",
@@ -844,7 +845,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "A busca por ISBN precisa de conexão com o servidor.",
   "Die Kamera ließ sich nicht starten.": "Não foi possível iniciar a câmera.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "A câmera está sendo usada por outro app.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "A lista reúne lacunas, volumes em outras estantes e pré-vendas que já deveriam ter saído. Desligada, ela some só para você; os avisos nas séries continuam.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "A lista reúne lacunas, volumes em outras estantes, pré-vendas que já deveriam ter saído e empréstimos longos. Desligada, ela some só para você; os avisos nas séries continuam.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "A lista vem do armazenamento local deste dispositivo (estado de {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "A lista vem do armazenamento local deste dispositivo.",
   "Die Liste wird noch geladen…": "A lista ainda está carregando…",
@@ -1021,6 +1022,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Uma estante, uma pessoa: nada para alternar aqui. Seus filtros salvos estão abaixo.",
   "Ein Tag hat 1 bis {max} Zeichen": "Uma tag tem de 1 a {max} caracteres",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "Um erro de digitação ou uma grafia que deveria ser mesclada?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Um volume emprestado aparece em “A fazer” quando está fora há esse tempo. Vale só para você.",
   "Eine Folge mehr": "Um episódio a mais",
   "Eine Folge mehr gesehen": "Mais um episódio assistido",
   "Eine Folge weniger": "Um episódio a menos",
@@ -1197,7 +1199,9 @@
   "Filme": "Filmes",
   "Filme & Specials": "Filmes e especiais",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Filmes e séries na busca da aba de anime, com pôsteres, temporadas e link do IMDb. Sem chave, não há resultados do TMDB.",
+  "Filter": "Filtros",
   "Filter & Suche zurücksetzen": "Limpar filtros e busca",
+  "Filter ({n} geändert)": "Filtros ({n} alterados)",
   "Filter und Suche zurücksetzen": "Limpar filtros e busca",
   "Filter zurücksetzen": "Limpar filtros",
   "Finanzen": "Finanças",
@@ -2359,6 +2363,7 @@
   "Scanner ist geöffnet…": "O leitor está aberto…",
   "Scanner schließen": "Fechar leitor",
   "Scanner starten": "Iniciar leitor",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Ative “A fazer” para que o lembrete apareça.",
   "Schaue": "Assistindo",
   "Schauen": "Assistindo",
   "Schauen auch: {names}": "Também assistindo: {names}",
@@ -2717,6 +2722,7 @@
   "Ungültige Angabe zum Verleihen": "Dados de empréstimo inválidos",
   "Ungültige AniList-ID": "ID do AniList inválido",
   "Ungültige Anmeldedaten": "Credenciais inválidas",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Prazo de empréstimo inválido (permitido: {allowed} dias)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Seleção inválida (1 a {max_ids} IDs de volume)",
   "Ungültige Backup-Datenbank: {reason}": "Banco de dados de backup inválido: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Número de volume inválido (um número de 0 a {max})",
@@ -3566,6 +3572,11 @@
     "many": "{n} contas precisam de redefinição de senha após a restauração (sem senha no backup): {names}.",
     "other": "{n} contas precisam de redefinição de senha após a restauração (sem senha no backup): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} mês",
+    "many": "{n} meses",
+    "other": "{n} meses"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} lançamento hoje",
     "many": "{n} lançamentos hoje",
@@ -3610,6 +3621,11 @@
     "one": "{n} resultado",
     "many": "{n} de resultados",
     "other": "{n} resultados"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} semana",
+    "many": "{n} semanas",
+    "other": "{n} semanas"
   },
   "{n} abgeschlossen": "{n} concluídos",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3696,12 +3712,22 @@
     "many": "{title}: volume {volume} emprestado a {name} há {n} meses",
     "other": "{title}: volume {volume} emprestado a {name} há {n} meses"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: volume {volume} emprestado a {name} há {n} semana",
+    "many": "{title}: volume {volume} emprestado a {name} há {n} semanas",
+    "other": "{title}: volume {volume} emprestado a {name} há {n} semanas"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: o volume {volume} já deveria ter saído",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: o volume {volume} já está na estante “{shelf}”",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
     "one": "{title}: volumes {volumes} emprestados a {name} há {n} mês",
     "many": "{title}: volumes {volumes} emprestados a {name} há {n} meses",
     "other": "{title}: volumes {volumes} emprestados a {name} há {n} meses"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: volumes {volumes} emprestados a {name} há {n} semana",
+    "many": "{title}: volumes {volumes} emprestados a {name} há {n} semanas",
+    "other": "{title}: volumes {volumes} emprestados a {name} há {n} semanas"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: os volumes {volumes} já deveriam ter saído",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: os volumes {volumes} já estão na estante “{shelf}”",

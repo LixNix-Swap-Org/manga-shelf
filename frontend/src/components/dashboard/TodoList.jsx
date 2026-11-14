@@ -59,9 +59,16 @@ export function todoText(item) {
       : t('{title}: Bände {volumes} sollten erschienen sein', { title, volumes });
   }
   if (item.kind === 'lent') {
-    // the server lists lendings of 90 days and more: "seit 3 Monaten"
-    const months = Math.max(1, Math.floor((Number(item.days) || 0) / 30));
+    // the server lists lendings older than the account's period (two weeks to a year): weeks below a month, else months
+    const days = Number(item.days) || 0;
     const vars = { title, volume, volumes, name: item.lent_to || '' };
+    if (days < 30) {
+      const weeks = Math.max(1, Math.floor(days / 7));
+      return one
+        ? tn('{title}: Band {volume} seit {n} Woche an {name} verliehen', '{title}: Band {volume} seit {n} Wochen an {name} verliehen', weeks, vars)
+        : tn('{title}: Bände {volumes} seit {n} Woche an {name} verliehen', '{title}: Bände {volumes} seit {n} Wochen an {name} verliehen', weeks, vars);
+    }
+    const months = Math.floor(days / 30);
     return one
       ? tn('{title}: Band {volume} seit {n} Monat an {name} verliehen', '{title}: Band {volume} seit {n} Monaten an {name} verliehen', months, vars)
       : tn('{title}: Bände {volumes} seit {n} Monat an {name} verliehen', '{title}: Bände {volumes} seit {n} Monaten an {name} verliehen', months, vars);

@@ -349,6 +349,7 @@
   "Ausgeliehen an {name}": "Pożyczone dla: {name}",
   "Ausgeliehen an {name} seit {date}": "Pożyczone dla: {name} od {date}",
   "Ausgeliehen an: {names}": "Pożyczone dla: {names}",
+  "Ausleihfrist": "Okres wypożyczenia",
   "Ausstehend: {changes}": "Oczekuje: {changes}",
   "Auswahl": "Wybór",
   "Auswahl aufheben": "Wyczyść zaznaczenie",
@@ -864,7 +865,7 @@
   "Die ISBN-Suche braucht eine Verbindung zum Server.": "Wyszukiwanie ISBN wymaga połączenia z serwerem.",
   "Die Kamera ließ sich nicht starten.": "Nie udało się uruchomić aparatu.",
   "Die Kamera wird gerade von einer anderen App benutzt.": "Aparat jest właśnie używany przez inną aplikację.",
-  "Die Liste sammelt Lücken, Bände aus anderen Regalen und Vorbestellungen, die erschienen sein sollten. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Lista zbiera luki, tomy z innych półek i zamówienia przedpremierowe, które powinny już wyjść. Wyłączona znika tylko dla ciebie; uwagi przy seriach zostają.",
+  "Die Liste sammelt Lücken, Bände aus anderen Regalen, Vorbestellungen, die erschienen sein sollten, und lange Ausleihen. Ausgeschaltet verschwindet sie nur für dich; die Hinweise an den Reihen bleiben.": "Lista zbiera luki, tomy z innych półek, zamówienia przedpremierowe, które powinny już wyjść, i długie wypożyczenia. Wyłączona znika tylko dla ciebie; uwagi przy seriach zostają.",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt (Stand: {stand}).": "Lista pochodzi z lokalnej pamięci tego urządzenia (stan: {stand}).",
   "Die Liste wird aus dem lokalen Speicher dieses Geräts bereitgestellt.": "Lista pochodzi z lokalnej pamięci tego urządzenia.",
   "Die Liste wird noch geladen…": "Lista jest jeszcze wczytywana…",
@@ -1043,6 +1044,7 @@
   "Ein Regal, eine Person: Hier gibt es nichts umzuschalten. Gemerkte Filter findest du unten.": "Jedna półka, jedna osoba: nie ma tu nic do przełączania. Zapisane filtry są poniżej.",
   "Ein Tag hat 1 bis {max} Zeichen": "Tag ma od 1 do {max} znaków",
   "Ein Tippfehler oder eine Schreibweise, die zusammengeführt werden sollte?": "Literówka lub zapis, który należałoby scalić?",
+  "Ein verliehener Band erscheint unter „Zu erledigen“, wenn er so lange weg ist. Gilt nur für dich.": "Wypożyczony tom pojawi się w „Do zrobienia”, gdy nie ma go tak długo. Dotyczy tylko ciebie.",
   "Eine Folge mehr": "Jeden odcinek więcej",
   "Eine Folge mehr gesehen": "Obejrzano o jeden odcinek więcej",
   "Eine Folge weniger": "Jeden odcinek mniej",
@@ -1220,7 +1222,9 @@
   "Filme": "Filmy",
   "Filme & Specials": "Filmy i odcinki specjalne",
   "Filme und Serien in der Suche des Anime-Tabs, mit Postern, Staffeln und IMDb-Link. Ohne Schlüssel gibt es keine TMDB-Treffer.": "Filmy i seriale w wyszukiwarce zakładki Anime, z plakatami, sezonami i linkiem do IMDb. Bez klucza nie ma wyników z TMDB.",
+  "Filter": "Filtry",
   "Filter & Suche zurücksetzen": "Zresetuj filtry i wyszukiwanie",
+  "Filter ({n} geändert)": "Filtry (zmienione: {n})",
   "Filter und Suche zurücksetzen": "Zresetuj filtry i wyszukiwanie",
   "Filter zurücksetzen": "Zresetuj filtry",
   "Finanzen": "Finanse",
@@ -2398,6 +2402,7 @@
   "Scanner ist geöffnet…": "Skaner jest otwarty…",
   "Scanner schließen": "Zamknij skaner",
   "Scanner starten": "Uruchom skaner",
+  "Schalte „Zu erledigen“ ein, damit die Erinnerung erscheint.": "Włącz „Do zrobienia”, aby przypomnienie się pojawiło.",
   "Schaue": "Oglądam",
   "Schauen": "Oglądane",
   "Schauen auch: {names}": "Oglądają też: {names}",
@@ -2761,6 +2766,7 @@
   "Ungültige Angabe zum Verleihen": "Nieprawidłowe dane pożyczki",
   "Ungültige AniList-ID": "Nieprawidłowe ID AniList",
   "Ungültige Anmeldedaten": "Nieprawidłowe dane logowania",
+  "Ungültige Ausleihfrist (erlaubt: {allowed} Tage)": "Nieprawidłowy okres wypożyczenia (dozwolone: {allowed} dni)",
   "Ungültige Auswahl (1 bis {max_ids} Band-IDs)": "Nieprawidłowy wybór (od 1 do {max_ids} ID tomów)",
   "Ungültige Backup-Datenbank: {reason}": "Nieprawidłowa baza danych kopii zapasowej: {reason}",
   "Ungültige Bandnummer (Zahl von 0 bis {max})": "Nieprawidłowy numer tomu (liczba od 0 do {max})",
@@ -3651,6 +3657,12 @@
     "many": "{n} kont wymaga po przywróceniu resetu hasła (brak hasła w kopii zapasowej): {names}.",
     "other": "{n} konta wymaga po przywróceniu resetu hasła (brak hasła w kopii zapasowej): {names}."
   },
+  "{n} Monat|{n} Monate": {
+    "one": "{n} miesiąc",
+    "few": "{n} miesiące",
+    "many": "{n} miesięcy",
+    "other": "{n} miesiąca"
+  },
   "{n} Neuerscheinung heute|{n} Neuerscheinungen heute": {
     "one": "{n} nowość dziś",
     "few": "{n} nowości dziś",
@@ -3704,6 +3716,12 @@
     "few": "{n} wyniki",
     "many": "{n} wyników",
     "other": "{n} wyniku"
+  },
+  "{n} Woche|{n} Wochen": {
+    "one": "{n} tydzień",
+    "few": "{n} tygodnie",
+    "many": "{n} tygodni",
+    "other": "{n} tygodnia"
   },
   "{n} abgeschlossen": "{n} ukończonych",
   "{n} eigene Staffel|{n} eigene Staffeln": {
@@ -3799,6 +3817,12 @@
     "many": "{title}: tom {volume} pożyczony {name} od {n} miesięcy",
     "other": "{title}: tom {volume} pożyczony {name} od {n} miesiąca"
   },
+  "{title}: Band {volume} seit {n} Woche an {name} verliehen|{title}: Band {volume} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: tom {volume} pożyczony {name} od {n} tygodnia",
+    "few": "{title}: tom {volume} pożyczony {name} od {n} tygodni",
+    "many": "{title}: tom {volume} pożyczony {name} od {n} tygodni",
+    "other": "{title}: tom {volume} pożyczony {name} od {n} tygodnia"
+  },
   "{title}: Band {volume} sollte erschienen sein": "{title}: tom {volume} powinien już być wydany",
   "{title}: Band {volume} steht schon im Regal „{shelf}“": "{title}: tom {volume} jest już na półce „{shelf}”",
   "{title}: Bände {volumes} seit {n} Monat an {name} verliehen|{title}: Bände {volumes} seit {n} Monaten an {name} verliehen": {
@@ -3806,6 +3830,12 @@
     "few": "{title}: tomy {volumes} pożyczone {name} od {n} miesięcy",
     "many": "{title}: tomy {volumes} pożyczone {name} od {n} miesięcy",
     "other": "{title}: tomy {volumes} pożyczone {name} od {n} miesiąca"
+  },
+  "{title}: Bände {volumes} seit {n} Woche an {name} verliehen|{title}: Bände {volumes} seit {n} Wochen an {name} verliehen": {
+    "one": "{title}: tomy {volumes} pożyczone {name} od {n} tygodnia",
+    "few": "{title}: tomy {volumes} pożyczone {name} od {n} tygodni",
+    "many": "{title}: tomy {volumes} pożyczone {name} od {n} tygodni",
+    "other": "{title}: tomy {volumes} pożyczone {name} od {n} tygodnia"
   },
   "{title}: Bände {volumes} sollten erschienen sein": "{title}: tomy {volumes} powinny już być wydane",
   "{title}: Bände {volumes} stehen schon im Regal „{shelf}“": "{title}: tomy {volumes} są już na półce „{shelf}”",
