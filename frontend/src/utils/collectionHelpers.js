@@ -238,11 +238,12 @@ export const getCollectCounts = (mangas) => {
   return counts;
 };
 
-const authorKey = (name) => String(name || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+const normalizeAuthor = (name) => String(name || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 
 export const matchesAuthor = (m, author) => {
-  const key = authorKey(author);
-  return !key || splitAuthors(m?.author).some(a => authorKey(a) === key);
+  const authors = splitAuthors(m?.author);
+  const key = normalizeAuthor(author);
+  return !key || authors.some(a => normalizeAuthor(a) === key);
 };
 
 /** Genres/tags of the collection with series counts for the toolbar: [{ tag, count }], most used first. */
