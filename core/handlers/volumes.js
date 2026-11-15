@@ -409,6 +409,9 @@ function update(ctx, { params, body }) {
         WHERE id = ?
     `);
 
+    const ownerId = Object.prototype.hasOwnProperty.call(body, 'owner_user_id')
+        ? resolveVolumeOwner(ctx, body, access.volumeAccess(ctx, vol.id, 'editor'))
+        : ctx.user.id;
     ctx.db.transaction(() => {
         // Owner rows copied the volume's price/date/condition; those still holding the old value follow the correction,
         // a different value set per owner stays
@@ -418,7 +421,7 @@ function update(ctx, { params, body }) {
         stmt.run(volume_number, isbn, price, release_date, release_year, condition, pages, publisher, purchase_date, status, notes, cover_image, imagesVal, volType, priority, target_price, language.value, sortAfterFor(volType, sortAfter.value ?? null), vol.id);
         // the edition fields go to the catalog or stay local to this shelf (core/lib/catalogWrite.js)
         catalogWrite.commit(ctx, 'volume', vol);
-        syncOwnersWithStatus(ctx.db, vol.id, ctx.user.id);
+        syncOwnersWithStatus(ctx.db, vol.id, ownerId);
         if (markAsRead && status === OWNED_STATUS) markRead(ctx.db, vol.id, ctx.user.id);
         touchVolumes(ctx, vol.id);
     });

@@ -654,4 +654,51 @@ describe('AddMangaModal: three steps', () => {
     expect(callsTo(fetchFn, 'POST /api/volumes/batch').map((call) => bodyOf(call).status)).toEqual(['Vorhanden', 'Vorhanden']);
 
   });
+
+  it('shows "Für wen?" in step "Bände" from shelf people and sends owner_user_id only for owned runs', async () => {
+    const fetchFn = mockFetch({
+      'GET /api/shelves': () => json(200, {
+        shelves: [{
+          id: 1, name: 'Sammlung', role: 'owner', is_default: true,
+          people: [{ user_id: 1, username: 'admin', role: 'admin' }, { user_id: 2, username: 'anna', role: 'editor' }]
+        }]
+      }),
+      'POST /api/mangas': () => json(200, { success: true, id: 55 }),
+      'POST /api/volumes/batch': () => json(200, { success: true, created: 1, skipped: [] })
+    });
+    const { onSuccess } = renderModal({ user: { id: 1, role: 'admin', username: 'admin' } });
+    fireEvent.change(titleInput(), { target: { value: 'Dandadan' } });
+    fireEvent.click(stepButton('Bände'));
+    fireEvent.change(screen.getByLabelText('Erschienene Bände'), { target: { value: '3' } });
+    const select = await screen.findByLabelText('Für wen?');
+    fireEvent.change(select, { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Band 1' }));
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(callsTo(fetchFn, 'POST /api/volumes/batch').map(bodyOf)).toEqual([
+      expect.objectContaining({ from: 1, to: 1, status: 'Vorhanden', owner_user_id: 2 }),
+      { manga_id: 55, from: 2, to: 3, status: 'Fehlt', publisher: null }
+    ]);
+  });
+
+  it('shows "Für wen?" for a prefilled scanned volume when no batch count is entered', async () => {
+    const fetchFn = mockFetch({
+      'GET /api/shelves': () => json(200, { shelves: [] }),
+      'POST /api/mangas': () => json(200, { success: true, id: 56 }),
+      'POST /api/volumes': () => json(200, { success: true, id: 101 })
+    });
+    const { onSuccess } = renderModal({
+      prefill: scanPrefill(),
+      user: { id: 1, role: 'admin', username: 'admin' },
+      people: [{ user_id: 1, username: 'admin', role: 'admin' }, { user_id: 2, username: 'anna', role: 'editor' }]
+    });
+    fireEvent.click(stepButton('Bände'));
+    const select = screen.getByLabelText('Für wen?');
+    fireEvent.change(select, { target: { value: 'nobody' } });
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(bodyOf(callsTo(fetchFn, 'POST /api/volumes')[0])).toEqual(expect.objectContaining({
+      manga_id: 56, volume_number: '3', status: 'Vorhanden', owner_user_id: null
+    }));
+  });
 });

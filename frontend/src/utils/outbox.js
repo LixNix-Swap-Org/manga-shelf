@@ -74,7 +74,9 @@ export function normalizeOutboxEntry(raw, { now = Date.now() } = {}) {
     volumeId,
     userId: raw.userId,
     serverId: String(raw.serverId),
-    targetUserId: hasValue(raw.targetUserId) ? raw.targetUserId : raw.userId,
+    targetUserId: raw.kind === 'purchase' && raw.targetUserId === null
+      ? null
+      : (hasValue(raw.targetUserId) ? raw.targetUserId : raw.userId),
     value,
     ts: Number.isFinite(raw.ts) ? raw.ts : now,
     id: typeof raw.id === 'string' && raw.id ? raw.id : newId(now),
@@ -105,6 +107,11 @@ export function outboxRequest(entry) {
     return { path: `${base}/read`, method: 'POST', body };
   }
   if (entry.kind === 'status') return { path: base, method: 'PUT', body: { status: entry.value } };
+  if (entry.kind === 'purchase' && entry.targetUserId === null) {
+    const body = { status: 'Vorhanden', owner_user_id: null };
+    if (entry.purchase_date) body.purchase_date = entry.purchase_date;
+    return { path: base, method: 'PUT', body };
+  }
   const body = { owned: entry.value };
   if (entry.value && entry.purchase_date) body.purchase_date = entry.purchase_date;
   if (String(entry.targetUserId) !== String(entry.userId)) body.user_id = entry.targetUserId;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getVolumeDisplayTitle } from '../../utils/volumeHelpers';
+import { getVolumeDisplayTitle, FOR_ME, ownerOptions, ownerBody } from '../../utils/volumeHelpers';
 import {
   classifyShopScan, classifyShopScanOffline, classifyLocalHit, localSourceNote, lookupFailureKind, canStartLookup,
   mergeScanEntry, normalizeBuyOutcome, shouldStopBooking, applyBookingResults, markScanBooking, bookingSummary, isBookable,
@@ -85,9 +85,23 @@ export default function ShoppingListView({
   user = null,
   shelfName = null,
   onClearShelf,
-  readOnlySeries = null
+  readOnlySeries = null,
+  people = null
 }) {
   const userId = user?.id ?? null;
+  const ownerChoices = useMemo(() => ownerOptions(people, user), [people, user]);
+  const [forWhom, setForWhom] = useState(FOR_ME);
+  const forWhomRef = useRef(FOR_ME);
+  const selectOwner = useCallback((next) => {
+    forWhomRef.current = next;
+    setForWhom(next);
+  }, []);
+  useEffect(() => {
+    if (forWhom !== FOR_ME && !ownerChoices.some((o) => o.value === forWhom)) {
+      forWhomRef.current = FOR_ME;
+      setForWhom(FOR_ME);
+    }
+  }, [forWhom, ownerChoices]);
   const items = useMemo(() => shoppingData?.items || [], [shoppingData]);
   // ?scan=1 (app shortcut "Barcode scannen"): a big camera button, since a file input only opens on a tap
   const [searchParams, setSearchParams] = useSearchParams();
@@ -195,6 +209,7 @@ export default function ShoppingListView({
   const [deferred, setDeferred] = useState([]);
   const deferredTimers = useRef(new Map());
   const deferredToasts = useRef(new Map());
+  const deferredOwners = useRef(new Map());
   const [inFlight, setInFlight] = useState(() => new Set());
   const quickBuyRef = useRef(handleQuickBuy);
   quickBuyRef.current = handleQuickBuy;
@@ -203,6 +218,7 @@ export default function ShoppingListView({
     if (!deferredTimers.current.has(id)) return false;
     clearTimeout(deferredTimers.current.get(id));
     deferredTimers.current.delete(id);
+    deferredOwners.current.delete(id);
     // forget the toast before announcing the dismiss, so the eviction listener below ignores our own dismiss
     const toastId = deferredToasts.current.get(id);
     deferredToasts.current.delete(id);
@@ -214,11 +230,16 @@ export default function ShoppingListView({
   // id -> running single quick buy, so a batch booking waits for it instead of buying twice
   const commitsRef = useRef(new Map());
   const commitBuy = useCallback((id) => {
+    const choice = deferredOwners.current.get(id) || FOR_ME;
     if (!dropDeferred(id)) return commitsRef.current.get(id) || null;
     setInFlight((prev) => new Set(prev).add(id));
     const run = (async () => {
       try {
-        return await quickBuyRef.current(id);
+        const extra = ownerBody(choice);
+        const hasOwner = Object.prototype.hasOwnProperty.call(extra, 'owner_user_id');
+        return hasOwner
+          ? await quickBuyRef.current(id, { targetUserId: extra.owner_user_id })
+          : await quickBuyRef.current(id);
       } finally {
         commitsRef.current.delete(id);
         setInFlight((prev) => withoutId(prev, id));
@@ -241,6 +262,7 @@ export default function ShoppingListView({
 
   const startBuy = (item) => {
     if (deferredTimers.current.has(item.id) || inFlight.has(item.id)) return;
+    deferredOwners.current.set(item.id, forWhomRef.current);
     deferredTimers.current.set(item.id, setTimeout(() => commitBuy(item.id), UNDO_MS));
     const toastId = notify.success(t('„{title} {volume}“ als gekauft markiert', { title: item.manga_title, volume: getVolumeDisplayTitle(item) }), {
       duration: UNDO_MS,
@@ -274,11 +296,23 @@ export default function ShoppingListView({
   const basket = basketTotals(buyable);
   /** One booking: list volumes through the quick buy (and its undo window), others as an own purchase or a new volume. */
   const bookEntry = (entry) => {
-    if (entry.kind === 'add') return handleAddBought({ mangaId: entry.mangaId, volume: entry.volume }, { batch: true });
-    if (entry.kind === 'claim') return handleQuickBuy(entry.volumeId, { batch: true, mangaId: entry.mangaId });
+    const extra = ownerBody(forWhomRef.current);
+    const hasOwner = Object.prototype.hasOwnProperty.call(extra, 'owner_user_id');
+    if (entry.kind === 'add') {
+      return handleAddBought(
+        { mangaId: entry.mangaId, volume: entry.volume },
+        hasOwner ? { batch: true, owner_user_id: extra.owner_user_id } : { batch: true }
+      );
+    }
+    if (entry.kind === 'claim') {
+      return handleQuickBuy(
+        entry.volumeId,
+        hasOwner ? { batch: true, mangaId: entry.mangaId, targetUserId: extra.owner_user_id } : { batch: true, mangaId: entry.mangaId }
+      );
+    }
     // a 'Gekauft' tap still in its undo window is cancelled only now; entries after a stop keep theirs
     const single = dropDeferred(entry.itemId) ? null : commitsRef.current.get(entry.itemId);
-    return single || handleQuickBuy(entry.itemId, { batch: true });
+    return single || handleQuickBuy(entry.itemId, hasOwner ? { batch: true, targetUserId: extra.owner_user_id } : { batch: true });
   };
   const bookAll = async () => {
     if (booking) return;
@@ -622,6 +656,9 @@ export default function ShoppingListView({
           onClear={clearScanned}
           onRecheck={(isbn) => handleBarcodeScan(isbn, { network: true })}
           onRemove={(isbn) => updateScanned((prev) => removeScanEntry(prev, isbn))}
+          ownerChoices={ownerChoices}
+          forWhom={forWhom}
+          onForWhom={selectOwner}
         />
       )}
 
@@ -735,6 +772,18 @@ export default function ShoppingListView({
             )}
           </div>
         </div>
+
+        {canEdit && ownerChoices.length > 0 && (
+          <select
+            id="shop-for-whom"
+            aria-label={t('Für wen?')}
+            value={forWhom}
+            onChange={(e) => selectOwner(e.target.value)}
+            className="input-field !w-auto !py-1.5 text-xs shrink-0"
+          >
+            {ownerChoices.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+          </select>
+        )}
 
         <button
           type="button"

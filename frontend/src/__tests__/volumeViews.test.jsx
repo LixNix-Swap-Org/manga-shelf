@@ -448,6 +448,46 @@ describe('OwnerBadges', () => {
     const { container } = render(<OwnerBadges multiUser vol={{ owners: [{ user_id: 1, username: 'alex' }] }} />);
     expect(container.querySelector('[data-owner-badges]').textContent).toBe('Al');
   });
+
+  it('opens an owner toggle popover for admins, toggles members without bubbling to card edit, and closes on Escape / outside click', () => {
+    const onToggleOwner = vi.fn();
+    const onCardClick = vi.fn();
+    const people = [
+      { user_id: 1, username: 'alex', role: 'owner', app_role: 'admin' },
+      { user_id: 2, username: 'mia', role: 'editor', app_role: 'editor' },
+      { user_id: 3, username: 'gast', role: 'viewer', app_role: 'visitor' }
+    ];
+    render(
+      <div>
+        <button type="button">Outside</button>
+        <div onClick={onCardClick}>
+          <OwnerBadges
+            multiUser
+            vol={{ id: 42, owners: [{ user_id: 1, username: 'alex' }] }}
+            people={people}
+            onToggleOwner={onToggleOwner}
+          />
+        </div>
+      </div>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
+    const popover = document.querySelector('[data-owner-popover]');
+    expect(popover).toBeTruthy();
+    expect(onCardClick).not.toHaveBeenCalled();
+    expect(within(popover).queryByText('gast')).toBeNull();
+
+    fireEvent.click(within(popover).getByRole('button', { name: /mia/ }));
+    expect(onToggleOwner).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), 2);
+    expect(onCardClick).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.querySelector('[data-owner-popover]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
+    expect(document.querySelector('[data-owner-popover]')).toBeTruthy();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Outside' }));
+    expect(document.querySelector('[data-owner-popover]')).toBeNull();
+  });
 });
 
 describe('selection mode of the volume views', () => {

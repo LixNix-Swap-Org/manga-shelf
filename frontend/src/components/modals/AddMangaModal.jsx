@@ -1,7 +1,8 @@
 // Add-series dialog: lookup search, manual form and cover; also creates a volume scanned by ISBN.
-import { useState, useEffect, useRef, useId } from 'react';
+import { useState, useEffect, useRef, useId, useMemo } from 'react';
 import { Plus, X, Sparkles, RefreshCw, TriangleExclamationPoint, Upload, ScanBarcode } from 'lucide-react';
 import { buildScanVolumePayload } from '../../utils/scanHelpers';
+import { FOR_ME, ownerOptions, ownerBody } from '../../utils/volumeHelpers';
 import { MANGA_STATUSES, lookupMangaUrl } from '../../hooks/useMangaData';
 import { UPLOAD_CANCELLED } from '../../hooks/useVolumeActions';
 import useDialogA11y from '../../hooks/useDialogA11y';
@@ -33,7 +34,7 @@ export { sameTitleSeries };
 // prefill: { form, volume } from an ISBN scan (utils/scanHelpers.js buildScanPrefill); also creates the scanned volume.
 // onSeriesCreated(manga) fires when the series exists but the dialog stays open because the scanned volume failed.
 
-export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCreated, prefill = null, mangas = null, onOpenExisting = null }) {
+export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCreated, prefill = null, mangas = null, onOpenExisting = null, user = null, people = null }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [shelves, setShelves] = useState([]);
@@ -64,6 +65,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   const [typedCount, setTypedCount] = useState('');
   const [ownedVolumes, setOwnedVolumes] = useState(() => new Set());
   const [missingRest, setMissingRest] = useState(true);
+  const [forWhom, setForWhom] = useState(FOR_ME);
   const stepHeadingRef = useRef(null);
   const stepMovedRef = useRef(false);
   const uploadAbortRef = useRef(null);
@@ -107,6 +109,7 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
     setTypedCount('');
     setOwnedVolumes(new Set());
     setMissingRest(true);
+    setForWhom(FOR_ME);
 
     // Catalogue cover (Open Library): cache it locally; if there is none, drop it instead of saving a dead link.
     // Submit awaits the same promise, so a quick submit never stores the remote URL.
@@ -282,12 +285,22 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
   };
 
   /** Creates the scanned volume; resolves to null on success or to the error text. */
+  const selectedShelf = shelves.find((s) => String(s.id) === String(shelfId)) || shelves.find((s) => s.is_default) || shelves[0];
+  const shelfPeople = Array.isArray(selectedShelf?.people) ? selectedShelf.people : people;
+  const ownerChoices = useMemo(() => ownerOptions(shelfPeople, user), [shelfPeople, user]);
+  useEffect(() => {
+    if (forWhom !== FOR_ME && !ownerChoices.some((o) => o.value === forWhom)) {
+      setForWhom(FOR_ME);
+    }
+  }, [forWhom, ownerChoices]);
+
   const createScanVolume = async (mangaId, isRetry) => {
     let res;
     try {
+      const owner = scanVolume?.status !== 'Fehlt' ? ownerBody(forWhom) : {};
       res = await apiFetch('/api/volumes', {
         method: 'POST',
-        body: buildScanVolumePayload(mangaId, scanVolume)
+        body: { ...buildScanVolumePayload(mangaId, scanVolume), ...owner }
       });
     } catch {
       return t('Netzwerkfehler – bitte Verbindung prüfen');
@@ -310,7 +323,14 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
       try {
         res = await apiFetch('/api/volumes/batch', {
           method: 'POST',
-          body: { manga_id: manga.id, from: run.from, to: run.to, status: run.status, publisher: form.publisher.trim() || null },
+          body: {
+            manga_id: manga.id,
+            from: run.from,
+            to: run.to,
+            status: run.status,
+            publisher: form.publisher.trim() || null,
+            ...(run.status === 'Vorhanden' ? ownerBody(forWhom) : {})
+          },
           timeout: TIMEOUTS.long
         });
       } catch {
@@ -826,6 +846,9 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
               onMissingRest={setMissingRest}
               skip={scanVolume?.enabled ? scanVolume.volume_number : null}
               disabled={submitting}
+              ownerChoices={ownerChoices}
+              forWhom={forWhom}
+              onForWhom={setForWhom}
             />
 
             <fieldset disabled={seriesLocked} className="min-w-0 disabled:opacity-60">
@@ -892,6 +915,20 @@ export default function AddMangaModal({ isOpen, onClose, onSuccess, onSeriesCrea
                         <option value="Fehlt">{t('Fehlt (Einkaufsliste)')}</option>
                       </select>
                     </div>
+                    {volumeCount === 0 && scanVolume.status === 'Vorhanden' && ownerChoices.length > 0 && (
+                      <div className="col-span-2">
+                        <label htmlFor={`${ids}-scan-for-whom`} className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">{t('Für wen?')}</label>
+                        <select
+                          id={`${ids}-scan-for-whom`}
+                          className="input-field max-w-xs"
+                          value={forWhom}
+                          onChange={(e) => setForWhom(e.target.value)}
+                          disabled={submitting}
+                        >
+                          {ownerChoices.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+                        </select>
+                      </div>
+                    )}
                     <p className="col-span-2 text-[11px] text-slate-400">
                       {t('ISBN {details} werden mit übernommen.', {
                         details: `${scanVolume.isbn || '–'}${scanVolume.price ? ` · ${scanVolume.price} €` : ''}${scanVolume.pages ? ` · ${t('{pages} Seiten', { pages: scanVolume.pages })}` : ''}${scanVolume.release_year ? ` · ${scanVolume.release_year}` : ''}`

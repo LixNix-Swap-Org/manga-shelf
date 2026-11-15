@@ -96,16 +96,23 @@ export function notifyTrashed(label, trashId, onDone) {
  * The outbox change of an owned-toggle click: { kind, value, purchase_date? }. With owners it switches the user's own
  * ownership; without, a missing volume becomes the user's and an owned one (old data) goes back to 'Fehlt'.
  */
-export function ownedToggleChange(vol, user, today = localDateString()) {
+export function ownedToggleChange(vol, user, today = localDateString(), targetUserId = undefined) {
   const owners = Array.isArray(vol.owners) ? vol.owners : [];
+  const hasOtherTarget = targetUserId !== undefined && targetUserId !== null && String(targetUserId) !== String(user?.id);
   if (vol.status === 'Vorhanden' && owners.length > 0) {
+    if (hasOtherTarget) {
+      const ownedByTarget = owners.some((o) => String(o.user_id) === String(targetUserId));
+      return { kind: 'owned', value: !ownedByTarget, targetUserId };
+    }
     const mine = typeof vol.owned_by_me === 'boolean' ? vol.owned_by_me : owners.some((o) => String(o.user_id) === String(user?.id));
     return { kind: 'owned', value: !mine };
   }
   if (vol.status !== 'Vorhanden') {
     // someone may have bought it meanwhile: their date stays theirs
-    return owners.length > 0 && vol.purchase_date ? { kind: 'owned', value: true } : { kind: 'owned', value: true, purchase_date: today };
+    const extra = hasOtherTarget ? { targetUserId } : {};
+    return owners.length > 0 && vol.purchase_date ? { kind: 'owned', value: true, ...extra } : { kind: 'owned', value: true, purchase_date: today, ...extra };
   }
+  if (hasOtherTarget) return { kind: 'owned', value: true, targetUserId };
   return { kind: 'status', value: 'Fehlt' };
 }
 
@@ -342,10 +349,13 @@ export default function useVolumeActions({
     }
   });
 
-  const handleToggleVolume = (vol) => {
+  const handleToggleVolume = (vol, targetUserId) => {
     if (!canToggleOwned) return undefined;
+    if (targetUserId !== undefined && targetUserId !== null && !canToggleOthers && String(targetUserId) !== String(user?.id)) {
+      return undefined;
+    }
     return withVolumeLock(vol.id, async () => {
-      const change = { ...ownedToggleChange(vol, user), volumeId: vol.id, mangaId: id };
+      const change = { ...ownedToggleChange(vol, user, localDateString(), targetUserId), volumeId: vol.id, mangaId: id };
       const data = await submitToggle(change, t(STATUS_FAILED));
       if (data?.removed_owner && change.kind === 'owned' && change.value === false) {
         notify.success(t('„{title}“ nicht mehr im Besitz', { title: getVolumeDisplayTitle(vol) }), {

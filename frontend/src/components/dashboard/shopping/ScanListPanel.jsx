@@ -14,12 +14,24 @@ export const KIND_STYLE = {
   offline: [WifiOff, 'text-amber-300'], pending: [Clock, 'text-slate-400']
 };
 
-export default function ScanListPanel({ scanned, canEdit, buyable, basket, booking, bookingNote, isOfflineMode, onBookAll, onClear, onRecheck, onRemove }) {
+export default function ScanListPanel({ scanned, canEdit, buyable, basket, booking, bookingNote, isOfflineMode, onBookAll, onClear, onRecheck, onRemove, ownerChoices = [], forWhom = '', onForWhom = null }) {
   return (
     <div className="glass-panel p-4 rounded-2xl border border-emerald-500/30 space-y-3" id="shop-scan-list">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-bold text-white">{t('Gescannt ({count})', { count: scanned.length })}</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && buyable.length > 0 && ownerChoices.length > 0 && onForWhom && (
+            <select
+              id="shop-scan-for-whom"
+              aria-label={t('Für wen?')}
+              value={forWhom}
+              onChange={(e) => onForWhom(e.target.value)}
+              disabled={booking}
+              className="input-field !w-auto !py-1.5 text-xs"
+            >
+              {ownerChoices.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+            </select>
+          )}
           {canEdit && buyable.length > 0 && (
             <button
               type="button"

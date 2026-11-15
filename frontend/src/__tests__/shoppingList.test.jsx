@@ -11,6 +11,8 @@ import { fakeResponse, htmlResponse } from './fakeResponse';
 import Toaster from '../components/common/Toaster';
 import { recordToasts } from './toastLog';
 import { notify } from '../utils/notify';
+import { outboxRequest } from '../utils/outbox';
+import { patchVolume } from '../utils/volumePatch';
 
 // The offline copy's ISBN index: `localHits` maps an ISBN to what lookupLocalIsbn answers
 const localHits = vi.hoisted(() => new Map());
@@ -1062,5 +1064,75 @@ describe('ShoppingListView: owned in another own shelf', () => {
     expect(entry.dataset.kind).toBe('buy');
     expect(entry.querySelector('[data-elsewhere]').textContent).toBe(warning);
     expect(screen.getByRole('button', { name: '1 als gekauft abhaken' })).toBeTruthy();
+  });
+});
+
+describe('ShoppingListView & ScanListPanel: "Für wen?" owner selection', () => {
+  const people = [
+    { user_id: 1, username: 'admin', role: 'admin' },
+    { user_id: 2, username: 'anna', role: 'editor' }
+  ];
+  const adminUser = { id: 1, role: 'admin', username: 'admin' };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('passes targetUserId for another member or null for household purchases from list & scan panel', async () => {
+    localStorage.removeItem(SCAN_LIST_KEY);
+    vi.stubGlobal('fetch', vi.fn(async () => response(200, {
+      isbn: '9783551000097', found: true, book: { title: 'Berserk', volume_number: '3', volume_number_known: true },
+      matched_manga: { id: 9, title: 'Berserk' }, matched_volume: null
+    })));
+    const handleAddBought = vi.fn(async () => 'ok');
+    const p = props({
+      user: adminUser,
+      people,
+      handleAddBought,
+      shoppingData: list([row({ id: 1 }), row({ id: 2, volume_number: '2', isbn: '9783551000028' })])
+    });
+    renderView(p);
+
+    const listSelect = document.getElementById('shop-for-whom');
+    expect(listSelect).toBeTruthy();
+    fireEvent.change(listSelect, { target: { value: '2' } });
+
+    await scan('9783551000097');
+    const scanSelect = document.getElementById('shop-scan-for-whom');
+    expect(scanSelect.value).toBe('2');
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Gekauft/ })[0]);
+    await act(async () => { await runBeforeLogout(); });
+    expect(p.handleQuickBuy).toHaveBeenCalledWith(1, { targetUserId: 2 });
+
+    fireEvent.change(scanSelect, { target: { value: 'nobody' } });
+    expect(listSelect.value).toBe('nobody');
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Gekauft/ })[1]);
+    await act(async () => { await runBeforeLogout(); });
+    expect(p.handleQuickBuy).toHaveBeenCalledWith(2, { targetUserId: null });
+
+    fireEvent.click(screen.getByRole('button', { name: '1 als gekauft abhaken' }));
+    await flush();
+    expect(handleAddBought).toHaveBeenCalledWith(
+      expect.objectContaining({ mangaId: 9 }),
+      { batch: true, owner_user_id: null }
+    );
+  });
+
+  it('outboxRequest and patchVolume support household purchases (targetUserId: null)', () => {
+    expect(outboxRequest({
+      kind: 'purchase', volumeId: 7, userId: 1, targetUserId: null, value: true, purchase_date: '2026-11-15'
+    })).toEqual({
+      path: '/api/volumes/7',
+      method: 'PUT',
+      body: { status: 'Vorhanden', owner_user_id: null, purchase_date: '2026-11-15' }
+    });
+    const patched = patchVolume(
+      { id: 7, status: 'Fehlt', owners: [], owned_by_me: false, purchase_date: null },
+      { kind: 'purchase', targetUserId: null, purchase_date: '2026-11-15' },
+      { detail: null, me: { id: 1 } }
+    );
+    expect(patched).toEqual({
+      id: 7, status: 'Vorhanden', owners: [], owned_by_me: false, purchase_date: '2026-11-15'
+    });
   });
 });
