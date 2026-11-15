@@ -69,6 +69,29 @@ export function openDatabase(SQL, bytes, { live = false } = {}) {
   }
 }
 
+// planner statistics (sqlite_stat1), as services/scheduler.js keeps them on the server: without them SQLite picks a scan
+// plan for the self-join of the shopping list and "Zu erledigen" that takes seconds on a large collection
+const PLANNER_STATS_SQL = 'SELECT tbl, idx, stat FROM sqlite_stat1 ORDER BY tbl, idx';
+
+/**
+ * PRAGMA optimize on the connection: analyses (on a sample) only the tables that were never analysed or changed a lot
+ * since. Runs through prepare(), which trackWrites does not count as a write; true when the statistics changed, so
+ * the caller saves them with the file.
+ */
+export function refreshPlannerStats(conn) {
+  const read = () => {
+    try {
+      return JSON.stringify(conn.prepare(PLANNER_STATS_SQL).all());
+    } catch (_) {
+      return '';
+    }
+  };
+  const before = read();
+  conn.prepare('PRAGMA analysis_limit = 1000').all();
+  conn.prepare('PRAGMA optimize = 0x10002').all();
+  return read() !== before;
+}
+
 const profileOf = (row) => (row ? { id: row.id, username: row.username, role: 'admin' } : null);
 
 /**
@@ -408,13 +431,15 @@ export async function createLocalRuntime({
     return removed;
   }
 
-  // the server's scheduler purges the trash after 30 days; on the device the window holding the database does it
+  // the server's scheduler purges the trash after 30 days and keeps the planner statistics; on the device the window
+  // holding the database does both
   async function housekeeping() {
     if (follower || closed || replacing) return;
     try {
       trash.purgeTrash(ctx);
       // catalog entries nothing shows or marks any more (core/lib/catalogMaintenance.js)
       catalogMaintenance.purgeOrphans(ctx);
+      if (refreshPlannerStats(conn)) markDirty();
       // with navigator.locks unavailable another window may hold uploads this one does not know yet
       if (lock || !lockName) await dropUnreferencedUploads();
     } catch (err) {
