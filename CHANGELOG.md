@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Phone
+- **Room below the collection on iPhones:** the start page now leaves space for the raised scan button and the home bar, like the series page, so the last footer line ("Mit App verbinden") no longer runs into the scan button.
+
 ## 4.0.1
 
 ### Before updating

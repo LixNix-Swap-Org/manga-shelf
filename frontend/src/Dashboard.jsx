@@ -461,7 +461,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   };
 
   return (
-    <div className="min-h-screen pb-16 overflow-x-clip">
+    <div className="min-h-screen pb-16 max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] overflow-x-clip">
       <SkipLink />
       <DashboardHeader
         activeMainView={statsTab ? 'stats' : activeMainView}
