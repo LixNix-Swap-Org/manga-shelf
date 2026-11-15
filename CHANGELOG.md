@@ -1,13 +1,24 @@
 # Changelog
 
-## Unreleased
+## 4.1.0
 
-### Volumes
-- **Ownership for other users when adding, buying or quick-toggling:** adding a single volume or filling a gap with status "Vorhanden" (`POST /api/volumes`), creating volumes in "Neuen Manga anlegen" (step "Bände" and scanned single volumes), and checking off purchases on the shopping list / store scanner now offer the "Für wen?" selector (`owner_user_id` on `POST /api/volumes`, `POST /api/volumes/batch`, and `PUT /api/volumes/:id` for household purchases). `GET /api/shelves` includes non-read-only members (`people`). In bulk edit, admins can transfer sole ownership, add an owner, or remove an owner via the new "Besitzer" panel, in "Band bearbeiten" admins can add a further copy ("Weiteres Exemplar") for other owners as well, and on volume cards/rows admins can click the amber owner badge pill (`OwnerBadges`) to toggle shelf members directly via a quick popover.
+### Before updating
+- **4.0.1 was not published on its own:** its changes (listed under 4.0.1 below) come with this version. Coming from 4.0.0, **database migration 59** runs at the first start, after the usual backup: it adds the loan period per account (90 days for everybody, as before). 4.0.0 cannot open the migrated database; going back restores that backup. 4.1.0 adds no further migration.
+
+### Owners: "Für wen?" in more places
+- **When adding:** a single volume, a filled gap and the volumes of "Neuer Manga" (step "Bände" and a scanned volume) with status "Vorhanden" can go to another person of the shelf or to the household, like "Mehrere Bände anlegen" already could (`owner_user_id` on `POST /api/volumes`). Other people are offered to admins; everybody can choose "Für mich" or "Noch für niemanden (Haushalt)".
+- **When buying:** the shopping list and the store scanner have a "Für wen?" choice for the volumes checked off as bought (`PUT /api/volumes/:id` takes `owner_user_id: null` for a household purchase, also from the offline queue). Over "Alle Regale" it offers only the people who are on every shelf you can edit, so a purchase never goes to a shelf without that person; pick a shelf to see all of its people.
+- **Bulk edit:** admins get a "Besitzer" panel: a person becomes the only owner of the selected volumes, is added, or is removed. The undo of the bulk edit covers it.
+- **Owner pill:** admins can click the amber owner pill on a volume card or list row and tick shelf members on or off without opening "Band bearbeiten".
+- **Further copies:** in "Band bearbeiten" admins can add a further copy for another owner of the volume too (at most 5 per person, as before).
+- `GET /api/shelves` lists the members who may own volumes per shelf (`people`, without read-only accounts).
 
 ### Phone
 - **Database care in the app without a server:** like the server, the app running without a server (phone, browser offline mode) now keeps SQLite's planner statistics at the start and once a day. On a never-optimised collection of 45 000 volumes the shopping list and "Zu erledigen" took about a minute; now well under a second. At about 1 400 volumes: 109 ms → 25 ms. The file is saved only when the statistics changed.
 - **Room below the collection on iPhones:** the start page now leaves space for the raised scan button and the home bar, like the series page, so the last footer line ("Mit App verbinden") no longer runs into the scan button.
+
+### Maintenance
+- Updated dependencies: Node 22.23.5 in the Docker image, Electron 44.11.1, and minor updates of vite, sql.js, lucide-react, dotenv, express-rate-limit and puppeteer-core; the glob and minimatch security alerts are fixed. A code-scanning finding in the author filter was cleared without a change in behaviour.
 
 ## 4.0.1
 
