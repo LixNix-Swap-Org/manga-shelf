@@ -9,7 +9,7 @@ const LABEL = 'block text-xs font-semibold text-slate-300 uppercase tracking-wid
  * the range since the last tap; the other volumes up to the count become "Fehlt" when the switch is on. Without a pick
  * no volumes are created, as before.
  */
-export default function AddVolumesStep({ ids, count, typedCount, onTypedCount, owned, onOwned, missingRest, onMissingRest, skip = null, disabled = false }) {
+export default function AddVolumesStep({ ids, count, typedCount, onTypedCount, owned, onOwned, missingRest, onMissingRest, skip = null, disabled = false, ownerChoices = [], forWhom = '', onForWhom = null }) {
   const [upTo, setUpTo] = useState('');
   const lastRef = useRef(null);
   const numbers = Array.from({ length: count }, (_, i) => i + 1);
@@ -52,6 +52,20 @@ export default function AddVolumesStep({ ids, count, typedCount, onTypedCount, o
             onChange={(e) => onTypedCount(e.target.value)}
           />
         </div>
+        {count > 0 && ownerChoices.length > 0 && onForWhom && (
+          <div>
+            <label htmlFor={`${ids}-for-whom`} className={LABEL}>{t('Für wen?')}</label>
+            <select
+              id={`${ids}-for-whom`}
+              className="input-field max-w-xs"
+              value={forWhom}
+              onChange={(e) => onForWhom(e.target.value)}
+              disabled={disabled}
+            >
+              {ownerChoices.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+            </select>
+          </div>
+        )}
         {count > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" id="btn-add-volumes-all" className="btn-secondary text-xs py-2 px-3" disabled={disabled} onClick={() => onOwned(new Set(numbers))}>{t('Alle')}</button>

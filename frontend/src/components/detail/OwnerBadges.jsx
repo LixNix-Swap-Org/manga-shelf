@@ -1,8 +1,11 @@
-import { Handshake, Users } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Check, Handshake, Users } from 'lucide-react';
 import { t } from '../../i18n/index.js';
 import { formatNumber } from '../../utils/format';
 
 const OWNER_COLORS = ['#38bdf8', '#f472b6', '#a3e635', '#fb923c', '#c084fc', '#2dd4bf', '#facc15', '#f87171'];
+const READ_ONLY_ROLES = ['visitor', 'guest'];
 
 /** Fixed colour per user, so badges and filters show the same person alike. */
 export function ownerColor(userId) {
@@ -34,19 +37,73 @@ export function copiesPerOwner(vol) {
  * "Besitz" side of the reader/owner chip. A small number on a circle says that person has more than one copy.
  * Nothing with only one person on the shelf.
  */
-export default function OwnerBadges({ vol, multiUser }) {
+export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwner = null }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ left: 8, top: 8 });
+  const anchorRef = useRef(null);
+  const popoverRef = useRef(null);
   const owners = vol?.owners || [];
+  const members = Array.isArray(people)
+    ? people.filter((p) => !READ_ONLY_ROLES.includes(p.app_role ?? p.role))
+    : [];
+  const interactive = multiUser && owners.length > 0 && Boolean(onToggleOwner) && members.length > 1;
+
+  useEffect(() => {
+    if (!open || !interactive || !anchorRef.current) return undefined;
+    const updatePos = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = 208;
+      const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+      const left = Math.max(8, Math.min(rect.left, vw - width - 8));
+      const openUp = rect.bottom + 180 > vh && rect.top > 180;
+      setPos({
+        left,
+        top: openUp ? undefined : rect.bottom + 6,
+        bottom: openUp ? vh - rect.top + 6 : undefined
+      });
+    };
+    updatePos();
+    const onPointerDown = (e) => {
+      if (anchorRef.current?.contains(e.target) || popoverRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        anchorRef.current?.focus();
+      }
+    };
+    const onScroll = (e) => {
+      if (popoverRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [open, interactive]);
+
   if (!multiUser || owners.length === 0) return null;
   const copies = copiesPerOwner(vol);
   const copiesOf = (o) => Math.max(1, copies.get(String(o.user_id)) || 0);
   const names = owners.map(o => (copiesOf(o) > 1 ? `${o.username} ×${formatNumber(copiesOf(o))}` : o.username)).join(', ');
-  return (
+  const pill = (
     <span
       role="img"
       aria-label={t('Besitzer: {names}', { names })}
       title={t('Besitzer: {names}', { names })}
       data-owner-badges
-      className="inline-flex items-center gap-1 shrink-0 rounded-full pl-1 pr-1.5 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300"
+      className={`inline-flex items-center gap-1 shrink-0 rounded-full pl-1 pr-1.5 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300${interactive ? ' hover:bg-amber-500/25 transition-colors' : ''}`}
     >
       <Users className="w-2.5 h-2.5" aria-hidden="true" />
       {owners.map(o => {
@@ -68,6 +125,72 @@ export default function OwnerBadges({ vol, multiUser }) {
         );
       })}
     </span>
+  );
+  if (!interactive) return pill;
+  return (
+    <>
+      <button
+        ref={anchorRef}
+        type="button"
+        aria-label={t('Besitzer')}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="inline-flex rounded-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+      >
+        {pill}
+      </button>
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={popoverRef}
+          role="dialog"
+          aria-label={t('Besitzer')}
+          data-owner-popover
+          onClick={(e) => e.stopPropagation()}
+          style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, width: 208 }}
+          className="z-[90] rounded-xl border border-slate-700 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md text-xs text-slate-100"
+        >
+          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{t('Besitzer')}</p>
+          <div className="space-y-0.5 max-h-52 overflow-y-auto custom-scrollbar">
+            {members.map((m) => {
+              const uid = m.user_id ?? m.id;
+              const label = m.display_name || m.username || m.name;
+              const isOwner = owners.some((o) => String(o.user_id) === String(uid));
+              return (
+                <button
+                  key={uid}
+                  type="button"
+                  aria-pressed={isOwner}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleOwner(vol, uid);
+                  }}
+                  className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
+                    isOwner ? 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/25' : 'text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span
+                      aria-hidden="true"
+                      className="w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0 text-slate-950"
+                      style={{ background: ownerColor(uid) }}
+                    >
+                      {readerInitials(label)}
+                    </span>
+                    <span className="truncate font-medium">{label}</span>
+                  </span>
+                  {isOwner && <Check className="w-3.5 h-3.5 text-amber-300 shrink-0" aria-hidden="true" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 

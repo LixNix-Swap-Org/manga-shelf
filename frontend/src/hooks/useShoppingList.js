@@ -223,7 +223,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
    * { batch: true } nothing is alerted or refetched and the result is batchResult(); a 404 drops the volume.
    * `mangaId` names the series of a volume that is not on the list (a scanned volume), so the stored copies follow too.
    */
-  const handleQuickBuy = async (volumeId, { batch = false, mangaId = null } = {}) => {
+  const handleQuickBuy = async (volumeId, { batch = false, mangaId = null, targetUserId } = {}) => {
     const done = (status, error = '', httpStatus = null, code = null) => {
       if (!batch) {
         if (status === 'failed' && error) notify.error(error);
@@ -236,7 +236,13 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
       const id = userId !== null ? userId : await resolveUserId();
       if (id === null) return done('failed', t(QUEUE_FAILED));
       const offline = Boolean(user?.offline) || browserOffline();
-      const change = { kind: 'purchase', volumeId, value: true, purchase_date: localToday() };
+      const change = {
+        kind: 'purchase',
+        volumeId,
+        value: true,
+        purchase_date: localToday(),
+        ...(targetUserId !== undefined ? { targetUserId } : {})
+      };
       let result;
       try {
         result = await submitChange(change, { userId: id, offline });
@@ -278,7 +284,7 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
    * today's purchase date). Needs the server: offline it fails instead of queuing. A 409 with `existing_id` (the volume
    * was created meanwhile) books that volume. Results as handleQuickBuy.
    */
-  const handleAddBought = async ({ mangaId, volume }, { batch = false } = {}) => {
+  const handleAddBought = async ({ mangaId, volume }, { batch = false, owner_user_id } = {}) => {
     const done = (status, error = '', httpStatus = null, code = null) => {
       if (!batch) {
         if (status === 'failed' && error) notify.error(error);
@@ -289,16 +295,20 @@ export default function useShoppingList({ user, setNetworkOffline, fetchMangas, 
     if (user?.offline || browserOffline()) return done('failed', t(ADD_OFFLINE));
     let res;
     try {
+      const body = { ...volume, manga_id: mangaId, status: 'Vorhanden', purchase_date: localToday() };
+      if (owner_user_id !== undefined) body.owner_user_id = owner_user_id;
       res = await apiFetch('/api/volumes', {
         method: 'POST',
         // i18n-ignore: stored status value
-        body: { ...volume, manga_id: mangaId, status: 'Vorhanden', purchase_date: localToday() }
+        body
       });
     } catch (err) {
       return done('failed', err?.message || t(BUY_FAILED));
     }
     const data = await readJson(res);
-    if (res.status === 409 && data?.existing_id) return handleQuickBuy(data.existing_id, { batch, mangaId });
+    if (res.status === 409 && data?.existing_id) {
+      return handleQuickBuy(data.existing_id, { batch, mangaId, ...(owner_user_id !== undefined ? { targetUserId: owner_user_id } : {}) });
+    }
     if (!res.ok) return done('failed', serverText(data) || t(BUY_FAILED), res.status, data?.code || null);
     invalidateIsbnIndex();
     window.dispatchEvent(new CustomEvent(PURCHASE_RECORDED_EVENT, { detail: { volumeId: data?.id ?? null } }));

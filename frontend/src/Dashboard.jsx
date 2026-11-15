@@ -157,6 +157,11 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     ? (availableShelves.find((s) => String(s.id) === scopedShelfId)?.name || (shelves || []).find((s) => String(s.id) === scopedShelfId)?.name || `#${scopedShelfId}`)
     : null;
   const clearShelfScope = useCallback(() => setShelfFilter('ALL'), [setShelfFilter]);
+  const householdPeople = useMemo(() => {
+    const scope = scopedShelfId ? (shelves || []).filter((s) => String(s.id) === scopedShelfId) : (shelves || []);
+    if (scope.some((s) => Array.isArray(s.people))) return scope.flatMap((s) => s.people || []);
+    return availablePersons;
+  }, [shelves, scopedShelfId, availablePersons]);
   const onShelfMissing = useCallback(() => {
     invalidateShelves();
     setShelfFilter('ALL');
@@ -686,6 +691,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         shelfName={scopedShelfName}
         onClearShelf={clearShelfScope}
         readOnlySeries={readOnlySeries}
+        people={householdPeople}
       />
     )}
 
@@ -816,6 +822,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
             prefill={scanPrefill}
             mangas={mangas}
             onOpenExisting={(manga) => navigateFromDialog(`/manga/${manga.id}`)}
+            user={user}
+            people={householdPeople}
           />
         )}
 

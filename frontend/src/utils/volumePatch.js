@@ -26,12 +26,13 @@ export function patchVolume(vol, change, { detail, me } = {}) {
   if (change.kind === 'owned' || change.kind === 'purchase') {
     const owners = (vol.owners || []).filter((o) => !same(o.user_id, target));
     const wantOwned = change.kind === 'purchase' ? true : Boolean(change.value);
-    if (wantOwned) {
+    const householdPurchase = change.kind === 'purchase' && change.targetUserId === null;
+    if (wantOwned && !householdPurchase) {
       const purchaseDate = change.purchase_date || vol.purchase_date || null;
       owners.push({ user_id: target, username: usernameOf(detail, target, me), price: vol.price ?? null, purchase_date: purchaseDate });
     }
     let status = vol.status;
-    if (owners.length && status !== OWNED) status = OWNED;
+    if (householdPurchase || (owners.length && status !== OWNED)) status = OWNED;
     else if (!owners.length && status === OWNED) status = 'Fehlt';
     const next = { ...vol, owners, status, owned_by_me: meId !== undefined ? owners.some((o) => same(o.user_id, meId)) : vol.owned_by_me };
     if (status !== OWNED) next.purchase_date = null;

@@ -269,7 +269,12 @@ export default function VolumeGridView({
                     <span className="truncate">{badge.text}{/* i18n-ignore: translated in getVolumeBadge */}</span>
                   )}
                   <VolumeLanguagePill volume={vol} manga={manga} />
-                  <OwnerBadges vol={vol} multiUser={readers.length > 1} />
+                  <OwnerBadges
+                    vol={vol}
+                    multiUser={readers.length > 1}
+                    people={mayToggleOthers && canToggleOwned && !selectionMode ? readers : null}
+                    onToggleOwner={mayToggleOthers && canToggleOwned && !selectionMode ? handleToggleVolume : null}
+                  />
                   <LentBadge vol={vol} />
                 </div>
               </div>

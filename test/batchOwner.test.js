@@ -103,3 +103,29 @@ test('POST /volumes (single volume and gap fill) accepts owner_user_id like /vol
     assert.equal(refused.status, 403);
     assert.equal((await admin('GET', `/mangas/${id}`)).body.volumes.length, 2);
 });
+
+test('PUT /volumes/:id accepts owner_user_id when setting status to Vorhanden (household copy or admin target)', async () => {
+    const { id } = (await admin('POST', '/mangas', { title: 'Shopping PUT Owner' })).body;
+    await admin('POST', '/volumes/batch', { manga_id: id, from: 1, to: 2, status: 'Fehlt' });
+    const vols = (await admin('GET', `/mangas/${id}`)).body.volumes;
+    const v1 = vols.find((v) => v.volume_number === '1').id;
+    const v2 = vols.find((v) => v.volume_number === '2').id;
+
+    assert.equal((await editor('PUT', `/volumes/${v1}`, { status: 'Vorhanden', owner_user_id: ids.felix })).status, 403);
+    assert.equal((await editor('PUT', `/volumes/${v1}`, { status: 'Vorhanden', owner_user_id: null })).status, 200);
+    assert.equal((await admin('PUT', `/volumes/${v2}`, { status: 'Vorhanden', owner_user_id: ids.felix })).status, 200);
+
+    const after = await ownersOf(admin, id);
+    assert.deepEqual(after['1'], { status: 'Vorhanden', owners: [null] });
+    assert.deepEqual(after['2'], { status: 'Vorhanden', owners: [ids.felix] });
+});
+
+test('GET /shelves includes non-read-only members in people and excludes visitors', async () => {
+    await admin('POST', '/users', { username: 'besucher', password: 'password123', role: 'visitor' });
+    const shelves = (await admin('GET', '/shelves')).body.shelves;
+    const names = shelves[0].people.map((p) => p.username);
+    assert.ok(names.includes('admin'));
+    assert.ok(names.includes('ed'));
+    assert.ok(names.includes('felix'));
+    assert.ok(!names.includes('besucher'));
+});

@@ -221,7 +221,12 @@ export default function VolumeListView({
                   {getVolumeDisplayTitle(vol)}
                   <VolumeLanguagePill volume={vol} manga={manga} className="ml-1.5 align-middle" />
                   <span className="ml-1.5 align-middle">
-                    <OwnerBadges vol={vol} multiUser={(manga?.reader_stats?.length || 0) > 1} />
+                    <OwnerBadges
+                      vol={vol}
+                      multiUser={(manga?.reader_stats?.length || 0) > 1}
+                      people={mayToggleOthers && canToggleOwned && !selectionMode ? manga?.reader_stats : null}
+                      onToggleOwner={mayToggleOthers && canToggleOwned && !selectionMode ? handleToggleVolume : null}
+                    />
                   </span>
                   <LentBadge vol={vol} className="ml-1.5 align-middle" />
                   {vol.isbn && (

@@ -642,12 +642,21 @@ const READ_ONLY_ROLES = ['visitor', 'guest'];
  */
 export function ownerOptions(people, user) {
   const list = Array.isArray(people) ? people : [];
-  const others = list.filter((p) => String(p.user_id) !== String(user?.id) && !READ_ONLY_ROLES.includes(p.role));
+  const seen = new Set();
+  const others = [];
+  for (const p of list) {
+    const uid = p?.user_id ?? p?.id;
+    const role = p?.app_role ?? p?.role;
+    if (uid == null || uid === '' || String(uid) === String(user?.id) || READ_ONLY_ROLES.includes(role)) continue;
+    const key = String(uid);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    others.push({ uid: key, label: p.display_name || p.username || p.name });
+  }
   if (others.length === 0) return [];
-  const name = (p) => p.display_name || p.username;
   return [
     { value: FOR_ME, text: t('Für mich') },
-    ...(user?.role === 'admin' ? others.map((p) => ({ value: String(p.user_id), text: t('Für {name}', { name: name(p) }) })) : []),
+    ...(user?.role === 'admin' ? others.map((o) => ({ value: o.uid, text: t('Für {name}', { name: o.label }) })) : []),
     { value: FOR_NOBODY, text: t('Noch für niemanden (Haushalt)') }
   ];
 }

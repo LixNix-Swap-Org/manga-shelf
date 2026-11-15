@@ -45,9 +45,17 @@ function describe(ctx, row, role) {
     const counts = ctx.db.prepare(`
         SELECT (SELECT count(*) FROM mangas WHERE shelf_id = ?) AS series,
                (SELECT count(*) FROM shelf_members WHERE shelf_id = ?) AS members`).get(row.id, row.id);
+    const people = ctx.db.prepare(`
+        SELECT sm.user_id, u.username, u.role
+        FROM shelf_members sm
+        JOIN users u ON u.id = sm.user_id
+        WHERE sm.shelf_id = ? AND COALESCE(u.role, '') NOT IN ('visitor', 'guest')
+        ORDER BY u.username COLLATE NOCASE
+    `).all(row.id);
     return {
         id: row.id, name: row.name, description: row.description || null, color: row.color,
-        is_default: Boolean(row.is_default), role, series_count: counts.series, member_count: counts.members
+        is_default: Boolean(row.is_default), role, series_count: counts.series, member_count: counts.members,
+        people
     };
 }
 
