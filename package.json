@@ -65,6 +65,15 @@
   "overrides": {
     "eslint-plugin-react": {
       "eslint": "$eslint"
+    },
+    "@tufjs/models": {
+      "minimatch": "^11.0.8"
+    },
+    "readdir-glob": {
+      "minimatch": "^11.0.8"
+    },
+    "eslint": {
+      "minimatch": "^11.0.8"
     }
   }
 }
