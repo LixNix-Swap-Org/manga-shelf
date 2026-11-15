@@ -83,6 +83,31 @@ describe('CopiesField', () => {
     expect(screen.queryByRole('button', { name: 'Weiteres Exemplar' })).toBeNull();
   });
 
+  it('offers an admin a further copy for another owner and sends user_id', async () => {
+    const two = [copy({ owner_user_id: 2, owner: 'ben' }), copy({ id: 14, owner_user_id: 2, owner: 'ben', price: null, purchase_date: null, condition: null })];
+    const fetchMock = vi.fn(async (url, init = {}) => {
+      expect(String(url)).toContain('/api/volumes/5/copies');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body)).toEqual({ user_id: 2 });
+      return fakeResponse(200, { success: true, copy: two[1], copies: two });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onChanged = vi.fn();
+    render(
+      <CopiesField
+        volumeId={5}
+        mangaId={2}
+        currentUser={{ ...anna, role: 'admin' }}
+        canEdit
+        copies={[copy({ owner_user_id: 2, owner: 'ben' })]}
+        onChanged={onChanged}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Weiteres Exemplar (Für ben)' }));
+    await waitFor(() => expect(document.querySelectorAll('[data-copy]')).toHaveLength(2));
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
   it('lists every copy with its purchase, the household and who borrowed it; only changeable copies get "Bearbeiten"', () => {
     render(
       <CopiesField

@@ -630,3 +630,31 @@ export const buildDisplayVolumeItems = ({
   pushGhosts(filteredVolumes.length);
   return items;
 };
+
+// i18n-ignore: values of the "Für wen?" select, not shown
+export const FOR_ME = 'me';
+export const FOR_NOBODY = 'nobody';
+const READ_ONLY_ROLES = ['visitor', 'guest'];
+
+/**
+ * The choices of "Für wen?": me, nobody yet (a household copy) and, for an admin, every other person of the shelf who
+ * may own volumes. Empty when nobody else is there to tell apart (the field is then left out).
+ */
+export function ownerOptions(people, user) {
+  const list = Array.isArray(people) ? people : [];
+  const others = list.filter((p) => String(p.user_id) !== String(user?.id) && !READ_ONLY_ROLES.includes(p.role));
+  if (others.length === 0) return [];
+  const name = (p) => p.display_name || p.username;
+  return [
+    { value: FOR_ME, text: t('Für mich') },
+    ...(user?.role === 'admin' ? others.map((p) => ({ value: String(p.user_id), text: t('Für {name}', { name: name(p) }) })) : []),
+    { value: FOR_NOBODY, text: t('Noch für niemanden (Haushalt)') }
+  ];
+}
+
+/** The owner_user_id of POST /api/volumes(/batch) for a choice: me = left out (the caller), nobody = null, else the id. */
+export function ownerBody(choice) {
+  if (!choice || choice === FOR_ME) return {};
+  if (choice === FOR_NOBODY) return { owner_user_id: null };
+  return { owner_user_id: Number(choice) };
+}

@@ -90,3 +90,16 @@ test('the series list names every owner with the number of volumes they own (own
     const owners = Object.fromEntries(row.owners.split('\n').map((line) => { const [, name, count] = line.split('\t'); return [name, Number(count)]; }));
     assert.deepEqual(owners, { admin: 1, ed: 3 });
 });
+
+test('POST /volumes (single volume and gap fill) accepts owner_user_id like /volumes/batch', async () => {
+    const { id } = (await admin('POST', '/mangas', { title: 'Einzelband Für wen' })).body;
+    assert.equal((await admin('POST', '/volumes', { manga_id: id, volume_number: '1', status: 'Vorhanden', owner_user_id: ids.felix })).status, 200);
+    assert.equal((await admin('POST', '/volumes', { manga_id: id, volume_number: '2', status: 'Vorhanden', owner_user_id: null })).status, 200);
+    const vols = await ownersOf(admin, id);
+    assert.deepEqual(vols['1'], { status: 'Vorhanden', owners: [ids.felix] });
+    assert.deepEqual(vols['2'], { status: 'Vorhanden', owners: [null] });
+
+    const refused = await editor('POST', '/volumes', { manga_id: id, volume_number: '3', status: 'Vorhanden', owner_user_id: ids.felix });
+    assert.equal(refused.status, 403);
+    assert.equal((await admin('GET', `/mangas/${id}`)).body.volumes.length, 2);
+});

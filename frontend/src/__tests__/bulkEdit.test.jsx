@@ -112,6 +112,44 @@ describe('BulkActionBar', () => {
     expect(screen.getByRole('button', { name: 'Als vorhanden (mir)' }).disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Löschen' }).disabled).toBe(true);
   });
+
+  it('offers the Besitzer panel to admins when other shelf members can own volumes', async () => {
+    const people = [
+      { user_id: 4, username: 'Max', role: 'admin' },
+      { user_id: 7, username: 'Felix', role: 'editor' },
+      { user_id: 9, username: 'Gast', role: 'visitor' }
+    ];
+    const pEditor = props({ people, user: { id: 7, role: 'editor' }, userId: 7 });
+    const { rerender } = render(<BulkActionBar {...pEditor} />);
+    expect(screen.queryByRole('button', { name: 'Besitzer' })).toBeNull();
+
+    const p = props({ people, user: { id: 4, role: 'admin' } });
+    rerender(<BulkActionBar {...p} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
+    expect(screen.getByLabelText('Für wen?')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Für wen?'), { target: { value: '7' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' })); });
+    expect(p.onApply).toHaveBeenLastCalledWith(
+      { owners: { add: [7], remove: [4] }, set: { purchase_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } },
+      'Besitzer: Felix'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
+    fireEvent.change(screen.getByLabelText('Besitzer'), { target: { value: 'add' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' })); });
+    expect(p.onApply).toHaveBeenLastCalledWith(
+      { owners: { add: [7] }, set: { purchase_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } },
+      'Felix als Besitzer eingetragen'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
+    fireEvent.change(screen.getByLabelText('Besitzer'), { target: { value: 'remove' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' })); });
+    expect(p.onApply).toHaveBeenLastCalledWith(
+      { owners: { remove: [7] } },
+      'Felix besitzt den Band nicht mehr'
+    );
+  });
 });
 
 describe('useVolumeActions.handleBulkEdit', () => {

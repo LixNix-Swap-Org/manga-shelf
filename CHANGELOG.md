@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Volumes
+- **Ownership for other users when adding or bulk-editing:** adding a single volume or filling a gap with status "Vorhanden" now offers the same "Für wen?" selector (`owner_user_id` on `POST /api/volumes`) as batch creation. In bulk edit, admins can now transfer sole ownership, add an owner, or remove an owner via the new "Besitzer" panel, and in "Band bearbeiten" admins can add a further copy ("Weiteres Exemplar") for other owners as well.
+
 ### Phone
 - **Database care in the app without a server:** like the server, the app running without a server (phone, browser offline mode) now keeps SQLite's planner statistics at the start and once a day. On a never-optimised collection of 45 000 volumes the shopping list and "Zu erledigen" took about a minute; now well under a second. At about 1 400 volumes: 109 ms → 25 ms. The file is saved only when the statistics changed.
 - **Room below the collection on iPhones:** the start page now leaves space for the raised scan button and the home bar, like the series page, so the last footer line ("Mit App verbinden") no longer runs into the scan button.

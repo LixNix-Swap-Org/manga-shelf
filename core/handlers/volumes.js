@@ -148,6 +148,13 @@ function parseVolumeLanguage(value) {
 }
 const VOLUME_LANGUAGE_ERROR = 'Unbekannte Sprache';
 
+// whose copies owned volumes become: absent = the caller, null = nobody yet (a copy of the
+// household), an id = that member of the shelf (another account than the caller only for admins, as for /owners)
+function resolveVolumeOwner(ctx, body, shelfId) {
+    if (!Object.prototype.hasOwnProperty.call(body, 'owner_user_id')) return ctx.user.id;
+    return body.owner_user_id === null ? null : resolveTargetUser(ctx, body.owner_user_id === '' ? NaN : body.owner_user_id, shelfId);
+}
+
 function create(ctx, { body }) {
     const {
         manga_id,
@@ -205,7 +212,8 @@ function create(ctx, { body }) {
         imagesVal = JSON.stringify([String(cover_image).trim()]);
     }
 
-    access.mangaAccess(ctx, mId, 'editor');
+    const shelfId = access.mangaAccess(ctx, mId, 'editor');
+    const ownerId = resolveVolumeOwner(ctx, body, shelfId);
 
     // The same type + number twice is almost always a double click or a repeated entry; edit the existing one instead
     const duplicate = findDuplicate(ctx, mId, volNumStr, volType);
@@ -243,8 +251,8 @@ function create(ctx, { body }) {
             sortAfterFor(volType, sortAfter.value)
         );
         newVolumeId = Number(result.lastInsertRowid);
-        syncOwnersWithStatus(ctx.db, newVolumeId, ctx.user.id);
-        if (st.read) markRead(ctx.db, newVolumeId, ctx.user.id);
+        syncOwnersWithStatus(ctx.db, newVolumeId, ownerId);
+        if (st.read) markRead(ctx.db, newVolumeId, ownerId ?? ctx.user.id);
         touchVolumes(ctx, newVolumeId);
     });
 
@@ -276,11 +284,7 @@ function createBatch(ctx, { body }) {
     if (numeric.error) throw badRequest(numeric.error);
 
     const shelfId = access.mangaAccess(ctx, mId, 'editor');
-    // whose copies the owned volumes become: absent = the caller (as before), null = nobody yet (a copy of the
-    // household), an id = that member of the shelf (another account than the caller only for admins, as for /owners)
-    const ownerId = Object.prototype.hasOwnProperty.call(body, 'owner_user_id')
-        ? (body.owner_user_id === null ? null : resolveTargetUser(ctx, body.owner_user_id === '' ? NaN : body.owner_user_id, shelfId))
-        : ctx.user.id;
+    const ownerId = resolveVolumeOwner(ctx, body, shelfId);
 
     // Special editions, Schuber and Specials carry their own numbers and never block a regular volume
     const existing = ctx.db.prepare("SELECT volume_number FROM volumes WHERE manga_id = ? AND type = 'volume'").all(mId);

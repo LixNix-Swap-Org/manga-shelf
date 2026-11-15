@@ -7,7 +7,7 @@ import { apiFetch, readJson, TIMEOUTS } from '../../utils/api';
 import { t as tr, tn } from '../../i18n/index.js';
 import { currencySymbol, formatNumber } from '../../utils/format';
 import { editionCurrency, isMpEdition } from '../../utils/editions';
-import { regularVolumeNumber } from '../../utils/volumeHelpers';
+import { regularVolumeNumber, FOR_ME, FOR_NOBODY, ownerOptions, ownerBody } from '../../utils/volumeHelpers';
 
 export const MAX_BATCH_VOLUMES = 300;
 
@@ -43,33 +43,7 @@ export function batchResultText({ created, skipped } = {}) {
   return tr('{made}, übersprungen (schon vorhanden): {shown}', { made, shown });
 }
 
-// i18n-ignore: values of the "Für wen?" select, not shown
-const FOR_ME = 'me';
-const FOR_NOBODY = 'nobody';
-const READ_ONLY = ['visitor', 'guest'];
-
-/**
- * The choices of "Für wen?": me, nobody yet (a household copy) and, for an admin, every other person of the shelf who
- * may own volumes. Empty when nobody else is there to tell apart (the field is then left out).
- */
-export function ownerOptions(people, user) {
-  const list = Array.isArray(people) ? people : [];
-  const others = list.filter((p) => String(p.user_id) !== String(user?.id) && !READ_ONLY.includes(p.role));
-  if (others.length === 0) return [];
-  const name = (p) => p.display_name || p.username;
-  return [
-    { value: FOR_ME, text: tr('Für mich') },
-    ...(user?.role === 'admin' ? others.map((p) => ({ value: String(p.user_id), text: tr('Für {name}', { name: name(p) }) })) : []),
-    { value: FOR_NOBODY, text: tr('Noch für niemanden (Haushalt)') }
-  ];
-}
-
-/** The owner_user_id of POST /api/volumes/batch for a choice: me = left out (the caller), nobody = null, else the id. */
-export function ownerBody(choice) {
-  if (!choice || choice === FOR_ME) return {};
-  if (choice === FOR_NOBODY) return { owner_user_id: null };
-  return { owner_user_id: Number(choice) };
-}
+export { FOR_ME, FOR_NOBODY, ownerOptions, ownerBody };
 
 const pillClass = (active, tone) => `py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 select-none ${
   active

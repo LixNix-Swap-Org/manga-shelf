@@ -162,11 +162,25 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
       setBusy(false);
     }
   };
-  const addCopy = () => request(`/api/volumes/${volumeId}/copies`, { method: 'POST', body: {} });
+  const addCopy = (targetUserId) => request(`/api/volumes/${volumeId}/copies`, {
+    method: 'POST',
+    body: targetUserId === undefined || targetUserId === currentUser?.id ? {} : { user_id: targetUserId }
+  });
   const removeCopy = (copy) => request(`/api/volumes/${volumeId}/copies/${copy.id}`, { method: 'DELETE' });
   const countOf = (ownerId) => copies.filter(c => c.owner_user_id === ownerId).length;
-  const ownCount = currentUser ? countOf(currentUser.id) : 0;
-  const canAdd = Boolean(canEdit && currentUser && ownCount > 0 && ownCount < MAX_COPIES_PER_PERSON);
+  const isAdmin = currentUser?.role === 'admin';
+  const addableOwners = [];
+  if (canEdit && currentUser) {
+    const seenOwnerIds = new Set();
+    for (const c of copies) {
+      if (c.owner_user_id === null || c.owner_user_id === undefined || seenOwnerIds.has(c.owner_user_id)) continue;
+      if (!isAdmin && c.owner_user_id !== currentUser.id) continue;
+      seenOwnerIds.add(c.owner_user_id);
+      if (countOf(c.owner_user_id) < MAX_COPIES_PER_PERSON) {
+        addableOwners.push({ user_id: c.owner_user_id, owner: c.owner });
+      }
+    }
+  }
 
   const symbol = currencySymbol(currency);
   const mirrored = followsVolume(copies, volume);
@@ -300,15 +314,23 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
         })}
       </ul>
       {editing === null && error && <p role="alert" className="mt-2 text-xs text-red-400">{error}</p>}
-      {canAdd && editing === null && (
-        <button
-          type="button"
-          onClick={addCopy}
-          disabled={busy}
-          className="mt-2 inline-flex items-center gap-1.5 text-xs text-brand-300 hover:text-white"
-        >
-          <Plus className="w-3.5 h-3.5" aria-hidden="true" /> {t('Weiteres Exemplar')}
-        </button>
+      {addableOwners.length > 0 && editing === null && (
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          {addableOwners.map((o) => (
+            <button
+              key={o.user_id}
+              type="button"
+              onClick={() => addCopy(o.user_id)}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 text-xs text-brand-300 hover:text-white"
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+              {addableOwners.length === 1 && o.user_id === currentUser?.id
+                ? t('Weiteres Exemplar')
+                : `${t('Weiteres Exemplar')} (${o.user_id === currentUser?.id ? t('Für mich') : t('Für {name}', { name: o.owner })})`}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

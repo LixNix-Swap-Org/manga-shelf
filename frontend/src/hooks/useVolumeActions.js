@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { hasUserRead, getVolumeDisplayTitle } from '../utils/volumeHelpers';
+import { hasUserRead, getVolumeDisplayTitle, FOR_ME, ownerBody } from '../utils/volumeHelpers';
 import { apiFetch, errorFromResponse, readJson, sessionEndAnnounced, isAbortError } from '../utils/api';
 import { notify, notifyResponseError } from '../utils/notify';
 import { formatCount, formatDate } from '../utils/format';
@@ -120,6 +120,7 @@ export default function useVolumeActions({
   const [newVolumeType, setNewVolumeType] = useState('volume'); // 'volume' | 'special_edition' | 'schuber' | 'special'
   const [newVolumeNum, setNewVolumeNum] = useState('');
   const [newVolumeStatus, setNewVolumeStatus] = useState('Vorhanden');
+  const [newVolumeOwner, setNewVolumeOwner] = useState(FOR_ME);
   const [newVolumeReleaseDate, setNewVolumeReleaseDate] = useState('');
   const [newVolumePrice, setNewVolumePrice] = useState('');
   const [newVolumeCover, setNewVolumeCover] = useState('');
@@ -248,7 +249,8 @@ export default function useVolumeActions({
           ...(extraMeta.release_year != null ? { release_year: extraMeta.release_year } : {}),
           ...(extraMeta.publisher ? { publisher: extraMeta.publisher } : {}),
           ...(extraMeta.notes ? { notes: extraMeta.notes } : {}),
-          ...(newVolumeType === 'special' && newVolumeSortAfter.trim() ? { sort_after: newVolumeSortAfter.trim() } : {})
+          ...(newVolumeType === 'special' && newVolumeSortAfter.trim() ? { sort_after: newVolumeSortAfter.trim() } : {}),
+          ...(newVolumeStatus === 'Vorhanden' ? ownerBody(newVolumeOwner) : {})
         }
       });
       if (res.ok) {
@@ -488,6 +490,7 @@ export default function useVolumeActions({
 
   return {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
+    newVolumeOwner, setNewVolumeOwner,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
     newVolumeCover, setNewVolumeCover: setNewVolumeCoverValue, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn,
     newVolumeMeta, setNewVolumeMeta,
