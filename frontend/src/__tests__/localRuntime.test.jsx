@@ -499,6 +499,34 @@ describe('two windows on one device database', () => {
 });
 
 describe('housekeeping of the device', () => {
+  it('keeps the planner statistics like the server: written at the start and saved, no save when nothing changed', async () => {
+    const store = memoryStore();
+    const rt = await newRuntime({ store });
+    const id = (await rt.request('POST', '/api/mangas', { title: 'Statistik' })).body.id;
+    for (const n of ['1', '2', '3']) await rt.request('POST', '/api/volumes', { manga_id: id, volume_number: n });
+    await rt.close();
+    const seq = () => new TextDecoder().decode(store.data.db.get(SAVE_SEQ_KEY));
+    const open = () => createLocalRuntime({ SQL, store, http: offline, profile: { id: 1 }, persistDelayMs: 0 });
+    const statTables = (bytes) => {
+      const db = new SQL.Database(bytes);
+      try { return db.exec('SELECT DISTINCT tbl FROM sqlite_stat1 ORDER BY tbl')[0]?.values.map(([t]) => t) ?? []; } finally { db.close(); }
+    };
+
+    const first = await open();
+    await first.housekeeping();
+    await first.close();
+    const saved = seq();
+    const second = await open();
+    await second.housekeeping();
+    expect(statTables(second.exportDatabase())).toEqual(expect.arrayContaining(['mangas', 'volumes']));
+    await second.close();
+    const third = await open();
+    await third.housekeeping();
+    await third.close();
+    // exportDatabase() saved once; the third start found the statistics current and saved nothing
+    expect(Number(seq())).toBe(Number(saved) + 1);
+  });
+
   it('purges trash entries older than 30 days at the start and daily, then drops uploads nothing references', async () => {
     let now = new Date('2026-01-01T12:00:00Z');
     const store = memoryStore();
