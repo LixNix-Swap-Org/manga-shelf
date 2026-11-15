@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { X, Coins, Calendar, ShoppingCart, CircleCheck, Clock, PackageCheck, CircleExclamationPoint } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { readApiError, notifyTrashed } from '../../hooks/useVolumeActions';
-import { getRegularGapMeta } from '../../utils/volumeHelpers';
+import { getRegularGapMeta, FOR_ME, ownerOptions, ownerBody } from '../../utils/volumeHelpers';
 import { ApiError, apiFetch, readJson, TIMEOUTS, assetImgProps } from '../../utils/api';
 import { notify, UNEXPECTED_ERROR } from '../../utils/notify';
 import { formatDate, formatEuro } from '../../utils/format';
@@ -90,11 +90,16 @@ export default function GapFillModal({
   mangaId,
   mpGapMap,
   canEdit,
+  people = [],
+  user = null,
   gapEditionUnconfirmed = false,
   onSuccess
 }) {
   // the gap whose request is running: Escape or another ghost can switch the dialog to a different gap meanwhile
   const [loadingGap, setLoadingGap] = useState(null);
+  const [gapOwner, setGapOwner] = useState(FOR_ME);
+  const ids = useId();
+  const owners = ownerOptions(people, user);
   const currentGapRef = useRef(gapNumber);
   currentGapRef.current = isOpen ? gapNumber : null;
 
@@ -137,7 +142,8 @@ export default function GapFillModal({
           release_date: trustedMeta?.release_date || null,
           cover_image: cover,
           publisher: manga?.publisher || null,
-          type: 'volume'
+          type: 'volume',
+          ...(targetStatus === 'Vorhanden' ? ownerBody(gapOwner) : {})
         }
       });
       if (res.ok) {
@@ -245,6 +251,20 @@ export default function GapFillModal({
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {options.includes('Vorhanden') && owners.length > 0 && (
+          <div className="mb-3">
+            <label htmlFor={`${ids}-owner`} className="block text-xs font-semibold text-slate-300 mb-1">{t('Für wen?')}</label>
+            <select
+              id={`${ids}-owner`}
+              className="input-field bg-slate-950 text-base sm:text-xs"
+              value={gapOwner}
+              onChange={(e) => setGapOwner(e.target.value)}
+            >
+              {owners.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+            </select>
           </div>
         )}
 

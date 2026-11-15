@@ -61,6 +61,8 @@ export default function DetailDialogs({
           mangaId={mangaId}
           mpGapMap={mpGapMap}
           canEdit={canEdit}
+          people={readers}
+          user={user}
           gapEditionUnconfirmed={gapEditionUnconfirmed}
           onSuccess={async () => {
             await fetchManga();

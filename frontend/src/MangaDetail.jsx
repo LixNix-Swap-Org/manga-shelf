@@ -147,6 +147,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
 
   const {
     newVolumeType, setNewVolumeType, newVolumeNum, setNewVolumeNum, newVolumeStatus, setNewVolumeStatus,
+    newVolumeOwner, setNewVolumeOwner,
     newVolumeReleaseDate, setNewVolumeReleaseDate, newVolumePrice, setNewVolumePrice,
     newVolumeCover, setNewVolumeCover, uploadingNewCover, newVolumeIsbn, setNewVolumeIsbn, setNewVolumeMeta, newVolumeSortAfter, setNewVolumeSortAfter,
     readDate, setReadDate,
@@ -777,6 +778,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
               onApply={applyBulk}
               busy={bulkBusy}
               userId={user?.id}
+              user={user}
+              people={readers}
               currency={editionCurrency(manga)}
               readerId={canToggleOthers && selectedReaderId !== 'ALL' ? selectedReaderId : user?.id}
             />
@@ -803,6 +806,10 @@ export default function MangaDetail({ user, onUnauthorized }) {
               setNewVolumeReleaseDate={setNewVolumeReleaseDate}
               setNewVolumeStatus={setNewVolumeStatus}
               setNewVolumeType={setNewVolumeType}
+              newVolumeOwner={newVolumeOwner}
+              setNewVolumeOwner={setNewVolumeOwner}
+              people={readers}
+              user={user}
               newVolumeSortAfter={newVolumeSortAfter}
               setNewVolumeSortAfter={setNewVolumeSortAfter}
               volumes={volumes}

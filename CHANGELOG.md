@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Volumes
+- **Ownership for other users when adding or bulk-editing:** adding a single volume or filling a gap with status "Vorhanden" now offers the same "Für wen?" selector (`owner_user_id` on `POST /api/volumes`) as batch creation. In bulk edit, admins can now transfer sole ownership, add an owner, or remove an owner via the new "Besitzer" panel, and in "Band bearbeiten" admins can add a further copy ("Weiteres Exemplar") for other owners as well.
+
 ### Phone
 - **Room below the collection on iPhones:** the start page now leaves space for the raised scan button and the home bar, like the series page, so the last footer line ("Mit App verbinden") no longer runs into the scan button.
 

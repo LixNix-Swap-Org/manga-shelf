@@ -9,6 +9,7 @@ import { askConfirm } from '../modals/askConfirm.jsx';
 
 // i18n
 export const BULK_STATUSES = ['Vorhanden', 'Fehlt', 'Vorbestellt', 'Erscheint bald', 'Bestellt'];
+const READ_ONLY_ROLES = ['visitor', 'guest']; // i18n-ignore: role ids
 
 /** Keyboard focus and anchor jumps stop above the sticky bar (and the phone's detail bar below it) while it is shown. */
 function useScrollPaddingAbove(ref) {
@@ -36,6 +37,7 @@ export const bulkDeleteConfirmText = (count) => t('{count} wirklich löschen? De
 // handleBulkEdit shows it as given. `readerId` is the reader whose "Gelesen" state changes (the selected reader when allowed).
 export default function BulkActionBar({
   count, visibleCount, allVisibleSelected, onSelectAllVisible, onClear, onClose, onApply, busy = false, userId, readerId, currency = 'EUR',
+  people = [], user = null,
   confirmDelete = (text) => askConfirm(text, { confirmLabel: t('Löschen') })
 }) {
   const barRef = useRef(null);
@@ -44,6 +46,17 @@ export default function BulkActionBar({
   const [status, setStatus] = useState('Vorhanden'); // i18n-ignore: stored status value
   const [price, setPrice] = useState('');
   const [date, setDate] = useState(() => localDateString());
+  const ownerMembers = user?.role === 'admin' && Array.isArray(people)
+    ? people
+      .filter((p) => !READ_ONLY_ROLES.includes(p.role))
+      .map((p) => ({ id: Number(p.user_id ?? p.id), name: p.display_name || p.username }))
+      .filter((p) => Number.isInteger(p.id) && p.id > 0)
+    : [];
+  const canBulkOwners = ownerMembers.some((p) => p.id !== Number(user?.id));
+  const defaultOwnerTarget = ownerMembers.find((p) => p.id !== Number(user?.id))?.id ?? ownerMembers[0]?.id ?? '';
+  const [ownerTargetId, setOwnerTargetId] = useState('');
+  const [ownerAction, setOwnerAction] = useState('only'); // i18n-ignore: action id
+  const selectedOwner = ownerMembers.find((p) => p.id === Number(ownerTargetId)) || ownerMembers.find((p) => p.id === defaultOwnerTarget) || null;
   const disabled = busy || count === 0;
   const reader = readerId ?? userId;
 
@@ -52,6 +65,28 @@ export default function BulkActionBar({
     if (ok) setPanel(null);
   };
   const togglePanel = (name) => setPanel((p) => (p === name ? null : name));
+  const submitOwners = (e) => {
+    e.preventDefault();
+    if (!selectedOwner) return;
+    const targetId = selectedOwner.id;
+    if (ownerAction === 'only') {
+      const remove = ownerMembers.filter((p) => p.id !== targetId).map((p) => p.id);
+      apply(
+        { owners: { add: [targetId], ...(remove.length > 0 ? { remove } : {}) }, set: { purchase_date: localDateString() } },
+        t('Besitzer: {names}', { names: selectedOwner.name })
+      );
+    } else if (ownerAction === 'add') {
+      apply(
+        { owners: { add: [targetId] }, set: { purchase_date: localDateString() } },
+        t('{name} als Besitzer eingetragen', { name: selectedOwner.name })
+      );
+    } else if (ownerAction === 'remove') {
+      apply(
+        { owners: { remove: [targetId] } },
+        t('{name} besitzt den Band nicht mehr', { name: selectedOwner.name })
+      );
+    }
+  };
   const remove = async () => {
     if (await confirmDelete(bulkDeleteConfirmText(count))) apply({ delete: true }, t('gelöscht'));
   };
@@ -101,6 +136,11 @@ export default function BulkActionBar({
         >
           <Check className="w-3.5 h-3.5" aria-hidden="true" /> {t('Als vorhanden (mir)')}
         </button>
+        {canBulkOwners && (
+          <button type="button" disabled={disabled} aria-expanded={panel === 'owners'} onClick={() => togglePanel('owners')} className={panelButton('owners')}>
+            <Check className="w-3.5 h-3.5" aria-hidden="true" /> {t('Besitzer')}
+          </button>
+        )}
         <button type="button" disabled={disabled} aria-expanded={panel === 'status'} onClick={() => togglePanel('status')} className={panelButton('status')}>
           <Tag className="w-3.5 h-3.5" aria-hidden="true" /> {t('Status…')}
         </button>
@@ -121,6 +161,35 @@ export default function BulkActionBar({
         </button>
       </div>
 
+      {panel === 'owners' && canBulkOwners && selectedOwner && (
+        <form className="flex flex-wrap items-center gap-2" onSubmit={submitOwners}>
+          <label htmlFor="bulk-owner" className="text-xs text-slate-400">{t('Für wen?')}</label>
+          <select
+            id="bulk-owner"
+            value={selectedOwner.id}
+            onChange={(e) => setOwnerTargetId(Number(e.target.value))}
+            className="input-field text-base sm:text-xs py-2 w-auto"
+          >
+            {ownerMembers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id === Number(user?.id) ? t('Für mich') : t('Für {name}', { name: p.name })}
+              </option>
+            ))}
+          </select>
+          <select
+            id="bulk-owner-action"
+            aria-label={t('Besitzer')}
+            value={ownerAction}
+            onChange={(e) => setOwnerAction(e.target.value)}
+            className="input-field text-base sm:text-xs py-2 w-auto"
+          >
+            <option value="only">{t('Besitzer: {names}', { names: selectedOwner.name })}</option>
+            <option value="add">{t('{name} als Besitzer eingetragen', { name: selectedOwner.name })}</option>
+            <option value="remove">{t('{name} besitzt den Band nicht mehr', { name: selectedOwner.name })}</option>
+          </select>
+          <button type="submit" disabled={disabled} className="btn-primary text-xs py-2 px-3 disabled:opacity-40">{t('Übernehmen')}</button>
+        </form>
+      )}
       {panel === 'status' && (
         <form
           className="flex flex-wrap items-center gap-2"

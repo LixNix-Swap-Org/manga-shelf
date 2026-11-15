@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { regularVolumeNumber } from '../../utils/volumeHelpers';
+import { regularVolumeNumber, FOR_ME, ownerOptions } from '../../utils/volumeHelpers';
 import { Barcode, Camera, Check, Plus, X } from 'lucide-react';
 import { assetImgProps } from '../../utils/api';
 import FilePickerButton from '../common/FilePickerButton';
@@ -57,10 +57,15 @@ export default function AddVolumeBar({
   setNewVolumeIsbn,
   newVolumeSortAfter = '',
   setNewVolumeSortAfter,
+  newVolumeOwner = FOR_ME,
+  setNewVolumeOwner,
+  people = [],
+  user = null,
   volumes = [],
   currency = 'EUR'
 }) {
   const ids = useId();
+  const owners = ownerOptions(people, user);
   const cancelUpload = onCancelUpload ?? handleUploadNewSingleCover?.cancel;
   // Enter in a text field submits too: while the photo uploads the volume would be created without it
   const handleSubmit = (e) => {
@@ -190,6 +195,20 @@ export default function AddVolumeBar({
                 <option value="Fehlt">{t('Fehlt noch')}</option>
               </select>
             </div>
+
+            {newVolumeStatus === 'Vorhanden' && owners.length > 0 && setNewVolumeOwner && (
+              <div className="min-w-0 col-span-2 sm:w-44 sm:shrink-0">
+                <label htmlFor={`${ids}-owner`} className={LABEL}>{t('Für wen?')}</label>
+                <select
+                  id={`${ids}-owner`}
+                  className="input-field bg-slate-950 text-base sm:text-sm py-2 px-2 w-full cursor-pointer font-medium"
+                  value={newVolumeOwner}
+                  onChange={e => setNewVolumeOwner(e.target.value)}
+                >
+                  {owners.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+                </select>
+              </div>
+            )}
 
             <div className="min-w-0 col-span-2 sm:w-40 sm:shrink-0" title={t('Erscheinungsdatum (für Release-Radar)')}>
               <label htmlFor={`${ids}-date`} className={LABEL}>{rich('Erscheinungsdatum{hint}', { hint: <span className="sr-only"> {t('(für Release-Radar)')}</span> })}</label>

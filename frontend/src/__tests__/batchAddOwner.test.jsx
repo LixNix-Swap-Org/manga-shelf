@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import BatchAddModal, { ownerOptions, ownerBody } from '../components/detail/BatchAddModal';
+import AddVolumeBar from '../components/detail/AddVolumeBar';
+import GapFillModal from '../components/detail/GapFillModal';
 
 afterEach(() => {
   cleanup();
@@ -65,5 +67,70 @@ describe('BatchAddModal "Für wen?"', () => {
     fireEvent.submit(screen.getByLabelText('Für wen?').closest('form'));
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(JSON.parse(fetch.mock.calls[0][1].body)).not.toHaveProperty('owner_user_id');
+  });
+});
+
+describe('AddVolumeBar and GapFillModal "Für wen?"', () => {
+  const barProps = (over = {}) => ({
+    canEdit: true,
+    handleAddSingleVolume: vi.fn((e) => e.preventDefault()),
+    handleUploadNewSingleCover: vi.fn(),
+    newVolumeCover: '',
+    newVolumeNum: '4',
+    newVolumePrice: '',
+    newVolumeReleaseDate: '',
+    newVolumeStatus: 'Vorhanden',
+    newVolumeType: 'volume',
+    setNewVolumeCover: vi.fn(),
+    setNewVolumeNum: vi.fn(),
+    setNewVolumePrice: vi.fn(),
+    setNewVolumeReleaseDate: vi.fn(),
+    setNewVolumeStatus: vi.fn(),
+    setNewVolumeType: vi.fn(),
+    uploadingNewCover: false,
+    newVolumeOwner: 'me',
+    setNewVolumeOwner: vi.fn(),
+    people,
+    user: { id: 1, role: 'admin' },
+    ...over
+  });
+
+  it('AddVolumeBar shows "Für wen?" when Vorhanden, hides it when Fehlt, and notifies changes', () => {
+    const setNewVolumeOwner = vi.fn();
+    const { rerender } = render(<AddVolumeBar {...barProps({ setNewVolumeOwner })} />);
+    const select = screen.getByLabelText('Für wen?');
+    expect(Array.from(select.options).map(o => o.text)).toEqual(['Für mich', 'Für Felix', 'Noch für niemanden (Haushalt)']);
+    fireEvent.change(select, { target: { value: '2' } });
+    expect(setNewVolumeOwner).toHaveBeenCalledWith('2');
+
+    rerender(<AddVolumeBar {...barProps({ newVolumeStatus: 'Fehlt', setNewVolumeOwner })} />);
+    expect(screen.queryByLabelText('Für wen?')).toBeNull();
+  });
+
+  it('GapFillModal sends owner_user_id only when filling as Vorhanden', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ id: 99 }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetch);
+    render(
+      <GapFillModal
+        isOpen
+        gapNumber={3}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+        manga={{ title: 'Test' }}
+        mangaId="1"
+        mpGapMap={new Map()}
+        canEdit
+        people={people}
+        user={{ id: 1, role: 'admin' }}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('Für wen?'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: /Direkt als im Besitz eintragen/ }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ volume_number: '3', status: 'Vorhanden', owner_user_id: 2 });
+
+    fireEvent.click(screen.getByRole('button', { name: /Auf Einkaufsliste setzen/ }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).not.toHaveProperty('owner_user_id');
   });
 });
