@@ -12,11 +12,11 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
 
 const AGENTS = fs.readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
 
-// runtime data and build output that never lives in the repository
+// runtime data, installed packages and build output that never live in the repository
 const GENERATED_PREFIXES = [
     'data/', 'data-dev/', 'dist/', 'dist_pack/', 'frontend/dist/', 'frontend/dist-app/', 'mobile/www/', 'mobile/build/',
     'desktop/dist/', 'test/browser/screenshots/', 'test/browser/test_screenshots/', 'test/browser/reports/',
-    'uploads/', 'temp/', 'backups/', 'server/', 'app-frontend/', 'www/', 'ios/App/App/public', 'android/app/src/main/assets/public'
+    'node_modules/', 'frontend/node_modules/', 'uploads/', 'temp/', 'backups/', 'server/', 'app-frontend/', 'www/', 'ios/App/App/public', 'android/app/src/main/assets/public'
 ];
 const GENERATED_NAMES = new Set([
     'seed-users.json', 'test_report.json', 'desktop-settings.json', 'secure-store.json', 'web-manifest.json',
