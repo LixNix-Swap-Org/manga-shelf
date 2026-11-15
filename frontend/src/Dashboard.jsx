@@ -16,7 +16,7 @@ import { MAIN_ID, SkipLink, useDocumentTitle, usePageHeading } from './component
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
-import { normalizePubName } from './utils/volumeHelpers';
+import { normalizePubName, peopleOnEveryShelf } from './utils/volumeHelpers';
 import { buildScanPrefill } from './utils/scanHelpers';
 import { getStatusBadge } from './utils/collectionHelpers';
 import { monthNames } from './utils/format';
@@ -159,7 +159,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   const clearShelfScope = useCallback(() => setShelfFilter('ALL'), [setShelfFilter]);
   const householdPeople = useMemo(() => {
     const scope = scopedShelfId ? (shelves || []).filter((s) => String(s.id) === scopedShelfId) : (shelves || []);
-    if (scope.some((s) => Array.isArray(s.people))) return scope.flatMap((s) => s.people || []);
+    if (scope.some((s) => Array.isArray(s.people))) return peopleOnEveryShelf(scope);
     return availablePersons;
   }, [shelves, scopedShelfId, availablePersons]);
   const onShelfMissing = useCallback(() => {

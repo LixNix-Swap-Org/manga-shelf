@@ -183,9 +183,9 @@ export default function BulkActionBar({
             onChange={(e) => setOwnerAction(e.target.value)}
             className="input-field text-base sm:text-xs py-2 w-auto"
           >
-            <option value="only">{t('Besitzer: {names}', { names: selectedOwner.name })}</option>
-            <option value="add">{t('{name} als Besitzer eingetragen', { name: selectedOwner.name })}</option>
-            <option value="remove">{t('{name} besitzt den Band nicht mehr', { name: selectedOwner.name })}</option>
+            <option value="only">{t('Nur diese Person')}</option>
+            <option value="add">{t('Hinzufügen')}</option>
+            <option value="remove">{t('Entfernen')}</option>
           </select>
           <button type="submit" disabled={disabled} className="btn-primary text-xs py-2 px-3 disabled:opacity-40">{t('Übernehmen')}</button>
         </form>

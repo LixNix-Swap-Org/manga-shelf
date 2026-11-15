@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import BatchAddModal, { ownerOptions, ownerBody } from '../components/detail/BatchAddModal';
 import AddVolumeBar from '../components/detail/AddVolumeBar';
 import GapFillModal from '../components/detail/GapFillModal';
+import { peopleOnEveryShelf } from '../utils/volumeHelpers';
 
 afterEach(() => {
   cleanup();
@@ -132,5 +133,28 @@ describe('AddVolumeBar and GapFillModal "Für wen?"', () => {
     fireEvent.click(screen.getByRole('button', { name: /Auf Einkaufsliste setzen/ }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     expect(JSON.parse(fetch.mock.calls[1][1].body)).not.toHaveProperty('owner_user_id');
+  });
+});
+
+describe('peopleOnEveryShelf: "Für wen?" over several shelves (shopping list on "Alle Regale")', () => {
+  const anna = { user_id: 2, username: 'anna', role: 'editor' };
+  const max = { user_id: 1, username: 'max', role: 'admin' };
+  const ben = { user_id: 3, username: 'ben', role: 'editor' };
+
+  it('keeps only the people who are on every editable shelf, so no booking goes to a shelf without that person', () => {
+    const shelves = [
+      { id: 1, role: 'owner', people: [max, anna, ben] },
+      { id: 2, role: 'owner', people: [max, anna] },
+      { id: 3, role: 'viewer', people: [max] }
+    ];
+    expect(peopleOnEveryShelf(shelves).map((p) => p.username)).toEqual(['max', 'anna']);
+    expect(peopleOnEveryShelf([shelves[0]]).map((p) => p.username)).toEqual(['max', 'anna', 'ben']);
+  });
+
+  it('gives nothing without editable shelves or people', () => {
+    expect(peopleOnEveryShelf([])).toEqual([]);
+    expect(peopleOnEveryShelf(null)).toEqual([]);
+    expect(peopleOnEveryShelf([{ id: 3, role: 'viewer', people: [max] }])).toEqual([]);
+    expect(peopleOnEveryShelf([{ id: 1, role: 'owner', people: [max, anna] }, { id: 2, role: 'editor' }])).toEqual([]);
   });
 });
