@@ -5,6 +5,7 @@
 import { normalizeBase, isSecureEnough, INSECURE_URL_TEXT } from './serverStore.js';
 import { buildBackupZip, readBackupZip, restorableUploadName } from '../local/backupZip.js';
 import { LOCAL_PASSWORD_HASH } from '../local/sanitize.js';
+import { uploadAndInspectBackup } from '../utils/backupUpload.js';
 import imageCheck from '../../../core/lib/imageCheck.js';
 import owners from '../../../core/lib/owners.js';
 import marks from '../../../core/lib/marks.js';
@@ -34,28 +35,40 @@ export function checkedBase(url) {
   return base;
 }
 
-async function call(session, path, { method = 'GET', body, form, raw = false, fetchImpl = session.fetchImpl || globalThis.fetch } = {}) {
-  const headers = { 'X-Client': 'app' };
+async function callResponse(session, path, { method = 'GET', body, rawBody, form, raw = false, headers: extraHeaders, signal, fetchImpl = session.fetchImpl || globalThis.fetch } = {}) {
+  const headers = { 'X-Client': 'app', ...extraHeaders };
   if (session.token) headers.Authorization = `Bearer ${session.token}`;
   let payload;
   if (form) payload = form;
+  else if (rawBody !== undefined) payload = rawBody;
   else if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     payload = JSON.stringify(body);
   }
   let res;
   try {
-    res = await fetchImpl(`${session.base}${path}`, { method, headers, body: payload, credentials: 'omit' });
+    res = await fetchImpl(`${session.base}${path}`, { method, headers, body: payload, credentials: 'omit', signal });
   } catch (err) {
+    if (signal?.aborted || err?.name === 'AbortError') throw err;
     throw new TakeoverError(t(NETWORK_TEXT), { code: 'NETWORK' });
   }
-  if (raw && res.ok) return res;
+  if (raw && res.ok) return { ok: true, status: res.status, data: null, res };
   let data = null;
   try { data = await res.json(); } catch (_) { /* not JSON */ }
-  if (!res.ok) {
-    throw new TakeoverError(serverText(data) || t('Anfrage fehlgeschlagen (HTTP {status})', { status: res.status }), { status: res.status, code: data?.code || null, data });
-  }
-  return data;
+  return { ok: res.ok, status: res.status, data, res };
+}
+
+function toTakeoverError({ status, data }) {
+  return new TakeoverError(
+    serverText(data) || t('Anfrage fehlgeschlagen (HTTP {status})', { status }),
+    { status, code: data?.code || null, data }
+  );
+}
+
+async function call(session, path, options = {}) {
+  const result = await callResponse(session, path, options);
+  if (!result.ok) throw toTakeoverError(result);
+  return options.raw ? result.res : result.data;
 }
 
 /** Signs in at the server: { base, token, user }. */
@@ -83,22 +96,35 @@ export async function hashPassword(password) {
   return bcrypt.hash(password, 10);
 }
 
-const zipForm = (bytes) => {
-  const form = new FormData();
-  form.append('backup', new Blob([bytes], { type: 'application/zip' }), 'manga-shelf-app.zip');
-  return form;
-};
-
 /**
  * Step 1 of "Auf Server übertragen": packs the local collection (profile = the signed-in admin) and lets the server
  * check it. Resolves with the server's inspect answer (counts, current_counts, warnings, staging_id).
  */
-export async function inspectTransfer(session, runtime, { password, appVersion = '' }) {
+export async function inspectTransfer(session, runtime, { password, appVersion = '', signal, onPhase, onProgress } = {}) {
   const passwordHash = await hashPassword(password);
   const profile = runtime.getProfile();
   const dbBytes = runtime.databaseCopy((conn) => assignProfileToAdmin(conn, { profileId: profile.id, username: session.user.username, passwordHash }));
   const zip = await buildBackupZip(runtime, { dbBytes, appVersion });
-  return call(session, '/api/backup/inspect', { method: 'POST', form: zipForm(zip) });
+  const result = await uploadAndInspectBackup({
+    file: zip,
+    filename: 'manga-shelf-app.zip',
+    signal,
+    onPhase,
+    onProgress,
+    request: {
+      postForm: (path, form) => callResponse(session, path, { method: 'POST', form, signal }),
+      postJson: (path, body) => callResponse(session, path, { method: 'POST', body, signal }),
+      putChunk: (path, chunk) => callResponse(session, path, {
+        method: 'PUT',
+        rawBody: chunk,
+        headers: { 'Content-Type': 'application/octet-stream' },
+        signal
+      }),
+      deleteUpload: (path) => callResponse(session, path, { method: 'DELETE' }).catch(() => null)
+    }
+  });
+  if (!result.ok) throw toTakeoverError(result);
+  return result.data;
 }
 
 /** The server already holds a collection (series, volumes or more than the one admin). */

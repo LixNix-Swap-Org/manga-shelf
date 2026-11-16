@@ -67,7 +67,7 @@
     "src/components/modals/AddAnimeModal.jsx": 5307,
     "src/components/modals/AddMangaModal.jsx": 10601,
     "src/components/modals/AnimeDetailModal.jsx": 13465,
-    "src/components/modals/BackupRestoreModal.jsx": 9643,
+    "src/components/modals/BackupRestoreModal.jsx": 11480,
     "src/components/modals/CleanupModal.jsx": 3188,
     "src/components/modals/EpisodeLinkDialog.jsx": 4099,
     "src/components/modals/PublishersModal.jsx": 2680,

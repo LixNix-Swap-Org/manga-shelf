@@ -68,7 +68,8 @@ test.before(async () => {
         runtime: await load('local/runtime.js'),
         store: await load('local/store.js'),
         takeover: await load('app/takeover.js'),
-        zip: await load('local/backupZip.js')
+        zip: await load('local/backupZip.js'),
+        backupUpload: await load('utils/backupUpload.js')
     };
     SQL = await require(require.resolve('sql.js', { paths: [FRONTEND] }))();
 });
@@ -216,4 +217,49 @@ test('the CSV merge into an existing server is idempotent', opts, async () => {
 test('an insecure server address is refused before any request', opts, async () => {
     const { remoteLogin } = mods.takeover;
     await assert.rejects(remoteLogin({ url: 'http://example.org', username: 'a', password: 'b', fetchImpl: () => assert.fail('no request') }), /Heimnetz/);
+});
+
+test('chunked app transfer uploads an archive above the chunk threshold via bearer auth and stages on inspect', opts, async () => {
+    const { remoteLogin, cancelTransfer } = mods.takeover;
+    const { uploadAndInspectBackup } = mods.backupUpload;
+    const rt = await newRuntime('ChunkUser');
+    await local(rt, 'POST', '/api/mangas', { title: 'Chunked App Manga' });
+    const dbBytes = rt.databaseCopy(() => {});
+    const zipBytes = await mods.zip.buildBackupZip(rt, { dbBytes, appVersion: '3.7.0' });
+    assert.ok(zipBytes.byteLength > 2000);
+
+    const session = await remoteLogin({ url: server.root, username: 'admin', password: PASSWORD });
+    const phases = [];
+    const progress = [];
+    const call = async (method, urlPath, { body, headers = {} } = {}) => {
+        const res = await fetch(`${session.base}${urlPath}`, {
+            method,
+            headers: { ...bearer(session), ...headers },
+            body
+        });
+        const data = await res.json().catch(() => null);
+        return { ok: res.ok, status: res.status, data, res };
+    };
+    const inspected = await uploadAndInspectBackup({
+        file: zipBytes,
+        filename: 'manga-shelf-app.zip',
+        threshold: 1000,
+        chunkSize: 1024,
+        onPhase: (p) => phases.push(p),
+        onProgress: (p) => progress.push(p),
+        request: {
+            postForm: (p, form) => call('POST', p, { body: form }),
+            postJson: (p, body) => call('POST', p, { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+            putChunk: (p, chunk) => call('PUT', p, { body: chunk, headers: { 'Content-Type': 'application/octet-stream' } }),
+            deleteUpload: (p) => call('DELETE', p).catch(() => null)
+        }
+    });
+    assert.equal(inspected.ok, true, JSON.stringify(inspected.data));
+    assert.ok(inspected.data.staging_id);
+    assert.equal(inspected.data.counts.mangas, 1);
+    assert.deepEqual(phases, ['upload', 'inspect']);
+    assert.equal(progress[0].loaded, 0);
+    assert.equal(progress[progress.length - 1].loaded, zipBytes.byteLength);
+    await cancelTransfer(session, inspected.data.staging_id);
+    await rt.close();
 });

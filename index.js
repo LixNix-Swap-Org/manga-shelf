@@ -77,7 +77,7 @@ const { HttpError, defaultCode, errorBody, isAppCode, msg } = require('./utils/h
 const { requireEditor } = require('./middleware/auth');
 const { clientIp, createLimiterStore } = require('./middleware/rateLimit');
 const { createOriginCheck, normalizeOrigin } = require('./middleware/originCheck');
-const { ALLOWED_IMAGE_EXTS } = require('./middleware/upload');
+const { ALLOWED_IMAGE_EXTS, uploadBackup, formatLimit } = require('./middleware/upload');
 
 const authRoutes = require('./routes/auth');
 const apiKeyRoutes = require('./routes/apiKeys');
@@ -127,12 +127,13 @@ const CLIENT_ERROR_TEXTS = {
     415: 'Format wird nicht unterstützt'
 };
 
-const formatLimit = (bytes) => (bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))} MB` : `${Math.round(bytes / 1024)} KB`);
-
 // Limits as configured in middleware/upload.js
 function uploadErrorMessage(err) {
     switch (err.code) {
-        case 'LIMIT_FILE_SIZE': return err.field === 'backup' ? 'Backup ist größer als 500 MB' : 'Bild ist größer als 15 MB';
+        case 'LIMIT_FILE_SIZE':
+            return err.field === 'backup'
+                ? msg('Backup ist größer als {max}', { max: formatLimit(uploadBackup.limits.fileSize) })
+                : 'Bild ist größer als 15 MB';
         case 'LIMIT_UNEXPECTED_FILE': return err.field === 'images' ? 'Höchstens 10 Bilder auf einmal' : 'Unerwartetes Dateifeld im Upload';
         case 'LIMIT_FILE_COUNT': return 'Zu viele Dateien auf einmal';
         default: return 'Upload abgelehnt';
