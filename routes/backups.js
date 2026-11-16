@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { db, tempDir, migrateDbFile, validateDbFile, openRawDb } = require('../db');
 const auth = require('../middleware/auth');
 const { requireAdmin, signSessionToken, setAuthCookie, clearAuthCookie } = auth;
-const { uploadBackup } = require('../middleware/upload');
+const { uploadBackup, maxBackupUploadBytes, formatLimit } = require('../middleware/upload');
 const scheduler = require('../services/scheduler');
 const { backupsDir, copyDatabaseToTemp, createBackupSnapshot, holdSnapshot } = scheduler;
 const {
@@ -168,6 +168,43 @@ const STAGING_TTL_MS = 15 * 60 * 1000;
 const MAX_STAGED = 3;
 const staged = new Map();
 
+const UPLOAD_TTL_MS = 30 * 60 * 1000;
+const MAX_UPLOAD_SESSIONS = 4;
+const DEFAULT_CHUNK_BYTES = 16 * 1024 * 1024;
+const MAX_CHUNK_BYTES = 32 * 1024 * 1024;
+const uploadSessions = new Map();
+
+const noRequestTimeout = (req, res, next) => {
+    req.setTimeout?.(0);
+    res.setTimeout?.(0);
+    next();
+};
+
+function dropUploadSession(id) {
+    const session = uploadSessions.get(id);
+    if (!session) return;
+    uploadSessions.delete(id);
+    clearTimeout(session.timer);
+    session.aborted = true;
+    if (session.destroyStream) session.destroyStream();
+    unlinkQuietly(session.path);
+}
+
+function touchUploadSession(session) {
+    clearTimeout(session.timer);
+    const expiresAt = Date.now() + UPLOAD_TTL_MS;
+    session.expiresAt = expiresAt;
+    session.timer = setTimeout(() => {
+        if (session.inFlight) return;
+        dropUploadSession(session.id);
+    }, UPLOAD_TTL_MS);
+    session.timer.unref();
+    return new Date(expiresAt).toISOString();
+}
+
+const uploadNotFound = (res) => sendError(res, 404,
+    'Der Upload ist abgelaufen oder unbekannt. Bitte das Backup erneut auswählen.', 'UPLOAD_NOT_FOUND');
+
 function dropStaging(id) {
     const entry = staged.get(id);
     if (!entry) return;
@@ -246,17 +283,22 @@ const snapshotNotFound = (res) => sendError(res, 404, 'Snapshot-Datei nicht gefu
 
 const truthy = (value) => value === true || value === 'true' || value === '1';
 
+function checkBackupUploadSpace(byteLength, res) {
+    try {
+        disk.ensureFreeSpace(tempDir, 2 * byteLength + disk.fileSize(dbFilePath), 'backup');
+        return true;
+    } catch (err) {
+        log.warn('[Backup Restore] Upload rejected for lack of space:', err.message);
+        sendError(res, 507, err.message, err.code, err.extra);
+        return false;
+    }
+}
+
 /** 507 before multer writes an upload that cannot fit (the archive plus its extracted content). */
 function requireSpaceForUpload(req, res, next) {
     const length = Number(req.headers['content-length']);
     if (!Number.isFinite(length) || length <= 0) return next();
-    try {
-        disk.ensureFreeSpace(tempDir, 2 * length + disk.fileSize(dbFilePath), 'backup');
-        next();
-    } catch (err) {
-        log.warn('[Backup Restore] Upload rejected for lack of space:', err.message);
-        sendError(res, 507, err.message, err.code, err.extra);
-    }
+    if (checkBackupUploadSpace(length, res)) next();
 }
 
 function snapshotJson(s) {
@@ -272,7 +314,7 @@ function snapshotJson(s) {
 }
 
 // 1. Direct stream download of current backup
-router.get('/backup', requireAdmin, async (req, res) => {
+router.get('/backup', requireAdmin, noRequestTimeout, async (req, res) => {
     let dbCopy = null;
     const dropCopy = () => { if (dbCopy) { try { fs.unlinkSync(dbCopy); } catch (e) { /* already gone */ } } };
     try {
@@ -327,7 +369,7 @@ router.post('/backups/create', requireAdmin, refuseDuringUpdate, async (req, res
 });
 
 // 4. Restore from an existing server snapshot (one step; the two-step flow is /backup/inspect + /backup/restore/:id)
-router.post('/backups/:filename/restore', requireAdmin, refuseDuringUpdate, async (req, res) => {
+router.post('/backups/:filename/restore', requireAdmin, refuseDuringUpdate, noRequestTimeout, async (req, res) => {
     const snapshot = findSnapshot(req.params.filename);
     if (!snapshot) return snapshotNotFound(res);
     await confirmRestorePassword(req, res);
@@ -361,7 +403,7 @@ router.post('/backups/:filename/restore', requireAdmin, refuseDuringUpdate, asyn
 });
 
 // 5. Download a specific server snapshot
-router.get('/backups/:filename/download', requireAdmin, (req, res) => {
+router.get('/backups/:filename/download', requireAdmin, noRequestTimeout, (req, res) => {
     const snapshot = findSnapshot(req.params.filename);
     if (!snapshot) return snapshotNotFound(res);
     res.download(snapshot.filePath, snapshot.filename);
@@ -411,12 +453,233 @@ const handleUploadedBackupRestore = async (req, res) => {
     }
 };
 
-router.post('/backup/restore', requireAdmin, refuseDuringUpdate, requireSpaceForUpload, uploadBackup.single('backup'), requireRestorePassword, handleUploadedBackupRestore);
-router.post('/restore', requireAdmin, refuseDuringUpdate, requireSpaceForUpload, uploadBackup.single('backup'), requireRestorePassword, handleUploadedBackupRestore);
+router.post('/backup/restore', requireAdmin, refuseDuringUpdate, noRequestTimeout, requireSpaceForUpload, uploadBackup.single('backup'), requireRestorePassword, handleUploadedBackupRestore);
+router.post('/restore', requireAdmin, refuseDuringUpdate, noRequestTimeout, requireSpaceForUpload, uploadBackup.single('backup'), requireRestorePassword, handleUploadedBackupRestore);
 
-// 8. Two-step restore, step 1: stage an uploaded ZIP (multipart field "backup") or a server snapshot
-// ({ filename }), check it and report what it contains. The staging id is valid for 15 minutes.
-router.post('/backup/inspect', requireAdmin, refuseDuringUpdate, requireSpaceForUpload, uploadBackup.single('backup'), async (req, res) => {
+// 7b. Chunked upload sessions: splits large archives into <= 32 MB pieces so reverse proxies (Cloudflare 100 MB,
+// nginx) and long slow uploads finish reliably; POST /backup/inspect promotes a completed upload_id to staging.
+router.post('/backup/uploads', requireAdmin, refuseDuringUpdate, (req, res) => {
+    try {
+        assertNoRollbackCopy();
+    } catch (err) {
+        return sendRestoreError(res, 'inspect', err, err.status || 409);
+    }
+    const rawSize = req.body && req.body.size;
+    if (typeof rawSize !== 'number' || !Number.isSafeInteger(rawSize) || rawSize <= 0) {
+        return sendError(res, 400, 'Ungültige Backup-Dateigröße', 'INVALID_UPLOAD_SIZE');
+    }
+    const maxBytes = maxBackupUploadBytes();
+    if (rawSize > maxBytes) {
+        return sendError(res, 413, msg('Backup ist größer als {max}', { max: formatLimit(maxBytes) }), 'PAYLOAD_TOO_LARGE');
+    }
+    if (!checkBackupUploadSpace(rawSize, res)) return;
+
+    while (uploadSessions.size >= MAX_UPLOAD_SESSIONS) {
+        let victim = null;
+        for (const candidate of uploadSessions.values()) {
+            if (!candidate.inFlight) {
+                victim = candidate;
+                break;
+            }
+        }
+        if (!victim) {
+            return sendError(res, 429, 'Zu viele gleichzeitige Backup-Uploads – bitte kurz warten.', 'TOO_MANY_UPLOADS');
+        }
+        dropUploadSession(victim.id);
+    }
+
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    const id = crypto.randomUUID();
+    const rawName = typeof req.body.filename === 'string' ? path.basename(req.body.filename.trim()) : '';
+    const filename = rawName ? rawName.slice(0, 200) : null;
+    const filePath = path.join(tempDir, `restore-upload-${id}.part`);
+    fs.writeFileSync(filePath, '');
+
+    const session = {
+        id,
+        userId: req.user.id,
+        path: filePath,
+        filename,
+        size: rawSize,
+        received: 0,
+        inFlight: false,
+        aborted: false,
+        destroyStream: null,
+        timer: null,
+        expiresAt: 0
+    };
+    const expiresAt = touchUploadSession(session);
+    uploadSessions.set(id, session);
+
+    res.status(201).json({
+        success: true,
+        upload_id: id,
+        chunk_size: DEFAULT_CHUNK_BYTES,
+        max_size: maxBytes,
+        expires_at: expiresAt
+    });
+});
+
+router.put('/backup/uploads/:uploadId', requireAdmin, refuseDuringUpdate, noRequestTimeout, async (req, res) => {
+    const session = uploadSessions.get(req.params.uploadId);
+    if (!session || session.userId !== req.user.id) {
+        res.set('Connection', 'close');
+        return uploadNotFound(res);
+    }
+    if (session.inFlight) {
+        res.set('Connection', 'close');
+        return sendError(res, 409, 'Für diesen Upload läuft bereits ein Teil-Upload.', 'UPLOAD_BUSY');
+    }
+    const rawOffset = req.query ? req.query.offset : undefined;
+    if (!/^\d+$/.test(String(rawOffset))) {
+        res.set('Connection', 'close');
+        return sendError(res, 400, 'Ungültiger Upload-Offset', 'INVALID_UPLOAD_OFFSET');
+    }
+    const offset = Number(rawOffset);
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+        res.set('Connection', 'close');
+        return sendError(res, 400, 'Ungültiger Upload-Offset', 'INVALID_UPLOAD_OFFSET');
+    }
+    if (offset !== session.received) {
+        res.set('Connection', 'close');
+        return sendError(res, 409, 'Upload-Offset passt nicht zum Serverstand.', 'OFFSET_MISMATCH', { expected: session.received });
+    }
+    const remaining = session.size - session.received;
+    if (remaining <= 0) {
+        res.set('Connection', 'close');
+        return sendError(res, 409, 'Dieser Upload ist bereits vollständig.', 'UPLOAD_COMPLETE');
+    }
+
+    const rawLength = req.headers['content-length'];
+    const contentLength = rawLength !== undefined ? Number(rawLength) : null;
+    if (contentLength !== null && (!Number.isFinite(contentLength) || contentLength < 0)) {
+        res.set('Connection', 'close');
+        return sendError(res, 400, 'Ungültige Chunk-Größe', 'INVALID_CHUNK_SIZE');
+    }
+    if (contentLength === 0) {
+        res.set('Connection', 'close');
+        return sendError(res, 400, 'Chunk darf nicht leer sein.', 'EMPTY_CHUNK');
+    }
+    if (contentLength !== null && contentLength > MAX_CHUNK_BYTES) {
+        res.set('Connection', 'close');
+        return sendError(res, 413, msg('Chunk ist größer als {max}', { max: formatLimit(MAX_CHUNK_BYTES) }), 'PAYLOAD_TOO_LARGE');
+    }
+    if (contentLength !== null && contentLength > remaining) {
+        res.set('Connection', 'close');
+        return sendError(res, 400, 'Chunk überschreitet die angegebene Backup-Größe.', 'CHUNK_OVERFLOW');
+    }
+    if (!fs.existsSync(session.path)) {
+        dropUploadSession(session.id);
+        res.set('Connection', 'close');
+        return uploadNotFound(res);
+    }
+
+    const startOffset = session.received;
+    const maxChunk = Math.min(MAX_CHUNK_BYTES, remaining);
+    let fh = null;
+    let written = 0;
+    let errorKind = null;
+    session.inFlight = true;
+    session.destroyStream = () => {
+        errorKind = 'cancelled';
+        req.destroy();
+    };
+    touchUploadSession(session);
+
+    try {
+        fh = await fs.promises.open(session.path, 'r+');
+        let pos = startOffset;
+        for await (const raw of req) {
+            const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+            if (written + buf.length > maxChunk) {
+                errorKind = remaining < MAX_CHUNK_BYTES ? 'overflow' : 'too_large';
+                req.destroy();
+                throw new Error(errorKind);
+            }
+            let off = 0;
+            while (off < buf.length) {
+                const { bytesWritten } = await fh.write(buf, off, buf.length - off, pos);
+                off += bytesWritten;
+                pos += bytesWritten;
+                written += bytesWritten;
+            }
+        }
+        if (session.aborted || !req.complete) {
+            errorKind = 'aborted';
+            throw new Error('CLIENT_ABORTED');
+        }
+        if (written === 0) {
+            errorKind = 'empty';
+            throw new Error('EMPTY_CHUNK');
+        }
+        if (contentLength !== null && written !== contentLength) {
+            errorKind = 'aborted';
+            throw new Error('SHORT_BODY');
+        }
+    } catch (err) {
+        if (fh) await fh.close().catch(() => {});
+        fh = null;
+        session.destroyStream = null;
+        session.inFlight = false;
+        if (!session.aborted && fs.existsSync(session.path)) {
+            try { fs.truncateSync(session.path, startOffset); } catch (_) {}
+            touchUploadSession(session);
+        }
+        if (session.aborted) {
+            unlinkQuietly(session.path);
+            if (!res.headersSent && !res.destroyed) return uploadNotFound(res);
+            return;
+        }
+        if (errorKind === 'overflow') {
+            return sendError(res, 400, 'Chunk überschreitet die angegebene Backup-Größe.', 'CHUNK_OVERFLOW');
+        }
+        if (errorKind === 'too_large') {
+            return sendError(res, 413, msg('Chunk ist größer als {max}', { max: formatLimit(MAX_CHUNK_BYTES) }), 'PAYLOAD_TOO_LARGE');
+        }
+        if (errorKind === 'empty') {
+            return sendError(res, 400, 'Chunk darf nicht leer sein.', 'EMPTY_CHUNK');
+        }
+        if (errorKind === 'aborted' || req.aborted || res.destroyed || err.code === 'ECONNRESET' || err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+            return;
+        }
+        if (isDiskFull(err)) {
+            log.warn('[Backup Restore] Chunk write failed (disk full):', err.message);
+            return sendError(res, 507, 'Nicht genug Speicherplatz auf dem Server für das Backup.', 'INSUFFICIENT_SPACE');
+        }
+        log.error('[Backup Upload] Chunk error:', err);
+        return sendError(res, 500, 'Fehler beim Speichern des Backup-Uploads');
+    } finally {
+        if (fh) await fh.close().catch(() => {});
+        session.destroyStream = null;
+    }
+
+    session.inFlight = false;
+    if (session.aborted) {
+        unlinkQuietly(session.path);
+        return uploadNotFound(res);
+    }
+    session.received = startOffset + written;
+    const expiresAt = touchUploadSession(session);
+    res.json({
+        success: true,
+        upload_id: session.id,
+        received: session.received,
+        size: session.size,
+        complete: session.received === session.size,
+        expires_at: expiresAt
+    });
+});
+
+router.delete('/backup/uploads/:uploadId', requireAdmin, (req, res) => {
+    const session = uploadSessions.get(req.params.uploadId);
+    if (!session || session.userId !== req.user.id) return uploadNotFound(res);
+    dropUploadSession(session.id);
+    res.json({ success: true });
+});
+
+// 8. Two-step restore, step 1: stage an uploaded ZIP (multipart field "backup"), a completed chunked upload
+// ({ upload_id }) or a server snapshot ({ filename }), check it and report what it contains. Valid for 15 minutes.
+router.post('/backup/inspect', requireAdmin, refuseDuringUpdate, noRequestTimeout, requireSpaceForUpload, uploadBackup.single('backup'), async (req, res) => {
     const id = crypto.randomUUID();
     const uploadedPath = uploadedBackupPath(req);
     let stagedPath = null;
@@ -432,6 +695,21 @@ router.post('/backup/inspect', requireAdmin, refuseDuringUpdate, requireSpaceFor
             stagedPath = path.join(tempDir, `restore-staged-${id}.zip`);
             fs.renameSync(uploadedPath, stagedPath);
             source = { type: 'upload', path: stagedPath, filename: req.file.originalname || null, size: req.file.size };
+        } else if (typeof req.body.upload_id === 'string' && req.body.upload_id) {
+            const session = uploadSessions.get(req.body.upload_id);
+            if (!session || session.userId !== req.user.id) return uploadNotFound(res);
+            if (session.inFlight || session.received !== session.size) {
+                return sendError(res, 409, 'Der Backup-Upload ist noch unvollständig.', 'UPLOAD_INCOMPLETE');
+            }
+            if (!fs.existsSync(session.path)) {
+                dropUploadSession(session.id);
+                return uploadNotFound(res);
+            }
+            uploadSessions.delete(session.id);
+            clearTimeout(session.timer);
+            stagedPath = path.join(tempDir, `restore-staged-${id}.zip`);
+            fs.renameSync(session.path, stagedPath);
+            source = { type: 'upload', path: stagedPath, filename: session.filename || null, size: session.size };
         } else if (typeof req.body.filename === 'string' && req.body.filename) {
             const snapshot = findSnapshot(req.body.filename);
             if (!snapshot) return snapshotNotFound(res);
@@ -471,7 +749,7 @@ router.post('/backup/inspect', requireAdmin, refuseDuringUpdate, requireSpaceFor
 const stagingNotFound = (res) => sendError(res, 404,
     'Die Prüfung ist abgelaufen oder unbekannt. Bitte das Backup erneut auswählen und prüfen.', 'STAGING_NOT_FOUND');
 
-router.post('/backup/restore/:stagingId', requireAdmin, refuseDuringUpdate, async (req, res) => {
+router.post('/backup/restore/:stagingId', requireAdmin, refuseDuringUpdate, noRequestTimeout, async (req, res) => {
     const entry = staged.get(req.params.stagingId);
     if (!entry || entry.userId !== req.user.id) return stagingNotFound(res);
     await confirmRestorePassword(req, res);

@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { uploadsDir, tempDir } = require('../db');
 const { detectImageExt } = require('../core/lib/imageCheck');
 const { stripImageMetadata } = require('../utils/imageMeta');
+const config = require('../utils/config');
 
 // Allowed image MIME types and extensions for secure uploads
 const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
@@ -184,14 +185,32 @@ const backupStorage = multer.diskStorage({
     }
 });
 
+// 6 GB default matches 2 GB DB + 4 GB uploads restore limits and grows when an admin raises RESTORE_MAX_*
+const BACKUP_MAX_ARCHIVE_BYTES = 6 * 1024 * 1024 * 1024;
+const maxBackupUploadBytes = () => Math.max(
+    BACKUP_MAX_ARCHIVE_BYTES,
+    Number(config.restoreMaxDbBytes || 0) + Number(config.restoreMaxUploadsBytes || 0)
+);
+
+const formatLimit = (bytes) => {
+    if (bytes >= 1024 ** 3) {
+        const gb = bytes / (1024 ** 3);
+        return `${Number.isInteger(gb) ? gb : gb.toFixed(1).replace(/\.0$/, '')} GB`;
+    }
+    return bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))} MB` : `${Math.round(bytes / 1024)} KB`;
+};
+
 const uploadBackup = multer({
     storage: backupStorage,
-    limits: { fileSize: 500 * 1024 * 1024 } // 500 MB max backup archive size
+    limits: { fileSize: maxBackupUploadBytes() }
 });
 
 module.exports = {
     upload,
     uploadBackup,
+    BACKUP_MAX_ARCHIVE_BYTES,
+    maxBackupUploadBytes,
+    formatLimit,
     verifyImageUploads,
     stripImageFile,
     stripImageFileSync,

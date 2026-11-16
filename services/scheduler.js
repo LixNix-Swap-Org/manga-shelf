@@ -454,7 +454,7 @@ function sweepTempArtefacts() {
             if (pattern.test(name)) candidates.push(path.join(dir, name));
         }
     };
-    collect(tempDir, /^((backup-db|verify|inspect|vor-update-db)-.*\.db(-wal|-shm|-journal)?|restore-.*\.zip|restore-uploads-.+|manga-shelf-db-check-.+)$/);
+    collect(tempDir, /^((backup-db|verify|inspect|vor-update-db)-.*\.db(-wal|-shm|-journal)?|restore-.*\.(zip|part)|restore-uploads-.+|manga-shelf-db-check-.+)$/);
     collect(dataDir, /^manga\.db\.(restore-tmp(-wal|-shm|-journal)?|bak\.tmp)$/);
     collect(backupsDir, /\.(zip\.part|json\.tmp)$/);
     collect(uploadsDir, /^\.strip-.+\.tmp$/);

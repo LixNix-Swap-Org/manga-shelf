@@ -12,6 +12,7 @@ import {
   UNDO_KEY, UNDO_TTL_MS, manifestSummary, readRestoreUndo, saveRestoreUndo, versionSummary
 } from '../components/modals/backup/backupHelpers';
 import { TIMEOUTS, setServer } from '../utils/api';
+import { uploadAndInspectBackup } from '../utils/backupUpload';
 import { downloadProgressText } from '../components/modals/backup/DownloadLink';
 
 const ADMIN = { id: 1, username: 'admin', role: 'admin' };
@@ -663,5 +664,131 @@ describe('BackupRestoreModal undo', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ausblenden' }));
     expect(screen.queryByRole('button', { name: 'Rückgängig machen' })).toBeNull();
     expect(sessionStorage.getItem(UNDO_KEY)).toBeNull();
+  });
+});
+
+describe('BackupRestoreModal large chunked uploads', () => {
+  function mockLargeFile(name, size) {
+    const file = new File(['zip'], name, { type: 'application/zip' });
+    Object.defineProperty(file, 'size', { value: size });
+    file.slice = (start, end) => {
+      const len = Math.max(0, end - start);
+      const b = new Blob(['x']);
+      Object.defineProperty(b, 'size', { value: len });
+      return b;
+    };
+    return file;
+  }
+
+  it('splits files above 16 MB into chunks, shows live progress and stages via upload_id', async () => {
+    const uploadId = 'chunk-up-1';
+    const chunkDeferred = deferred();
+    const callsLog = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      const method = init.method || 'GET';
+      callsLog.push({ method, url, init });
+      if (method === 'GET' && url === '/api/backups') return json(200, { backups: [] });
+      if (method === 'POST' && url === '/api/backup/uploads') {
+        return json(201, { upload_id: uploadId, chunk_size: 16 * 1024 * 1024 });
+      }
+      if (method === 'PUT' && url === `/api/backup/uploads/${uploadId}?offset=0`) {
+        await chunkDeferred.promise;
+        return json(200, { upload_id: uploadId, received: 16 * 1024 * 1024, size: 20 * 1024 * 1024, complete: false });
+      }
+      if (method === 'PUT' && url === `/api/backup/uploads/${uploadId}?offset=${16 * 1024 * 1024}`) {
+        return json(200, { upload_id: uploadId, received: 20 * 1024 * 1024, size: 20 * 1024 * 1024, complete: true });
+      }
+      if (method === 'POST' && url === '/api/backup/inspect') {
+        return json(200, inspection({ source: { type: 'upload', filename: 'big.zip', size: 20 * 1024 * 1024 } }));
+      }
+      throw new Error(`unexpected ${method} ${url}`);
+    }));
+
+    renderBackup();
+    fireEvent.click(screen.getByRole('tab', { name: 'ZIP-Datei hochladen' }));
+    const file = mockLargeFile('big.zip', 20 * 1024 * 1024);
+    fireEvent.change(document.getElementById('backup-file-input'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Backup prüfen' }));
+
+    const bar = await screen.findByRole('progressbar', { name: 'Upload-Fortschritt' });
+    expect(bar.getAttribute('aria-valuenow')).toBe('0');
+    expect(screen.getByRole('button', { name: 'Abbrechen' })).toBeTruthy();
+
+    await act(async () => { chunkDeferred.resolve(); });
+    expect(await screen.findByRole('heading', { name: 'Wiederherstellung bestätigen' })).toBeTruthy();
+
+    const inspectCall = callsLog.find((c) => c.method === 'POST' && c.url === '/api/backup/inspect');
+    expect(JSON.parse(inspectCall.init.body)).toEqual({ upload_id: uploadId });
+    expect(callsLog.filter((c) => c.method === 'PUT')).toHaveLength(2);
+  });
+
+  it('cancelling during chunked upload aborts cleanly, deletes server upload and shows no error', async () => {
+    const uploadId = 'chunk-up-cancel';
+    const callsLog = [];
+    vi.stubGlobal('fetch', vi.fn((url, init = {}) => {
+      const method = init.method || 'GET';
+      callsLog.push({ method, url, init });
+      if (method === 'GET' && url === '/api/backups') return Promise.resolve(json(200, { backups: [] }));
+      if (method === 'POST' && url === '/api/backup/uploads') {
+        return Promise.resolve(json(201, { upload_id: uploadId, chunk_size: 16 * 1024 * 1024 }));
+      }
+      if (method === 'PUT' && url.startsWith(`/api/backup/uploads/${uploadId}`)) {
+        return new Promise((_, reject) => {
+          init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        });
+      }
+      if (method === 'DELETE' && url === `/api/backup/uploads/${uploadId}`) {
+        return Promise.resolve(json(200, { success: true }));
+      }
+      return Promise.reject(new Error(`unexpected ${method} ${url}`));
+    }));
+
+    renderBackup();
+    fireEvent.click(screen.getByRole('tab', { name: 'ZIP-Datei hochladen' }));
+    const file = mockLargeFile('big.zip', 20 * 1024 * 1024);
+    fireEvent.change(document.getElementById('backup-file-input'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Backup prüfen' }));
+
+    const cancelBtn = await screen.findByRole('button', { name: 'Abbrechen' });
+    fireEvent.click(cancelBtn);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Backup prüfen' }).disabled).toBe(false));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(callsLog.some((c) => c.method === 'DELETE' && c.url === `/api/backup/uploads/${uploadId}`)).toBe(true);
+  });
+
+  it('retries transient chunk failures and resumes cleanly on OFFSET_MISMATCH', async () => {
+    const bytes = new Uint8Array(25);
+    const putUrls = [];
+    let attempt = 0;
+    const res = await uploadAndInspectBackup({
+      file: bytes,
+      filename: 'retry.zip',
+      threshold: 5,
+      chunkSize: 10,
+      request: {
+        postForm: vi.fn(),
+        postJson: async (url) => (url === '/api/backup/uploads'
+          ? { ok: true, status: 201, data: { upload_id: 'up-r', chunk_size: 10 }, res: null }
+          : { ok: true, status: 200, data: { staging_id: STAGING }, res: null }),
+        putChunk: async (url) => {
+          putUrls.push(url);
+          attempt++;
+          if (attempt === 1) return { ok: false, status: 502, data: {}, res: null };
+          if (attempt === 2) return { ok: true, status: 200, data: { received: 10 }, res: null };
+          if (attempt === 3) return { ok: false, status: 409, data: { code: 'OFFSET_MISMATCH', expected: 15 }, res: null };
+          return { ok: true, status: 200, data: { received: 25 }, res: null };
+        },
+        deleteUpload: vi.fn()
+      }
+    });
+    expect(res.ok).toBe(true);
+    expect(res.data.staging_id).toBe(STAGING);
+    expect(putUrls).toEqual([
+      '/api/backup/uploads/up-r?offset=0',
+      '/api/backup/uploads/up-r?offset=0',
+      '/api/backup/uploads/up-r?offset=10',
+      '/api/backup/uploads/up-r?offset=15'
+    ]);
   });
 });
