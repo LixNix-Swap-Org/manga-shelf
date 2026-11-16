@@ -24,8 +24,10 @@ test('reads, owned copies, new volumes and series, grouped per person, series an
     const vols = (await lena('GET', `/mangas/${id}`)).body.volumes;
     for (const v of vols) assert.equal((await lena('POST', `/volumes/${v.id}/owners`, { owned: true })).status, 200);
     for (const v of vols.slice(0, 2)) assert.ok((await admin('POST', `/volumes/${v.id}/read`, {})).status < 300);
-    // everything so far happened an hour ago; admin changes volume 3 now: a change of its own (not the step that added or owned it)
+    // everything so far happened an hour ago; admin changes volume 3 now: a change of its own (not the step that added or owned it).
+    // The series moves back with its volumes, so in the first hour of a day they stay on one day (the creation groups by day).
     const db = require('../db').db;
+    db.prepare("UPDATE mangas SET created_at = datetime(created_at, '-1 hour'), updated_at = datetime(updated_at, '-1 hour') WHERE id = ?").run(id);
     db.prepare("UPDATE volumes SET created_at = datetime(created_at, '-1 hour'), updated_at = datetime(updated_at, '-1 hour') WHERE manga_id = ?").run(id);
     db.prepare("UPDATE volume_copies SET created_at = datetime(created_at, '-1 hour') WHERE volume_id IN (SELECT id FROM volumes WHERE manga_id = ?)").run(id);
     assert.equal((await admin('PUT', `/volumes/${vols[2].id}`, { ...vols[2], notes: 'Knick' })).status, 200);
