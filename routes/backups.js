@@ -568,15 +568,19 @@ router.put('/backup/uploads/:uploadId', requireAdmin, refuseDuringUpdate, noRequ
         res.set('Connection', 'close');
         return sendError(res, 400, 'Chunk überschreitet die angegebene Backup-Größe.', 'CHUNK_OVERFLOW');
     }
-    if (!fs.existsSync(session.path)) {
-        dropUploadSession(session.id);
+    // open first instead of checking for the part file: a sweep or cancel in between ends as "unknown upload"
+    let fh;
+    try {
+        fh = await fs.promises.open(session.path, 'r+');
+    } catch (err) {
         res.set('Connection', 'close');
+        if (err.code !== 'ENOENT') return sendError(res, 500, 'Fehler beim Speichern des Backup-Uploads');
+        dropUploadSession(session.id);
         return uploadNotFound(res);
     }
 
     const startOffset = session.received;
     const maxChunk = Math.min(MAX_CHUNK_BYTES, remaining);
-    let fh = null;
     let written = 0;
     let errorKind = null;
     session.inFlight = true;
@@ -587,7 +591,6 @@ router.put('/backup/uploads/:uploadId', requireAdmin, refuseDuringUpdate, noRequ
     touchUploadSession(session);
 
     try {
-        fh = await fs.promises.open(session.path, 'r+');
         let pos = startOffset;
         for await (const raw of req) {
             const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);

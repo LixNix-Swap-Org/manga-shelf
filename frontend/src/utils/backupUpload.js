@@ -88,7 +88,14 @@ export async function uploadAndInspectBackup({
   onProgress?.({ loaded: 0, total });
 
   const init = await request.postJson('/api/backup/uploads', { size: total, filename: resolvedName }, 'write');
-  if (!init.ok) return init;
+  if (!init.ok) {
+    // older servers (before chunked uploads) answer 404/405: send the whole file in one request as before
+    if (init.status === 404 || init.status === 405) {
+      onPhase?.('inspect');
+      return request.postForm('/api/backup/inspect', buildForm(file, resolvedName));
+    }
+    return init;
+  }
 
   const uploadId = init.data?.upload_id;
   if (!uploadId) return { ok: false, status: init.status || 500, data: init.data || {}, res: init.res };

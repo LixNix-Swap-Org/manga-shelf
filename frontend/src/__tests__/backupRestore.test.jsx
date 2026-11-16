@@ -791,4 +791,46 @@ describe('BackupRestoreModal large chunked uploads', () => {
       '/api/backup/uploads/up-r?offset=15'
     ]);
   });
+  it('falls back to one multipart upload when an older server has no chunked upload route', async () => {
+    const bytes = new Uint8Array(25);
+    const postForm = vi.fn(async () => ({ ok: true, status: 200, data: { staging_id: STAGING }, res: null }));
+    const putChunk = vi.fn();
+    const phases = [];
+    const res = await uploadAndInspectBackup({
+      file: bytes,
+      filename: 'old-server.zip',
+      threshold: 5,
+      chunkSize: 10,
+      onPhase: (p) => phases.push(p),
+      request: {
+        postForm,
+        postJson: async () => ({ ok: false, status: 404, data: { error: 'Nicht gefunden' }, res: null }),
+        putChunk,
+        deleteUpload: vi.fn()
+      }
+    });
+    expect(res.ok).toBe(true);
+    expect(res.data.staging_id).toBe(STAGING);
+    expect(putChunk).not.toHaveBeenCalled();
+    expect(postForm).toHaveBeenCalledTimes(1);
+    expect(postForm.mock.calls[0][0]).toBe('/api/backup/inspect');
+    expect(postForm.mock.calls[0][1].get('backup')).toBeTruthy();
+    expect(phases).toEqual(['upload', 'inspect']);
+  });
+
+  it('does not fall back to multipart when the chunked upload is refused for other reasons', async () => {
+    const postForm = vi.fn();
+    const res = await uploadAndInspectBackup({
+      file: new Uint8Array(25),
+      threshold: 5,
+      request: {
+        postForm,
+        postJson: async () => ({ ok: false, status: 507, data: { code: 'INSUFFICIENT_SPACE' }, res: null }),
+        putChunk: vi.fn(),
+        deleteUpload: vi.fn()
+      }
+    });
+    expect(res.status).toBe(507);
+    expect(postForm).not.toHaveBeenCalled();
+  });
 });
