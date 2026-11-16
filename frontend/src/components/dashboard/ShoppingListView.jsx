@@ -774,15 +774,17 @@ export default function ShoppingListView({
         </div>
 
         {canEdit && ownerChoices.length > 0 && (
-          <select
-            id="shop-for-whom"
-            aria-label={t('Für wen?')}
-            value={forWhom}
-            onChange={(e) => selectOwner(e.target.value)}
-            className="input-field !w-auto !py-1.5 text-xs shrink-0"
-          >
-            {ownerChoices.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
-          </select>
+          <label htmlFor="shop-for-whom" className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 shrink-0">
+            {t('Für wen?')}
+            <select
+              id="shop-for-whom"
+              value={forWhom}
+              onChange={(e) => selectOwner(e.target.value)}
+              className="input-field !w-auto !py-1.5 text-xs font-normal"
+            >
+              {ownerChoices.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}{/* i18n-ignore: ownerOptions() translates the texts */}
+            </select>
+          </label>
         )}
 
         <button

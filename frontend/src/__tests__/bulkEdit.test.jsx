@@ -128,6 +128,8 @@ describe('BulkActionBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
     expect(screen.getByLabelText('Für wen?')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Für wen?'), { target: { value: '7' } });
+    // the action names what happens, not the toast that follows
+    expect([...screen.getByLabelText('Besitzer').options].map((o) => o.textContent)).toEqual(['Nur diese Person', 'Hinzufügen', 'Entfernen']);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' })); });
     expect(p.onApply).toHaveBeenLastCalledWith(
       { owners: { add: [7], remove: [4] }, set: { purchase_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } },

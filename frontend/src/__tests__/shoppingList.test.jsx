@@ -1093,6 +1093,9 @@ describe('ShoppingListView & ScanListPanel: "Für wen?" owner selection', () => 
 
     const listSelect = document.getElementById('shop-for-whom');
     expect(listSelect).toBeTruthy();
+    // a visible label, not only "Für mich" without context
+    expect(screen.getByLabelText('Für wen?', { selector: '#shop-for-whom' })).toBe(listSelect);
+    expect(listSelect.closest('label').textContent).toMatch(/^Für wen\?/);
     fireEvent.change(listSelect, { target: { value: '2' } });
 
     await scan('9783551000097');

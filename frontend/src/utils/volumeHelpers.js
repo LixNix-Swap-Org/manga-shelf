@@ -667,3 +667,17 @@ export function ownerBody(choice) {
   if (choice === FOR_NOBODY) return { owner_user_id: null };
   return { owner_user_id: Number(choice) };
 }
+
+/**
+ * The people of GET /api/shelves (`people` per shelf) who are on every shelf the caller can edit among `shelves`: the
+ * choices of one "Für wen?" that applies to volumes of several shelves (the shopping list over all shelves). A person
+ * missing from one of them could not own that shelf's volumes, so the booking would fail. Read-only shelves are left out.
+ */
+export function peopleOnEveryShelf(shelves) {
+  const editable = (Array.isArray(shelves) ? shelves : []).filter((s) => s && s.role !== 'viewer');
+  if (editable.length === 0) return [];
+  const [first, ...rest] = editable;
+  const idsOf = (s) => new Set((Array.isArray(s.people) ? s.people : []).map((p) => String(p.user_id ?? p.id)));
+  const restIds = rest.map(idsOf);
+  return (Array.isArray(first.people) ? first.people : []).filter((p) => restIds.every((ids) => ids.has(String(p.user_id ?? p.id))));
+}
