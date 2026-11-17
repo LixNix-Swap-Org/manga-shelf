@@ -179,7 +179,7 @@ self.addEventListener('fetch', (event) => {
   // Cover uploads and cached foreign covers (/api/covers?url=…, keyed by their URL): cache first. File names are
   // unique and the content never changes, so a cached image is served as is - no re-download in the background (that
   // used to cost tens of MB per sync on large collections). Only real images of this origin are stored: a 404 page, a
-  // proxy's HTML or the cover host's answer after a redirect must never be served for an image later.
+  // proxy's HTML or an answer of another origin must never be served for an image later.
   const cover = url.pathname === '/api/covers';
   // Never cache other API or Auth requests (always network)
   if (url.pathname.startsWith('/api/') && !cover) return;

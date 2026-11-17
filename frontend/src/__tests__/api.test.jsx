@@ -476,7 +476,7 @@ describe('server images in the app build', () => {
     vi.stubEnv('VITE_APP_MODE', 'app');
     setServer({ base: 'https://shelf.example.org' });
     expect(assetImgProps('/uploads/a.jpg')).toEqual({ src: 'https://shelf.example.org/uploads/a.jpg', crossOrigin: 'anonymous' });
-    // the cover cache answers with CORP cross-origin and may redirect to the host: a plain (no-cors) image load
+    // the cover cache answers with CORP cross-origin: a plain (no-cors) image load
     expect(assetImgProps('https://cdn.example/b.jpg')).toEqual({ src: 'https://shelf.example.org/api/covers?url=https%3A%2F%2Fcdn.example%2Fb.jpg' });
     expect(assetImgProps('http://cdn.example/c.jpg')).toEqual({ src: 'http://cdn.example/c.jpg' });
     expect(assetImgProps('blob:https://app/1')).toEqual({ src: 'blob:https://app/1' });

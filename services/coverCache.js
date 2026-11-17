@@ -68,18 +68,24 @@ function presentColumns() {
     return list;
 }
 
-/** Whether a row of this database names `url` as its cover, banner or volume photo. */
-function isReferenced(url) {
+/**
+ * The URL as a row of this database stores it (cover, banner or volume photo), or null when no row names `url`. The
+ * download uses this stored value, never the request's text.
+ */
+function storedUrl(url) {
     const columns = presentColumns();
-    if (!columns.length && !columns.images) return false;
-    const parts = columns.map(([table, column]) => `SELECT 1 FROM ${table} WHERE ${column} = ?`);
+    const parts = columns.map(([table, column]) => `SELECT ${column} AS url FROM ${table} WHERE ${column} = ?`);
     const params = columns.map(() => url);
     if (hasVolumeImages()) {
         // a photo added as an external link (volumes.images, a JSON array of URLs)
-        parts.push('SELECT 1 FROM volumes WHERE instr(images, ?) > 0');
-        params.push(JSON.stringify(url));
+        parts.push(`SELECT j.value AS url FROM volumes v,
+            json_each(CASE WHEN json_valid(v.images) AND json_type(v.images) = 'array' THEN v.images ELSE '[]' END) j
+            WHERE instr(v.images, ?) > 0 AND j.value = ?`);
+        params.push(JSON.stringify(url), url);
     }
-    return Boolean(db.prepare(parts.join(' UNION ALL ') + ' LIMIT 1').get(...params));
+    if (!parts.length) return null;
+    const row = db.prepare(parts.join(' UNION ALL ') + ' LIMIT 1').get(...params);
+    return row && typeof row.url === 'string' ? cacheableUrl(row.url) : null;
 }
 
 /** sha256 keys of every URL the database names now. */
@@ -186,27 +192,27 @@ async function coverFile(raw) {
     const key = keyOf(url);
     const cached = findCached(key);
     if (cached) return { status: 'ok', file: cached.file, contentType: CONTENT_TYPES[cached.ext] };
-    let referenced = false;
+    let stored = null;
     try {
-        referenced = isReferenced(url);
+        stored = storedUrl(url);
     } catch (err) {
-        // database closed for a restore or an update: the host serves it this once
+        // database closed for a restore or an update: the device loads it from the host this once
         log.debug('[Cover] Datenbank gerade nicht lesbar:', err && err.message);
     }
-    if (!referenced) return { status: 'unknown' };
+    if (!stored) return { status: 'unknown' };
     if (failedRecently(key)) return { status: 'unavailable' };
     let pending = inFlight.get(key);
     if (!pending) {
-        pending = download(url, key).finally(() => inFlight.delete(key));
+        pending = download(stored, key).finally(() => inFlight.delete(key));
         inFlight.set(key, pending);
     }
     try {
-        const stored = await pending;
-        if (!stored) return { status: 'unavailable' };
-        return { status: 'ok', file: stored.file, contentType: CONTENT_TYPES[stored.ext] };
+        const saved = await pending;
+        if (!saved) return { status: 'unavailable' };
+        return { status: 'ok', file: saved.file, contentType: CONTENT_TYPES[saved.ext] };
     } catch (err) {
         rememberFailure(key);
-        log.debug(`[Cover] ${new URL(url).host} nicht erreichbar:`, err && err.message);
+        log.debug('[Cover] Download fehlgeschlagen:', err && err.message);
         return { status: 'unavailable' };
     }
 }

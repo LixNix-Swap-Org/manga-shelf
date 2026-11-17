@@ -1,5 +1,5 @@
 // Cover cache (services/coverCache.js, GET /api/covers): foreign covers are fetched once by the server and served from
-// <DATA_DIR>/cache/covers; unknown URLs and failed downloads go to the cover host (image loads only).
+// <DATA_DIR>/cache/covers; unknown URLs and failed downloads answer 404 (no redirect, the frontend loads them from the host).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -59,20 +59,20 @@ test('a cover a series names is fetched once and then served from the cache', as
     assert.deepEqual(stored, [`${coverCache.keyOf(url)}.png`]);
 });
 
-test('a URL no row names is never fetched: image loads are sent to its host, links are not', async () => {
+test('a URL no row names is never fetched and never redirected to', async () => {
     const url = 'https://media.example.org/cover/search-result.jpg';
     const res = await cover(url, { 'Sec-Fetch-Dest': 'image' });
-    assert.equal(res.status, 302);
-    assert.equal(res.headers.get('location'), url);
+    assert.equal(res.status, 404);
+    assert.equal(res.headers.get('location'), null);
     assert.equal(res.headers.get('cache-control'), 'no-store');
-    assert.equal((await cover(url)).status, 302, 'clients without Sec-Fetch-Dest');
-    const navigation = await cover(url, { 'Sec-Fetch-Dest': 'document' });
-    assert.equal(navigation.status, 404, 'no open redirect for a link');
+    assert.equal((await res.json()).code, 'NOT_FOUND');
     assert.deepEqual(downloads, []);
 });
 
 test('only https addresses are accepted', async () => {
-    for (const url of ['http://media.example.org/a.jpg', 'javascript:alert(1)', '/uploads/a.jpg', 'https://user:pw@example.org/a.jpg', '']) {
+    const known = 'https://user:pw@example.org/a.jpg';
+    require('../db').db.prepare('INSERT INTO mangas (title, cover_image, shelf_id) SELECT ?, ?, id FROM shelves LIMIT 1').run('Mit Zugangsdaten', known);
+    for (const url of ['http://media.example.org/a.jpg', 'javascript:alert(1)', '/uploads/a.jpg', known, '']) {
         const res = await cover(url, { 'Sec-Fetch-Dest': 'image' });
         assert.equal(res.status, 404, url);
     }
@@ -80,15 +80,15 @@ test('only https addresses are accepted', async () => {
     assert.deepEqual(downloads, []);
 });
 
-test('a failed download goes to the host and is not retried at once', async () => {
+test('a failed download answers 404 and is not retried at once', async () => {
     const url = 'https://media.example.org/cover/down.png';
     assert.equal((await admin('POST', '/mangas', { title: 'Down', cover_image: url })).status, 200);
     failNext = true;
     const res = await cover(url, { 'Sec-Fetch-Dest': 'image' });
-    assert.equal(res.status, 302);
-    assert.equal(res.headers.get('location'), url);
+    assert.equal(res.status, 404);
+    assert.equal(res.headers.get('location'), null);
     failNext = false;
-    assert.equal((await cover(url)).status, 302, 'remembered for a while');
+    assert.equal((await cover(url)).status, 404, 'remembered for a while');
     assert.equal(downloads.length, 1);
 });
 

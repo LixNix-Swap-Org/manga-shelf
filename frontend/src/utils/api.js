@@ -123,7 +123,8 @@ const isForeignCover = (path) => typeof path === 'string' && FOREIGN_COVER.test(
 
 /**
  * Server path of a foreign cover (Manga Passion, AniList …) in the server's cover cache (routes/covers.js): the server
- * fetches it once, so the device never contacts the cover host. A URL the server does not know is redirected there.
+ * fetches it once, so the device never contacts the cover host. A URL the server does not know answers 404 and loads
+ * from its host instead (utils/coverFallback.js).
  */
 export function coverCachePath(url) {
   return `/api/covers?url=${encodeURIComponent(url)}`;
