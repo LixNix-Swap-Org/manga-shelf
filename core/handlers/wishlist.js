@@ -83,8 +83,13 @@ const OWN_WISHES_SQL = `
 
 const PRIORITY_TEXT = { 1: '★ niedrig', 2: '★★ mittel', 3: '★★★ hoch' };
 const html = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-// covers from this server (/uploads) or another https address; anything else (data:, javascript:) is left out
-const safeCover = (src) => (typeof src === 'string' && (/^\/uploads\/[A-Za-z0-9._/-]+$/.test(src) || /^https:\/\/[^\s"'<>]+$/.test(src)) ? src : null);
+// covers from this server (/uploads) or another https address; anything else (data:, javascript:) is left out. A foreign
+// cover comes through the server's cover cache (routes/covers.js), so the cover host never sees who opens the link.
+const safeCover = (src) => {
+    if (typeof src !== 'string') return null;
+    if (/^\/uploads\/[A-Za-z0-9._/-]+$/.test(src)) return src;
+    return /^https:\/\/[^\s"'<>]+$/.test(src) ? `/api/covers?url=${encodeURIComponent(src)}` : null;
+};
 
 const PAGE_CSS = `
     :root { color-scheme: dark; }
