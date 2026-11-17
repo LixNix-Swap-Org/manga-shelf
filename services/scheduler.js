@@ -637,10 +637,19 @@ function initScheduler() {
         } catch (e) {
             log.warn('[Papierkorb] Aufräumen fehlgeschlagen:', e);
         }
+        let maintained = null;
         try {
-            runDatabaseMaintenanceIfDue();
+            maintained = runDatabaseMaintenanceIfDue();
         } catch (e) {
             log.warn('[Datenbank] Wartung fehlgeschlagen:', e);
+        }
+        // once a day with the maintenance: cached covers no row names any more (services/coverCache.js)
+        if (maintained) {
+            try {
+                require('./coverCache').pruneUnused();
+            } catch (e) {
+                log.warn('[Cover] Aufräumen des Zwischenspeichers fehlgeschlagen:', e);
+            }
         }
         try {
             await runAnimeRefreshIfDue(new Date(), backupSchedule(), { shouldStop: () => stopped });

@@ -118,11 +118,24 @@ export function assetUrl(path) {
   return `${getApiBase()}${path}`;
 }
 
+const FOREIGN_COVER = /^https:\/\//i;
+const isForeignCover = (path) => typeof path === 'string' && FOREIGN_COVER.test(path);
+
 /**
- * src (and crossOrigin) for an <img> of a possibly server-side path. The app build loads server images in CORS mode:
+ * Server path of a foreign cover (Manga Passion, AniList …) in the server's cover cache (routes/covers.js): the server
+ * fetches it once, so the device never contacts the cover host. A URL the server does not know is redirected there.
+ */
+export function coverCachePath(url) {
+  return `/api/covers?url=${encodeURIComponent(url)}`;
+}
+
+/**
+ * src (and crossOrigin) for an <img> of a possibly server-side path. Foreign https covers load through the server's
+ * cover cache (not in the local app mode, which has no server). The app build loads server images in CORS mode:
  * /uploads answers with Cross-Origin-Resource-Policy same-origin, which only a CORS request from an app origin passes.
  */
 export function assetImgProps(path) {
+  if (isForeignCover(path) && !isLocalMode()) return { src: apiUrl(coverCachePath(path)) };
   const src = assetUrl(path);
   return isAppMode() && !storedModeIsLocal() && isServerPath(path) ? { src, crossOrigin: 'anonymous' } : { src };
 }
