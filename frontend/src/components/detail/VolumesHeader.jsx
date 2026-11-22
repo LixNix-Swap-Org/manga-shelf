@@ -18,10 +18,10 @@ export default function VolumesHeader({ canEdit, canBatchRead, onBatchRead, onBa
 
       {/* Quick Actions */}
       {canBatchRead && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2">
           <button 
             onClick={onBatchRead} 
-            className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+            className="btn-secondary text-xs flex items-center justify-center text-center gap-1.5 py-2 px-3 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
             title={t('Mehrere Bände auf einmal als gelesen oder ungelesen markieren')}
           >
             <BookCheck className="w-3.5 h-3.5 text-emerald-400" /> {t('Bis Band X als gelesen')}
@@ -29,7 +29,7 @@ export default function VolumesHeader({ canEdit, canBatchRead, onBatchRead, onBa
           {canEdit && (
             <button 
               onClick={onBatchAdd} 
-              className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
+              className="btn-secondary text-xs flex items-center justify-center text-center gap-1.5 py-2 px-3"
             >
               <Plus className="w-3.5 h-3.5 text-brand-400" /> {t('Mehrere Bände anlegen')}
             </button>

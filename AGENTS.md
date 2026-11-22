@@ -513,8 +513,9 @@ manga-shelf/
 │           │   ├── CatalogNotice.jsx # notice in the series edit form (migration 46): an edition also in a shelf the caller only reads keeps changes in this shelf, local fields, "Auf Katalogstand zurücksetzen" (POST /mangas/:id/catalog-reset)
 │           │   ├── OwnerFilterBar.jsx # "Wessen Bände zeigen?" inside the reader chip: ownership per person, "Nur zeigen, was noch fehlt" (ownerChoices: who is listed)
 │           │   ├── OwnerBadges.jsx # owner badges
-│           │   ├── GapNotices.jsx # banners: duplicates, edition, gaps (with the announced count and the button for special editions)
-│           │   ├── VolumeFilterBar.jsx # filter chips, Manga Passion pill, "Auswählen"
+│           │   ├── GapNotices.jsx # banners: duplicates, edition, gaps (with the announced count and the button for special editions; without the number list while the views show the gaps)
+│           │   ├── GapRunRow.jsx # one row for 3+ gaps in a row (groupGapRuns in utils/volumeHelpers.js): Aufklappen, "In die Einkaufsliste" for that run, "Mehrere erfassen" with its range
+│           │   ├── VolumeFilterBar.jsx # filter chips, Manga Passion pill, "Auswählen"; on phones publisher, condition, sort, search and the type row wait behind "Filter"
 │           │   ├── BulkActionBar.jsx # bar of the bulk edit
 │           │   ├── DetailBottomBar.jsx # phone bar of the series page (back, scan a volume, add a volume)
 │           │   ├── AddVolumeBar.jsx # create a single volume (upload cancellable)

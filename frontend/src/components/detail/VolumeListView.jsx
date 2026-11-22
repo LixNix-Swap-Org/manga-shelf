@@ -4,6 +4,7 @@ import { READ_OTHERS_ADMIN_ONLY } from '../../hooks/useVolumeActions';
 import OwnerBadges, { LentBadge } from './OwnerBadges';
 import { formatEuro, formatShortDate, gapLabel, getVolumeBadge, releaseVerb, volumeStatusKind } from './volumeViewHelpers';
 import { assetImgProps } from '../../utils/api';
+import GapRunRow from './GapRunRow';
 import { t } from '../../i18n/index.js';
 import { conditionLabel } from '../../utils/enumLabels';
 import { formatMoney } from '../../utils/format';
@@ -38,7 +39,8 @@ export default function VolumeListView({
   canToggleOwned = canToggle,
   selectionMode = false,
   isSelected = () => false,
-  onSelectVolume
+  onSelectVolume,
+  gapRunProps = null
 }) {
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
@@ -60,6 +62,9 @@ export default function VolumeListView({
         </thead>
         <tbody className="divide-y divide-slate-800/60 text-slate-300">
           {displayVolumeItems.map((item, idx) => {
+            if (item.isGapRun) {
+              return <GapRunRow key={`gap-run-${item.key}`} run={item} variant="row" colSpan={selectionMode ? 10 : 9} mpGapMap={mpGapMap} manga={manga} gapsOfficial={gapsOfficial} canEdit={canEdit} {...gapRunProps} />;
+            }
             if (item.isGap) {
               const gapMeta = item.gapMeta || getRegularGapMeta(mpGapMap, item.gapNumber);
               const gapDate = formatShortDate(gapMeta?.release_date);

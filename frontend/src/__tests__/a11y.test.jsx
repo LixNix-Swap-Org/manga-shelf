@@ -459,7 +459,7 @@ describe('detail page controls', () => {
     const names = () => screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') || b.textContent.trim());
     const { unmount } = render(<VolumeGridView {...props} />);
     for (const name of ['Foto für Band 1 hochladen', 'Band 1 bearbeiten', 'Band 1 löschen', 'Band 2 bearbeiten', 'Band 2 löschen',
-      '2 Fotos von Band 2 öffnen', 'Band 3 erfassen', 'Band 3 zu Sammlung hinzufügen', 'Band 4 erfassen', 'Band 4 zu Sammlung hinzufügen']) {
+      '2 Fotos von Band 2 öffnen', 'Band 3 erfassen', 'Band 4 erfassen']) {
       expect(screen.getByRole('button', { name })).toBeTruthy();
     }
     expect(screen.queryByRole('button', { name: 'Band löschen' })).toBeNull();

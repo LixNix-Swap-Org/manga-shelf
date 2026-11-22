@@ -34,6 +34,7 @@ export default function DetailDialogs({
           mangaId={mangaId}
           volumes={manga?.volumes}
           officialTotal={mpGapData?.total_official_volumes}
+          range={showBatchModal && typeof showBatchModal === 'object' ? showBatchModal : null}
           people={readers}
           user={user}
           onSuccess={fetchManga}

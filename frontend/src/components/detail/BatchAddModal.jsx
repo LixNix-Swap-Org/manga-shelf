@@ -53,8 +53,9 @@ const pillClass = (active, tone) => `py-2 px-2.5 rounded-lg text-xs font-bold tr
     : 'text-slate-400 hover:text-slate-200 border border-transparent'
 }`;
 
-export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSuccess, volumes, officialTotal, people = [], user = null }) {
-  const [initialRange] = useState(() => batchDefaults(volumes, manga?.total_volumes, officialTotal));
+export default function BatchAddModal({ isOpen, onClose, manga, mangaId, onSuccess, volumes, officialTotal, people = [], user = null, range = null }) {
+  // a run of gaps on the series page opens the dialog with its own range
+  const [initialRange] = useState(() => (range ? { from: String(range.from), to: String(range.to) } : batchDefaults(volumes, manga?.total_volumes, officialTotal)));
   const [batchFrom, setBatchFrom] = useState(initialRange.from);
   const [batchTo, setBatchTo] = useState(initialRange.to);
   const [batchStatus, setBatchStatus] = useState('Vorhanden');

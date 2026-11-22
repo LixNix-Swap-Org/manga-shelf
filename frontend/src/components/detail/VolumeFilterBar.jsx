@@ -1,4 +1,5 @@
-import { ArrowUpDown, BookCheck, BookOpen, Calendar, Check, ListChecks, BuildingComplex, ChevronDown, Eye, EyeOff, Funnel, Globe, Hourglass, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, Truck, X } from 'lucide-react';
+import { useId, useState } from 'react';
+import { ArrowUpDown, BookCheck, BookOpen, Calendar, Check, ListChecks, BuildingComplex, SlidersHorizontal, ChevronDown, Eye, EyeOff, Funnel, Globe, Hourglass, LayoutGrid, Library, List, Package, RotateCcw, Search, Sparkles, Truck, X } from 'lucide-react';
 import { CONDITION_NONE, READ_FILTER, UNREAD_FILTER } from '../../utils/volumeHelpers';
 import { mpPillText } from './volumeViewHelpers';
 import { formatCount } from '../../utils/format';
@@ -57,12 +58,18 @@ export default function VolumeFilterBar({
   const showTypeChip = (type, count) => count > 0 || volumeTypeFilter === type;
   const showTypeRow = specialEditionCount > 0 || schuberCount > 0 || specialCount > 0 || volumeTypeFilter !== 'ALL';
   const visibleGapCount = showGaps && gapsAllowedByFilters ? detectedGaps.length : 0;
+  // phones: publisher, condition, sort, search and the type row wait behind "Filter" (as on the collection); from sm on
+  // everything sits in the bar as before
+  const [panelOpen, setPanelOpen] = useState(false);
+  const panelId = useId();
+  const hiddenSet = [volumePublisherFilter !== 'ALL', volumeConditionFilter !== 'ALL', volumeSort !== 'number_asc',
+    Boolean(String(volumeSearch ?? '').trim()), volumeTypeFilter !== 'ALL'].filter(Boolean).length;
   return (
     <div className="flex flex-col gap-3 mb-6 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80 shadow-lg">
       {/* Top Bar: View Mode Switcher + Gap Indicator */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/60">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+        <div className="w-full sm:w-auto flex flex-nowrap sm:flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-400 hidden sm:flex items-center gap-1.5">
             <Library className="w-3.5 h-3.5 text-brand-400" />
             {t('Ansicht:')}
           </span>
@@ -79,7 +86,7 @@ export default function VolumeFilterBar({
               title={t('Kachelansicht mit Coverbildern')}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>{t('Karten')}</span>
+              <span className="hidden sm:inline">{t('Karten')}</span>
             </button>
             <button
               type="button"
@@ -93,7 +100,7 @@ export default function VolumeFilterBar({
               title={t('3D-Buchrückenansicht / Echtes Manga-Regal')}
             >
               <Library className="w-3.5 h-3.5" />
-              <span>{t('Regal')}</span>
+              <span className="hidden sm:inline">{t('Regal')}</span>
             </button>
             <button
               type="button"
@@ -107,7 +114,7 @@ export default function VolumeFilterBar({
               title={t('Kompakte Listenansicht')}
             >
               <List className="w-3.5 h-3.5" />
-              <span>{t('Liste')}</span>
+              <span className="hidden sm:inline">{t('Liste')}</span>
             </button>
           </div>
           {canSelect && (
@@ -115,6 +122,7 @@ export default function VolumeFilterBar({
               type="button"
               id="btn-volume-select-mode"
               aria-pressed={selectionMode}
+              aria-label={t('Auswählen')}
               onClick={onToggleSelectionMode}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
                 selectionMode
@@ -124,13 +132,29 @@ export default function VolumeFilterBar({
               title={t('Mehrere Bände auswählen und gemeinsam ändern')}
             >
               <ListChecks className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>{t('Auswählen')}</span>
+              <span className="hidden sm:inline">{t('Auswählen')}</span>
             </button>
           )}
+          <button
+            type="button"
+            id="btn-volume-phone-filters"
+            aria-expanded={panelOpen}
+            aria-controls={`${panelId}-a ${panelId}-b`}
+            aria-label={hiddenSet ? t('Filter ({n} geändert)', { n: hiddenSet }) : t('Filter')}
+            onClick={() => setPanelOpen((v) => !v)}
+            className={`sm:hidden ml-auto shrink-0 flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold ${panelOpen || hiddenSet ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-brand-400 shrink-0" aria-hidden="true" />
+            <span>{t('Filter')}</span>
+            {hiddenSet > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold leading-none bg-brand-700 text-white" aria-hidden="true">{hiddenSet}</span>
+            )}
+            <ChevronDown className={`w-3 h-3 text-slate-400 shrink-0 transition-transform ${panelOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+          </button>
         </div>
 
-        {/* Gap detection toggle & Manga Passion pill */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Gap detection toggle & Manga Passion pill (one row on phones: the edition name only from sm on) */}
+        <div className="w-full sm:w-auto flex flex-nowrap sm:flex-wrap items-center gap-2">
           {detectedGaps.length > 0 && (
             <button
               type="button"
@@ -171,7 +195,7 @@ export default function VolumeFilterBar({
             >
               <Globe className="w-3.5 h-3.5 text-brand-400" />
               <span className="hidden sm:inline">{t('Manga Passion:')}</span>
-              <span className="font-semibold text-white truncate max-w-[130px]">
+              <span className="hidden sm:inline font-semibold text-white truncate max-w-[130px]">
                 {mpPillText({ mpGapData, mpGapLoading, mpGapError })}
               </span>
               {mpGapData?.discrepancy && (
@@ -187,7 +211,7 @@ export default function VolumeFilterBar({
       <div className="flex flex-wrap items-center justify-between gap-3">
 
         {/* Status Filter Tabs */}
-        <div role="group" aria-label={t('Status-Filter')} className="flex flex-wrap items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
+        <div role="group" aria-label={t('Status-Filter')} className="w-full sm:w-auto flex flex-nowrap sm:flex-wrap items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs overflow-x-auto sm:overflow-visible no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0">
           <button
             type="button"
             aria-pressed={volumeFilter === 'ALL'}
@@ -282,7 +306,7 @@ export default function VolumeFilterBar({
         </div>
 
         {/* Search & Sort Controls */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div id={`${panelId}-a`} className={`${panelOpen ? 'flex' : 'hidden'} sm:flex flex-wrap items-center gap-2 text-xs`}>
           {/* Verlag Filter Dropdown */}
           <label className="flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl px-2.5 py-1.5 cursor-pointer transition-all shadow-sm group">
             <BuildingComplex className="w-3.5 h-3.5 text-brand-400 shrink-0" />
@@ -383,7 +407,7 @@ export default function VolumeFilterBar({
 
       {/* Optional Type Filter Chips (if manga contains Special Editions, Schuber or Specials) */}
       {showTypeRow && (
-        <div role="group" aria-label={t('Typ-Filter')} className="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/60 text-xs">
+        <div id={`${panelId}-b`} role="group" aria-label={t('Typ-Filter')} className={`${panelOpen || volumeTypeFilter !== 'ALL' ? 'flex' : 'hidden'} sm:flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/60 text-xs`}>
           <span className="text-[11px] text-slate-400 font-semibold mr-1 flex items-center gap-1">
             <Funnel className="w-3 h-3 text-brand-400" /> {t('Typ:')}
           </span>
