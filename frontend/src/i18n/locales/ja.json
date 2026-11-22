@@ -182,11 +182,13 @@
   "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
     "other": "過去{n}日間、何もありませんでした。"
   },
+  "Am meisten gelesen": "最も読んだ作品",
   "An dich ausgeliehen": "あなたが借りている本",
   "Andere Ausgabe vorhanden ({language})": "別の版を所持しています({language})",
   "Andere Ausgaben derselben Reihe (Sprache, Format, Sonderausgabe) verknüpfen und zwischen ihnen wechseln.": "同じシリーズの別の版（言語、判型、特装版）をリンクして切り替えます。",
   "Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)": "自分以外のユーザーは管理者のみ登録できます(無視されました)",
   "Andere Datei auswählen": "別のファイルを選ぶ",
+  "Andere Person …": "その他の人 …",
   "Andere Person…": "その他の人…",
   "Andere Regale": "その他の本棚",
   "Andere Sprachausgabe anlegen oder verknüpfen": "別の言語の版を作成またはリンク",
@@ -502,6 +504,7 @@
   "Besitz pro Nutzer": "ユーザー別の所持数",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "所持状況と既読状況はこのプロフィールに紐づきます – サーバー上のユーザーと同じですが、パスワードはありません。",
   "Besitzer": "所有者",
+  "Besitzer und Verleihen": "所有者と貸し出し",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "所有者「{name}」はこの本棚に属していません(無視されました)",
   "Besitzer: {names}": "所有者: {names}",
   "Besitzt: {owners}": "所持者: {owners}",
@@ -1489,6 +1492,7 @@
   "Jahr": "年",
   "Jahr ({year})": "年({year})",
   "Jahr wählen": "年を選ぶ",
+  "Jahresrückblick konnte nicht geladen werden.": "年間まとめを読み込めませんでした。",
   "Jahreszeit": "季節",
   "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "各巻は最後の変更のみ表示され、削除したものは表示されません。",
   "Jede Note zählt ohne Namen im Community-Schnitt mit, auch mit „Nur ich“.": "「自分のみ」でも、すべての評価は名前なしでコミュニティ平均に含まれます。",
@@ -1805,6 +1809,7 @@
   "Mehrere erfassen": "まとめて登録",
   "Mein Anime-Jahr {year}": "私のアニメ年間まとめ {year}",
   "Mein Fortschritt": "自分の進捗",
+  "Mein Manga-Jahr {year}": "私のマンガ年 {year}",
   "Meine": "自分",
   "Meine Anime-Liste mit Namen zeigen": "自分のアニメリストを名前付きで表示",
   "Meine Bewertung sehen": "評価を見られる人",
@@ -1915,6 +1920,7 @@
   "Netzwerkfehler: Der Server ist nicht erreichbar.": "ネットワークエラー: サーバーに接続できません。",
   "Netzwerkfehler: Leser-Details konnten nicht geladen werden.": "ネットワークエラー: 読者の詳細を読み込めませんでした。",
   "Netzwerkfehler: Statistiken konnten nicht geladen werden.": "ネットワークエラー: 統計を読み込めませんでした。",
+  "Neu angefangen": "新しく読み始めた",
   "Neu erzeugen": "再作成",
   "Neu in der Liste: {title}": "リストに追加しました: {title}",
   "Neu laden": "再読み込み",
@@ -2095,6 +2101,9 @@
   "Ohne Vorlage weiter": "テンプレートなしで続行",
   "Ohne Zustand": "状態なし",
   "Ohne konkretes Datum": "具体的な日付なし",
+  "Ohne {n} Band in anderer Währung.|Ohne {n} Bände in anderer Währung.": {
+    "other": "他通貨の {n} 冊を除く。"
+  },
   "Online & abgeglichen": "オンライン・照合済み",
   "Online mitsuchen": "オンラインも検索",
   "Online nach „{q}“ suchen": "「{q}」をオンラインで検索",
@@ -2339,6 +2348,7 @@
   "Seinen": "青年向け(セイネン)",
   "Seit": "貸出日",
   "Seite": "ページ",
+  "Seiten": "ページ",
   "Seiten {year}": "ページ数 {year}",
   "Seitennavigation": "ページナビゲーション",
   "Seitenzahl": "ページ数",
@@ -2515,6 +2525,7 @@
   "Strg K": "Ctrl K",
   "Studio": "スタジオ",
   "Studios": "スタジオ",
+  "Stärkster Monat": "最も読んだ月",
   "SuB (Offen)": "積読(未読)",
   "SuB: {unread}": "積読: {unread}",
   "Suchbegriff erforderlich": "検索語が必要です",
@@ -2725,6 +2736,7 @@
   "Ungültiges Erscheinungsjahr „{value}“": "発売年「{value}」が無効です",
   "Ungültiges Format (erlaubt: print, webtoon)": "無効な形式です(使用可能: print, webtoon)",
   "Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)": "ISBNの形式が正しくありません(10桁または13桁である必要があります)",
+  "Ungültiges Jahr": "無効な年",
   "Ungültiges Jahr oder Monat": "年または月が正しくありません",
   "Ungültiges Regal": "無効な本棚です",
   "Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden": "ZIPアーカイブが無効です: ファイルを読み取れません",
@@ -2790,6 +2802,8 @@
   },
   "Verlassen": "退出",
   "Verlauf konnte nicht geladen werden": "履歴を読み込めませんでした",
+  "Verleihen": "貸す",
+  "Verleihen an": "貸す相手",
   "Verliehen": "貸出中",
   "Verliehen & ausgeliehen": "貸し借り",
   "Verschieben": "移動",
@@ -3013,6 +3027,8 @@
   "Zurück zu v{version} und neu starten": "v{version}に戻して再起動",
   "Zurück zur Sammlung": "コレクションに戻る",
   "Zurück zur Übersicht": "概要に戻る",
+  "Zurückbekommen": "返却済み",
+  "Zurückbekommen von {name}": "{name} から返却",
   "Zurückgesetzt: v{from} → v{to} ({at})": "元に戻しました: v{from} → v{to}({at})",
   "Zurücksetzen": "リセット",
   "Zurücksetzen auf v{to} fehlgeschlagen ({at}); v{from} läuft weiter.": "v{to}へ戻す処理に失敗しました({at})。v{from}はそのまま動作しています。",
@@ -3203,6 +3219,7 @@
     "other": "件"
   },
   "wenig freier Speicher": "空き容量が少ない",
+  "wie {year}": "{year} と同じ",
   "z. B. 1": "例: 1",
   "z. B. 12": "例: 12",
   "z. B. 192": "例: 192",
@@ -3271,6 +3288,7 @@
   "{device} Kalender → Neuer Kalender → Im Netzwerk → Adresse einfügen → Abonnieren.": "{device}のカレンダー → 新規カレンダー → ネットワーク上 → アドレスを貼り付け → 購読。",
   "{device} im Browser calendar.google.com öffnen → bei „Weitere Kalender“ auf + → „Per URL“ → Adresse einfügen. Danach in der Google-Kalender-App unter Einstellungen die Synchronisierung des Kalenders einschalten. Ohne Google-Konto geht es mit der App ICSx⁵.": "{device}ブラウザでcalendar.google.comを開く →「他のカレンダー」の+ →「URLで追加」→ アドレスを貼り付け。その後、Googleカレンダーアプリの設定でこのカレンダーの同期をオンにします。Googleアカウントがない場合は、アプリのICSx⁵を使ってください。",
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device}「カレンダーアプリで開く」をタップして「購読」– または、設定 → カレンダー → アカウント → アカウントを追加 → その他 → 照会するカレンダーを追加 の順に進み、アドレスを貼り付けます。",
+  "{diff} zu {year}": "{year} 比 {diff}",
   "{entry} von „{title}“ wiederhergestellt": "「{title}」の{entry}を復元しました",
   "{episodes} à {duration} Min.": "{episodes} × {duration}分",
   "{episode} bewerten": "{episode}を評価",
@@ -3421,6 +3439,9 @@
   },
   "{n} Reihen|{n} Reihen": {
     "other": "{n}シリーズ"
+  },
+  "{n} Reihe|{n} Reihen": {
+    "other": "{n} シリーズ"
   },
   "{n} Seiten|{n} Seiten": {
     "other": "{n}ページ"

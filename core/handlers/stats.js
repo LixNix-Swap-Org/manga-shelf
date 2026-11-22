@@ -506,11 +506,8 @@ function continueReading(ctx, userId) {
  */
 function reading(realCtx, { query }) {
     const ctx = access.scopedCtx(realCtx, access.requestedShelfIds(realCtx, qstr(query.shelf_id)));
-    const raw = qstr(query.user_id);
-    const userId = raw === undefined || raw === '' ? ctx.user.id : Number(raw);
-    if (!Number.isSafeInteger(userId) || userId <= 0) throw badRequest('Ungültige user_id');
-    const user = ctx.db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
-    if (!user || !access.canSeeUser(realCtx, user.id)) throw notFound('Benutzer');
+    const user = readerFromQuery(realCtx, ctx, query);
+    const userId = user.id;
 
     const now = ctx.now();
     const keys = lastMonthKeys(now, READING_MONTHS);
@@ -599,6 +596,115 @@ function chapterTotals(ctx, userId) {
     return { series: row.series, read: row.read, finished: row.finished };
 }
 
+/** The reader of `?user_id=` (default: the caller); 404 for an account the caller may not see, like GET /stats/reading. */
+function readerFromQuery(realCtx, ctx, query) {
+    const raw = qstr(query.user_id);
+    const userId = raw === undefined || raw === '' ? ctx.user.id : Number(raw);
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw badRequest('Ungültige user_id');
+    const user = ctx.db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
+    if (!user || !access.canSeeUser(realCtx, user.id)) throw notFound('Benutzer');
+    return user;
+}
+
+const yearOf = (value) => {
+    const m = /^(\d{4})/.exec(String(value ?? '').trim());
+    return m && m[1] >= '1900' ? Number(m[1]) : null;
+};
+
+/**
+ * GET /stats/year?user_id=&year=&shelf_id=: one person's manga year ("Mein Manga-Jahr"). Reads count once per catalog
+ * volume as in GET /stats/reading; `started` are the series whose first dated read falls in the year; `bought` counts
+ * that person's own copies with a purchase date in the year (the copy's, else the volume's) at list price, euro only
+ * like every money figure (`other_currency` counts the priced copies left out). `years` lists every year with a dated
+ * read or purchase, newest first, plus the current one.
+ */
+function yearReview(realCtx, { query } = {}) {
+    const q = query || {};
+    const ctx = access.scopedCtx(realCtx, access.requestedShelfIds(realCtx, qstr(q.shelf_id)));
+    const user = readerFromQuery(realCtx, ctx, q);
+    const current = ctx.now().getFullYear();
+    const rawYear = qstr(q.year);
+    const year = rawYear === undefined || rawYear === '' ? current : Number(rawYear);
+    if (!Number.isSafeInteger(year) || year < 1900 || year > current + 1) throw badRequest('Ungültiges Jahr');
+
+    const reads = ctx.db.prepare(`
+        SELECT v.catalog_volume_id AS catalog_volume_id, MAX(vr.read_at) AS read_at, MAX(COALESCE(v.pages, 0)) AS pages,
+               MIN(COALESCE(m.catalog_series_id, -m.id)) AS series, MIN(m.id) AS manga_id
+        FROM {volume_reads} vr JOIN {volumes} v ON v.id = vr.volume_id JOIN {mangas} m ON m.id = v.manga_id
+        WHERE vr.user_id = ? AND vr.read_at IS NOT NULL
+        GROUP BY v.catalog_volume_id
+    `).all(user.id);
+
+    const years = new Set([current]);
+    const firstRead = new Map();
+    const bySeries = new Map();
+    const byMonth = new Map();
+    let volumes = 0;
+    let pages = 0;
+    let previous = 0;
+    for (const r of reads) {
+        const y = yearOf(r.read_at);
+        if (y === null) continue;
+        years.add(y);
+        const first = firstRead.get(r.series);
+        if (first === undefined || r.read_at < first) firstRead.set(r.series, r.read_at);
+        if (y === year - 1) previous++;
+        if (y !== year) continue;
+        volumes++;
+        pages += r.pages || 0;
+        const month = String(r.read_at).trim().slice(0, 7);
+        byMonth.set(month, (byMonth.get(month) || 0) + 1);
+        const entry = bySeries.get(r.series) || { count: 0, manga_id: r.manga_id };
+        entry.count++;
+        bySeries.set(r.series, entry);
+    }
+    const started = [...firstRead.values()].filter((at) => yearOf(at) === year).length;
+
+    let bestMonth = null;
+    for (const [month, count] of [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        if (!bestMonth || count > bestMonth.volumes) bestMonth = { month, volumes: count };
+    }
+    let topSeries = null;
+    const top = [...bySeries.values()].sort((a, b) => b.count - a.count || a.manga_id - b.manga_id)[0];
+    if (top) {
+        const m = ctx.db.prepare('SELECT id, title, cover_image FROM {mangas} WHERE id = ?').get(top.manga_id);
+        if (m) topSeries = { manga_id: m.id, title: m.title, cover_image: m.cover_image || null, volumes: top.count };
+    }
+
+    const PURCHASED = 'TRIM(COALESCE(c.purchase_date, v.purchase_date))';
+    const copies = ctx.db.prepare(`
+        SELECT ${PURCHASED} AS purchased, m.currency AS currency, v.price AS price
+        FROM {volume_copies} c
+        JOIN {volumes} v ON v.id = c.volume_id AND v.status = 'Vorhanden'
+        JOIN {mangas} m ON m.id = v.manga_id
+        WHERE c.owner_user_id = ? AND ${PURCHASED} GLOB '[0-9][0-9][0-9][0-9]*'
+    `).all(user.id);
+    const bought = { volumes: 0, total: 0, other_currency: 0 };
+    for (const c of copies) {
+        const y = yearOf(c.purchased);
+        if (y === null) continue;
+        years.add(y);
+        if (y !== year) continue;
+        bought.volumes++;
+        if (c.price === null || c.price === undefined) continue;
+        if (c.currency === 'EUR') bought.total += Number(c.price) || 0;
+        else bought.other_currency++;
+    }
+    bought.total = round2(bought.total);
+
+    return {
+        body: {
+            user: { id: user.id, username: user.username },
+            year,
+            years: [...years].filter((y) => y <= current).sort((a, b) => b - a),
+            read: { volumes, pages, previous_year: previous, started },
+            best_month: bestMonth,
+            top_series: topSeries,
+            bought
+        }
+    };
+}
+
 /** { anime } only when the anime list has entries (the parity tests compare /stats without it). */
 function animeBlock(ctx) {
     const anime = animeStats(ctx);
@@ -614,4 +720,4 @@ function clearStartDate(ctx, { body }) {
     return { body: { success: true } };
 }
 
-module.exports = { stats, reading, readingStreaks, parseStartDate, derivedStartDate, buildSpending, clearStartDate };
+module.exports = { stats, reading, yearReview, readingStreaks, parseStartDate, derivedStartDate, buildSpending, clearStartDate };

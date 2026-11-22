@@ -182,11 +182,13 @@
   "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
     "other": "过去 {n} 天没有动态。"
   },
+  "Am meisten gelesen": "读得最多",
   "An dich ausgeliehen": "借给你的",
   "Andere Ausgabe vorhanden ({language})": "已拥有其他版本（{language}）",
   "Andere Ausgaben derselben Reihe (Sprache, Format, Sonderausgabe) verknüpfen und zwischen ihnen wechseln.": "关联同一系列的其他版本（语言、开本、特装版）并在它们之间切换。",
   "Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)": "只有管理员可以登记你本人以外的用户（已忽略）",
   "Andere Datei auswählen": "选择其他文件",
+  "Andere Person …": "其他人 …",
   "Andere Person…": "其他人…",
   "Andere Regale": "其他书架",
   "Andere Sprachausgabe anlegen oder verknüpfen": "创建或关联其他语言的版本",
@@ -502,6 +504,7 @@
   "Besitz pro Nutzer": "各用户的拥有量",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "拥有和阅读状态属于此个人资料——就像服务器上的用户，只是没有密码。",
   "Besitzer": "拥有者",
+  "Besitzer und Verleihen": "所有者与借出",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "拥有者“{name}”不属于此书架（已忽略）",
   "Besitzer: {names}": "拥有者：{names}",
   "Besitzt: {owners}": "拥有者：{owners}",
@@ -1489,6 +1492,7 @@
   "Jahr": "年份",
   "Jahr ({year})": "年份（{year}）",
   "Jahr wählen": "选择年份",
+  "Jahresrückblick konnte nicht geladen werden.": "无法加载年度回顾。",
   "Jahreszeit": "季节",
   "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "每卷只显示最近一次更改；已删除的内容不会出现在这里。",
   "Jede Note zählt ohne Namen im Community-Schnitt mit, auch mit „Nur ich“.": "每个评分都会不署名地计入社区平均分，即使选择“仅自己”。",
@@ -1805,6 +1809,7 @@
   "Mehrere erfassen": "批量登记",
   "Mein Anime-Jahr {year}": "我的动画年度 {year}",
   "Mein Fortschritt": "我的进度",
+  "Mein Manga-Jahr {year}": "我的漫画年 {year}",
   "Meine": "我的",
   "Meine Anime-Liste mit Namen zeigen": "以我的名字显示我的动画列表",
   "Meine Bewertung sehen": "谁能看到我的评分",
@@ -1915,6 +1920,7 @@
   "Netzwerkfehler: Der Server ist nicht erreichbar.": "网络错误：无法访问服务器。",
   "Netzwerkfehler: Leser-Details konnten nicht geladen werden.": "网络错误：无法加载读者详情。",
   "Netzwerkfehler: Statistiken konnten nicht geladen werden.": "网络错误：无法加载统计数据。",
+  "Neu angefangen": "新开始",
   "Neu erzeugen": "重新生成",
   "Neu in der Liste: {title}": "已加入列表：{title}",
   "Neu laden": "重新加载",
@@ -2095,6 +2101,9 @@
   "Ohne Vorlage weiter": "不使用模板继续",
   "Ohne Zustand": "无品相",
   "Ohne konkretes Datum": "无具体日期",
+  "Ohne {n} Band in anderer Währung.|Ohne {n} Bände in anderer Währung.": {
+    "other": "不含其他货币的 {n} 卷。"
+  },
   "Online & abgeglichen": "在线且已比对",
   "Online mitsuchen": "同时在线搜索",
   "Online nach „{q}“ suchen": "在线搜索“{q}”",
@@ -2339,6 +2348,7 @@
   "Seinen": "青年向",
   "Seit": "借出日期",
   "Seite": "页面",
+  "Seiten": "页数",
   "Seiten {year}": "{year} 年页数",
   "Seitennavigation": "页面导航",
   "Seitenzahl": "页数",
@@ -2515,6 +2525,7 @@
   "Strg K": "Ctrl K",
   "Studio": "制作公司",
   "Studios": "制作公司",
+  "Stärkster Monat": "最佳月份",
   "SuB (Offen)": "TBR（待读）",
   "SuB: {unread}": "TBR：{unread}",
   "Suchbegriff erforderlich": "需要搜索词",
@@ -2725,6 +2736,7 @@
   "Ungültiges Erscheinungsjahr „{value}“": "无效的发售年份“{value}”",
   "Ungültiges Format (erlaubt: print, webtoon)": "格式无效（允许：print, webtoon）",
   "Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)": "ISBN 格式无效（必须为 10 或 13 个字符）",
+  "Ungültiges Jahr": "无效年份",
   "Ungültiges Jahr oder Monat": "年份或月份无效",
   "Ungültiges Regal": "书架无效",
   "Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden": "无效的 ZIP 压缩包：无法读取文件",
@@ -2790,6 +2802,8 @@
   },
   "Verlassen": "退出",
   "Verlauf konnte nicht geladen werden": "无法加载历史记录",
+  "Verleihen": "借出",
+  "Verleihen an": "借给",
   "Verliehen": "已借出",
   "Verliehen & ausgeliehen": "借出与借入",
   "Verschieben": "移动",
@@ -3013,6 +3027,8 @@
   "Zurück zu v{version} und neu starten": "回退到 v{version} 并重启",
   "Zurück zur Sammlung": "返回收藏",
   "Zurück zur Übersicht": "返回概览",
+  "Zurückbekommen": "已归还",
+  "Zurückbekommen von {name}": "{name} 已归还",
   "Zurückgesetzt: v{from} → v{to} ({at})": "已回退：v{from} → v{to}（{at}）",
   "Zurücksetzen": "重置",
   "Zurücksetzen auf v{to} fehlgeschlagen ({at}); v{from} läuft weiter.": "回退到 v{to} 失败（{at}）；v{from} 继续运行。",
@@ -3203,6 +3219,7 @@
     "other": "个"
   },
   "wenig freier Speicher": "可用空间不足",
+  "wie {year}": "与 {year} 相同",
   "z. B. 1": "例如 1",
   "z. B. 12": "例如 12",
   "z. B. 192": "例如 192",
@@ -3271,6 +3288,7 @@
   "{device} Kalender → Neuer Kalender → Im Netzwerk → Adresse einfügen → Abonnieren.": "{device}：日历 → 新建日历 → 网络 → 粘贴地址 → 订阅。",
   "{device} im Browser calendar.google.com öffnen → bei „Weitere Kalender“ auf + → „Per URL“ → Adresse einfügen. Danach in der Google-Kalender-App unter Einstellungen die Synchronisierung des Kalenders einschalten. Ohne Google-Konto geht es mit der App ICSx⁵.": "{device}：在浏览器中打开 calendar.google.com → 点击“其他日历”旁的 + → “通过网址” → 粘贴地址。然后在 Google 日历应用的设置中为该日历开启同步。没有 Google 账户的话，可以使用 ICSx⁵ 应用。",
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device}：点击“在日历应用中打开”，再点“订阅”——或者依次进入 设置 → 日历 → 账户 → 添加账户 → 其他 → 添加已订阅的日历，粘贴地址。",
+  "{diff} zu {year}": "较 {year} {diff}",
   "{entry} von „{title}“ wiederhergestellt": "“{title}”：{entry} 已恢复",
   "{episodes} à {duration} Min.": "{episodes} 集 × {duration} 分钟",
   "{episode} bewerten": "为{episode}评分",
@@ -3420,6 +3438,9 @@
     "other": "今天有 {n} 项新内容"
   },
   "{n} Reihen|{n} Reihen": {
+    "other": "{n} 个系列"
+  },
+  "{n} Reihe|{n} Reihen": {
     "other": "{n} 个系列"
   },
   "{n} Seiten|{n} Seiten": {

@@ -37,6 +37,7 @@ import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { useDetailScroll, findDuplicateEntries, backLinkTarget } from './components/detail/detailPage';
 import { inferVolumeType, normalizePubName, getSeriesProgress, getVolumeProgressCounts, buildDisplayVolumeItems, hasUserRead, groupGapRuns, gapVolumeNumber } from './utils/volumeHelpers';
 import { t } from './i18n/index.js';
+import { notify, notifyResponseError } from './utils/notify';
 import { useShelfAccess } from './hooks/useShelfViewer';
 import { editionCurrency } from './utils/editions';
 
@@ -271,6 +272,22 @@ export default function MangaDetail({ user, onUnauthorized }) {
     onToShopping: (numbers) => handleBatchFillGaps('Fehlt', { numbers }),
     onAddRange: (range) => setShowBatchModal(range)
   };
+
+  // quick lending from the owner pill (U8): the user's own copy to a shelf member or another person, or back again
+  const lendProps = canEdit && !isOffline && user?.id ? {
+    userId: user.id,
+    people: readers,
+    onLend: async (vol, copy, lent) => {
+      try {
+        const res = await apiFetch(`/api/volumes/${vol.id}/copies/${copy.id}`, { method: 'PUT', body: { lent } });
+        if (!res.ok) { await notifyResponseError(res, t('Fehler beim Speichern')); return; }
+        notify.success(lent ? t('Verliehen') : t('Zurückbekommen'));
+        fetchManga();
+      } catch (err) {
+        notify.error(err);
+      }
+    }
+  } : null;
 
   // while loading: the title the shelf already knows, else null (the previous title stays, no generic title in between)
   const listTitle = useMemo(
@@ -745,6 +762,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                 <VolumeListView
                   displayVolumeItems={groupedVolumeItems}
                   gapRunProps={gapRunProps}
+                  lendProps={lendProps}
                   mpGapMap={mpGapMap}
                   manga={manga}
                   user={user}
@@ -774,6 +792,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   gapsOfficial={gapsOfficial}
                   displayVolumeItems={groupedVolumeItems}
                   gapRunProps={gapRunProps}
+                  lendProps={lendProps}
                   handleDeleteVolume={handleDeleteVolume}
                   handleOpenEditVolume={handleOpenEditVolume}
                   handleToggleVolume={handleToggleVolume}

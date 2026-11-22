@@ -40,7 +40,8 @@ export default function VolumeListView({
   selectionMode = false,
   isSelected = () => false,
   onSelectVolume,
-  gapRunProps = null
+  gapRunProps = null,
+  lendProps = null
 }) {
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
@@ -231,6 +232,7 @@ export default function VolumeListView({
                       multiUser={(manga?.reader_stats?.length || 0) > 1}
                       people={mayToggleOthers && canToggleOwned && !selectionMode ? manga?.reader_stats : null}
                       onToggleOwner={mayToggleOthers && canToggleOwned && !selectionMode ? handleToggleVolume : null}
+                      lend={selectionMode ? null : lendProps}
                     />
                   </span>
                   <LentBadge vol={vol} className="ml-1.5 align-middle" />

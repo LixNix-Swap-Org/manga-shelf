@@ -182,11 +182,13 @@
   "Am letzten Tag ist nichts passiert.|In den letzten {n} Tagen ist nichts passiert.": {
     "other": "최근 {n}일 동안 활동이 없습니다."
   },
+  "Am meisten gelesen": "가장 많이 읽은 작품",
   "An dich ausgeliehen": "내가 빌린 책",
   "Andere Ausgabe vorhanden ({language})": "다른 판을 보유하고 있어요 ({language})",
   "Andere Ausgaben derselben Reihe (Sprache, Format, Sonderausgabe) verknüpfen und zwischen ihnen wechseln.": "같은 시리즈의 다른 판본(언어, 판형, 특별판)을 연결하고 전환합니다.",
   "Andere Benutzer als dich selbst kann nur ein Admin eintragen (ignoriert)": "본인 외의 사용자는 관리자만 입력할 수 있어요 (무시됨)",
   "Andere Datei auswählen": "다른 파일 선택",
+  "Andere Person …": "다른 사람 …",
   "Andere Person…": "다른 사람…",
   "Andere Regale": "다른 책장",
   "Andere Sprachausgabe anlegen oder verknüpfen": "다른 언어판 만들기 또는 연결",
@@ -502,6 +504,7 @@
   "Besitz pro Nutzer": "사용자별 보유",
   "Besitz und Lesestatus gehören zu diesem Profil – wie ein Benutzer auf einem Server, nur ohne Passwort.": "보유 및 읽음 상태는 이 프로필에 속해요 – 서버의 사용자와 같지만 비밀번호가 없어요.",
   "Besitzer": "보유자",
+  "Besitzer und Verleihen": "소유자 및 대여",
   "Besitzer „{name}“ gehört nicht zu diesem Regal (ignoriert)": "보유자 “{name}”은(는) 이 책장에 속하지 않아요 (무시됨)",
   "Besitzer: {names}": "보유자: {names}",
   "Besitzt: {owners}": "보유: {owners}",
@@ -1489,6 +1492,7 @@
   "Jahr": "연도",
   "Jahr ({year})": "연도 ({year})",
   "Jahr wählen": "연도 선택",
+  "Jahresrückblick konnte nicht geladen werden.": "연간 결산을 불러오지 못했습니다.",
   "Jahreszeit": "계절",
   "Je Band zählt nur die letzte Änderung; Gelöschtes erscheint hier nicht.": "권마다 마지막 변경만 표시되며, 삭제된 항목은 나타나지 않습니다.",
   "Jede Note zählt ohne Namen im Community-Schnitt mit, auch mit „Nur ich“.": "'나만'으로 설정해도 모든 점수는 이름 없이 커뮤니티 평균에 반영됩니다.",
@@ -1805,6 +1809,7 @@
   "Mehrere erfassen": "여러 권 등록",
   "Mein Anime-Jahr {year}": "나의 애니 {year}",
   "Mein Fortschritt": "내 진행 상황",
+  "Mein Manga-Jahr {year}": "나의 만화 연도 {year}",
   "Meine": "내 것",
   "Meine Anime-Liste mit Namen zeigen": "내 애니 목록을 이름과 함께 표시",
   "Meine Bewertung sehen": "내 평점을 볼 수 있는 사람",
@@ -1915,6 +1920,7 @@
   "Netzwerkfehler: Der Server ist nicht erreichbar.": "네트워크 오류: 서버에 연결할 수 없어요.",
   "Netzwerkfehler: Leser-Details konnten nicht geladen werden.": "네트워크 오류: 독자 상세 정보를 불러오지 못했어요.",
   "Netzwerkfehler: Statistiken konnten nicht geladen werden.": "네트워크 오류: 통계를 불러오지 못했어요.",
+  "Neu angefangen": "새로 시작",
   "Neu erzeugen": "새로 만들기",
   "Neu in der Liste: {title}": "목록에 추가됨: {title}",
   "Neu laden": "새로고침",
@@ -2095,6 +2101,9 @@
   "Ohne Vorlage weiter": "템플릿 없이 계속",
   "Ohne Zustand": "컨디션 없음",
   "Ohne konkretes Datum": "정확한 날짜 없음",
+  "Ohne {n} Band in anderer Währung.|Ohne {n} Bände in anderer Währung.": {
+    "other": "다른 통화의 {n}권 제외."
+  },
   "Online & abgeglichen": "온라인 & 대조됨",
   "Online mitsuchen": "온라인도 검색",
   "Online nach „{q}“ suchen": "온라인에서 “{q}” 검색",
@@ -2339,6 +2348,7 @@
   "Seinen": "세이넨",
   "Seit": "빌려준 날",
   "Seite": "페이지",
+  "Seiten": "페이지",
   "Seiten {year}": "{year}년 쪽수",
   "Seitennavigation": "페이지 내비게이션",
   "Seitenzahl": "쪽수",
@@ -2515,6 +2525,7 @@
   "Strg K": "Ctrl K",
   "Studio": "스튜디오",
   "Studios": "스튜디오",
+  "Stärkster Monat": "가장 많이 읽은 달",
   "SuB (Offen)": "쌓아둔 책 (남음)",
   "SuB: {unread}": "쌓아둔 책: {unread}",
   "Suchbegriff erforderlich": "검색어가 필요해요",
@@ -2725,6 +2736,7 @@
   "Ungültiges Erscheinungsjahr „{value}“": "올바르지 않은 발매 연도 “{value}”",
   "Ungültiges Format (erlaubt: print, webtoon)": "잘못된 형식이에요 (허용: print, webtoon)",
   "Ungültiges ISBN-Format (muss 10 oder 13 Zeichen lang sein)": "올바르지 않은 ISBN 형식이에요 (10자 또는 13자여야 해요)",
+  "Ungültiges Jahr": "잘못된 연도",
   "Ungültiges Jahr oder Monat": "올바르지 않은 연도 또는 월이에요",
   "Ungültiges Regal": "잘못된 책장입니다",
   "Ungültiges ZIP-Archiv: Datei kann nicht gelesen werden": "올바르지 않은 ZIP 아카이브예요: 파일을 읽을 수 없어요",
@@ -2790,6 +2802,8 @@
   },
   "Verlassen": "나가기",
   "Verlauf konnte nicht geladen werden": "기록을 불러오지 못했습니다",
+  "Verleihen": "빌려주기",
+  "Verleihen an": "빌려줄 사람",
   "Verliehen": "대여 중",
   "Verliehen & ausgeliehen": "빌려준 책과 빌린 책",
   "Verschieben": "이동",
@@ -3013,6 +3027,8 @@
   "Zurück zu v{version} und neu starten": "v{version} 버전으로 되돌리고 다시 시작",
   "Zurück zur Sammlung": "컬렉션으로 돌아가기",
   "Zurück zur Übersicht": "개요로 돌아가기",
+  "Zurückbekommen": "돌려받음",
+  "Zurückbekommen von {name}": "{name}에게서 돌려받음",
   "Zurückgesetzt: v{from} → v{to} ({at})": "이전 버전으로 되돌렸어요: v{from} → v{to} ({at})",
   "Zurücksetzen": "초기화",
   "Zurücksetzen auf v{to} fehlgeschlagen ({at}); v{from} läuft weiter.": "v{to} 버전으로 되돌리지 못했어요 ({at}). v{from} 버전은 계속 실행 중이에요.",
@@ -3203,6 +3219,7 @@
     "other": "개"
   },
   "wenig freier Speicher": "여유 공간이 적음",
+  "wie {year}": "{year}와 동일",
   "z. B. 1": "예: 1",
   "z. B. 12": "예: 12",
   "z. B. 192": "예: 192",
@@ -3271,6 +3288,7 @@
   "{device} Kalender → Neuer Kalender → Im Netzwerk → Adresse einfügen → Abonnieren.": "{device} 캘린더 → 새 캘린더 → 네트워크 → 주소 붙여넣기 → 구독.",
   "{device} im Browser calendar.google.com öffnen → bei „Weitere Kalender“ auf + → „Per URL“ → Adresse einfügen. Danach in der Google-Kalender-App unter Einstellungen die Synchronisierung des Kalenders einschalten. Ohne Google-Konto geht es mit der App ICSx⁵.": "{device} 브라우저에서 calendar.google.com을 열어요 → “다른 캘린더”의 + → “URL로 추가” → 주소 붙여넣기. 그런 다음 Google 캘린더 앱의 설정에서 해당 캘린더 동기화를 켜 주세요. Google 계정이 없으면 ICSx⁵ 앱을 사용할 수 있어요.",
   "{device} „In Kalender-App öffnen“ tippen und „Abonnieren“ – oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo hinzufügen, Adresse einfügen.": "{device} “캘린더 앱에서 열기”를 누르고 “구독”을 선택해요 – 또는 설정 → 캘린더 → 계정 → 계정 추가 → 기타 → 구독 캘린더 추가에 주소를 붙여넣어요.",
+  "{diff} zu {year}": "{year} 대비 {diff}",
   "{entry} von „{title}“ wiederhergestellt": "“{title}”의 {entry}을(를) 복원했어요",
   "{episodes} à {duration} Min.": "{episodes}, 편당 {duration}분",
   "{episode} bewerten": "{episode} 평가",
@@ -3421,6 +3439,9 @@
   },
   "{n} Reihen|{n} Reihen": {
     "other": "시리즈 {n}개"
+  },
+  "{n} Reihe|{n} Reihen": {
+    "other": "{n}개 시리즈"
   },
   "{n} Seiten|{n} Seiten": {
     "other": "{n}쪽"

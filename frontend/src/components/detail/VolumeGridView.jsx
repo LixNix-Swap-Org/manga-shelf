@@ -35,7 +35,8 @@ export default function VolumeGridView({
   selectionMode = false,
   isSelected = () => false,
   onSelectVolume,
-  gapRunProps = null
+  gapRunProps = null,
+  lendProps = null
 }) {
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
@@ -261,6 +262,7 @@ export default function VolumeGridView({
                     multiUser={readers.length > 1}
                     people={mayToggleOthers && canToggleOwned && !selectionMode ? readers : null}
                     onToggleOwner={mayToggleOthers && canToggleOwned && !selectionMode ? handleToggleVolume : null}
+                    lend={selectionMode ? null : lendProps}
                   />
                   <LentBadge vol={vol} />
                 </div>
