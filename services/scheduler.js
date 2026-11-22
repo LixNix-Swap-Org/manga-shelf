@@ -616,6 +616,14 @@ function runAnimeListSyncIfDue({ shouldStop = () => false } = {}) {
     return listSyncRun;
 }
 
+/** Browser push of the release-day reminders (services/push.js), from 9:00 local time once a day; after the anime refresh. */
+function runPushRemindersIfDue({ now = new Date(), shouldStop = () => false } = {}) {
+    const { createCtx } = require('../db');
+    const stop = () => shouldStop() || lifecycle.isShuttingDown();
+    return lifecycle.trackJob('Push-Erinnerungen',
+        require('./push').runPushRemindersIfDue({ db, createCtx, now, timeZone: config.appTimeZone || backupSchedule().timeZone, shouldStop: stop }));
+}
+
 /**
  * Starts the daily backup: a check 10 s after boot, then hourly, snapshots once BACKUP_HOUR has passed with no
  * verified one for the local day (so restarts cannot skip a day). Returns a stop function that clears the timers.
@@ -652,6 +660,11 @@ function initScheduler() {
         } catch (e) {
             log.warn('[Anime] AniList-Abgleich fehlgeschlagen:', e);
         }
+        try {
+            await runPushRemindersIfDue({ shouldStop: () => stopped });
+        } catch (e) {
+            log.warn('[Push] Erinnerungen fehlgeschlagen:', e);
+        }
     };
     const first = setTimeout(check, 10000);
     const interval = setInterval(check, CHECK_INTERVAL_MS);
@@ -663,6 +676,7 @@ function initScheduler() {
 }
 
 module.exports = {
+    runPushRemindersIfDue,
     backupsDir,
     DAILY_PREFIX,
     PRE_RESTORE_PREFIX,

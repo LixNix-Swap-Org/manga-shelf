@@ -1513,6 +1513,28 @@ function migrationList(log = silentLog) {
                 const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
                 if (!cols.has('lent_reminder_days')) d.exec('ALTER TABLE users ADD COLUMN lent_reminder_days INTEGER NOT NULL DEFAULT 90;');
             }
+        },
+        {
+            version: 60,
+            name: 'add_push_subscriptions',
+            up: (d) => {
+                // Web Push of the release-day reminders in the browser (services/push.js): one row per browser that switched
+                // them on; `texts` holds the notification texts in that browser's UI language (the server has no catalog),
+                // `last_day` the local day of the last reminder sent to it
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS push_subscriptions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        endpoint TEXT NOT NULL UNIQUE,
+                        p256dh TEXT NOT NULL,
+                        auth TEXT NOT NULL,
+                        texts TEXT,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        last_day TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id);
+                `);
+            }
         }
     ];
 }

@@ -8,6 +8,7 @@ import { watchServiceWorkerUpdates } from './hooks/usePwaInstall'
 import { installDeepLinkBridge } from './app/deepLink'
 import { initI18n, t } from './i18n/index.js'
 import { installFieldMessages } from './utils/fieldMessages'
+import { installWebPushLogout } from './utils/webPush'
 import './index.css'
 
 const appBuild = isAppMode()
@@ -20,6 +21,9 @@ installFieldMessages(document)
 if (!appBuild && window.location.pathname === '/' && navigator.onLine !== false && !isLogoutPending()) {
   startPrefetch(PREFETCH_MANGAS, () => apiFetch('/api/mangas'))
 }
+
+// a logout ends this browser's release-day reminders (Web Push), so the next account on it does not get them
+if (!appBuild) installWebPushLogout(window, navigator)
 
 // manga-shelf://connect links the shells receive before the app has mounted
 if (appBuild) installDeepLinkBridge(window)

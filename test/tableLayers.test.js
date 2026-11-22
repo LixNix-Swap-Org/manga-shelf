@@ -12,7 +12,7 @@ const TABLE_LAYERS = {
         'anime_airings', 'anime_work_links'],
     shelf: ['shelves', 'shelf_members', 'mangas', 'volumes', 'trash'],
     person: ['users', 'volume_copies', 'volume_reads', 'chapter_progress', 'anime_progress', 'anime_tags', 'anime_sync',
-        'user_api_credentials', 'calendar_feeds', 'saved_filters', 'series_wishes'],
+        'user_api_credentials', 'calendar_feeds', 'saved_filters', 'series_wishes', 'push_subscriptions'],
     technical: ['app_settings', 'schema_migrations', 'data_versions', 'api_cache', 'manga_passion_cache', 'sqlite_sequence',
         'sqlite_stat1', 'sqlite_stat4']
 };
@@ -36,7 +36,8 @@ const ACCOUNT_REFERENCES = {
     'anime_sync.user_id': 'CASCADE',
     'user_api_credentials.user_id': 'CASCADE',
     'calendar_feeds.user_id': 'CASCADE',
-    'saved_filters.user_id': 'CASCADE'
+    'saved_filters.user_id': 'CASCADE',
+    'push_subscriptions.user_id': 'CASCADE'
 };
 
 const fresh = () => {

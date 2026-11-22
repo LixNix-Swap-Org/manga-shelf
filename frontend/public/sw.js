@@ -203,3 +203,36 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(url.pathname.startsWith('/assets/') ? cacheFirst(event) : networkFirst(event));
 });
+
+// Release-day reminders by Web Push (services/push.js on the server): the server sends { title, body, url, tag }
+// encrypted; the browser decrypts it before this handler sees it. A push without readable data still shows a notice,
+// because browsers punish a push that shows nothing.
+self.addEventListener('push', (event) => {
+  let data;
+  try { data = event.data ? event.data.json() : {}; } catch (_) { data = {}; }
+  const title = typeof data.title === 'string' && data.title ? data.title : 'Manga Shelf';
+  const url = typeof data.url === 'string' && data.url.startsWith('/') && !data.url.startsWith('//') ? data.url : '/';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: typeof data.body === 'string' ? data.body : '',
+    tag: typeof data.tag === 'string' && data.tag ? data.tag : undefined,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: { url }
+  }));
+});
+
+// a tap opens the radar (or the anime list) in an open tab of the app, else in a new one
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data && event.notification.data.url ? event.notification.data.url : '/', self.location.origin).href;
+  event.waitUntil((async () => {
+    const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const own = tabs.find((c) => new URL(c.url).origin === self.location.origin);
+    if (own) {
+      await own.focus();
+      if ('navigate' in own) await own.navigate(target).catch(() => {});
+      return;
+    }
+    await self.clients.openWindow(target);
+  })());
+});
