@@ -8,6 +8,7 @@ import { watchServiceWorkerUpdates } from './hooks/usePwaInstall'
 import { installDeepLinkBridge } from './app/deepLink'
 import { initI18n, t } from './i18n/index.js'
 import { installFieldMessages } from './utils/fieldMessages'
+import { installCoverFallback } from './utils/coverFallback'
 import { installWebPushLogout } from './utils/webPush'
 import './index.css'
 
@@ -15,6 +16,8 @@ const appBuild = isAppMode()
 
 // form fields report their errors in the app language, not the browser's
 installFieldMessages(document)
+// a foreign cover the server's cover cache cannot serve loads from its host (utils/coverFallback.js)
+installCoverFallback(document)
 
 // The shelf list loads in parallel with the session check; useMangaList takes the answer once (a 401 is ignored there).
 // Not while a logout is outstanding: the old session must not be used again. The app build first picks its server.

@@ -4,7 +4,8 @@ import {
 } from 'lucide-react';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { clearOfflineData } from '../../utils/offlineStore';
-import { apiFetch, TIMEOUTS } from '../../utils/api';
+import { apiFetch, TIMEOUTS, uploadTimeout, isAbortError } from '../../utils/api';
+import { uploadAndInspectBackup } from '../../utils/backupUpload';
 import { formatMegabytes } from '../../utils/format';
 import {
   clearRestoreUndo, httpErrorMessage, passwordRefusalText, readJson, readRestoreUndo, saveRestoreUndo
@@ -77,6 +78,8 @@ const discardStaging = (stagingId) => {
 export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuccess }) {
   const [restoreFile, setRestoreFile] = useState(null);
   const [inspecting, setInspecting] = useState(false);
+  const [inspectPhase, setInspectPhase] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [inspection, setInspection] = useState(null);
   const [allowNewer, setAllowNewer] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -142,10 +145,14 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   useEffect(() => {
     backupsRequestRef.current++;
     restoreRequestRef.current++;
+    inspectAbortRef.current?.abort();
+    inspectAbortRef.current = null;
     dropStaging();
     if (isOpen) {
       setRestoreFile(null);
       setInspecting(false);
+      setInspectPhase(null);
+      setUploadProgress(null);
       setInspection(null);
       setAllowNewer(false);
       setRestoreError('');
@@ -230,45 +237,94 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
     }, RELOAD_DELAY_MS);
   };
 
+  const cancelInspect = () => {
+    restoreRequestRef.current++;
+    inspectAbortRef.current?.abort();
+    inspectAbortRef.current = null;
+    setInspecting(false);
+    setInspectPhase(null);
+    setUploadProgress(null);
+  };
+
   /** Step 1: stage and check an upload ({ file }) or a server snapshot ({ filename }). */
   const inspect = async (source) => {
     const id = ++restoreRequestRef.current;
     dropStaging();
     setInspection(null);
     setInspecting(true);
+    setInspectPhase(source.file ? 'upload' : 'inspect');
+    setUploadProgress(null);
     clearMessages();
     const controller = new AbortController();
     inspectAbortRef.current = controller;
     const { signal } = controller;
     try {
       let res;
+      let data;
       if (source.file) {
-        const formData = new FormData();
-        formData.append('backup', source.file);
-        res = await apiFetch('/api/backup/inspect', { method: 'POST', body: formData, timeout: TIMEOUTS.upload, signal });
+        const result = await uploadAndInspectBackup({
+          file: source.file,
+          filename: source.file.name || null,
+          signal,
+          onPhase: (phase) => {
+            if (id === restoreRequestRef.current) setInspectPhase(phase);
+          },
+          onProgress: (progress) => {
+            if (id === restoreRequestRef.current) setUploadProgress(progress);
+          },
+          request: {
+            postForm: async (url, body) => {
+              const r = await apiFetch(url, { method: 'POST', body, timeout: TIMEOUTS.upload, signal });
+              return { ok: r.ok, status: r.status, data: await readJson(r), res: r };
+            },
+            postJson: async (url, body, kind) => {
+              const timeout = kind === 'inspect' ? TIMEOUTS.upload : TIMEOUTS.write;
+              const r = await apiFetch(url, { method: 'POST', body, timeout, signal });
+              return { ok: r.ok, status: r.status, data: await readJson(r), res: r };
+            },
+            putChunk: async (url, chunk) => {
+              const r = await apiFetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: chunk,
+                timeout: uploadTimeout(chunk.size),
+                signal
+              });
+              return { ok: r.ok, status: r.status, data: await readJson(r), res: r };
+            },
+            deleteUpload: (url) => apiFetch(url, { method: 'DELETE' }).catch(() => {})
+          }
+        });
+        res = result.res;
+        data = result.data;
       } else {
         res = await apiFetch('/api/backup/inspect', { method: 'POST', body: { filename: source.filename }, timeout: TIMEOUTS.long, signal });
+        data = await readJson(res);
       }
-      const data = await readJson(res);
       if (id !== restoreRequestRef.current) {
-        if (res.ok && data.staging_id) discardStaging(data.staging_id);
+        if (res?.ok && data?.staging_id) discardStaging(data.staging_id);
         return;
       }
-      if (res.ok && data.staging_id) {
+      if (res?.ok && data?.staging_id) {
         stagingRef.current = data.staging_id;
         setAllowNewer(false);
         setInspection(withPasswordWarnings(data));
       } else {
-        setRestoreError(httpErrorMessage(res.status, data, tr('Backup konnte nicht geprüft werden'), INSPECT_HTTP));
-        if (res.status === 404 && source.filename) fetchServerBackups();
+        setRestoreError(httpErrorMessage(res?.status || 500, data || {}, tr('Backup konnte nicht geprüft werden'), INSPECT_HTTP));
+        if (res?.status === 404 && source.filename) fetchServerBackups();
       }
-    } catch (_) {
+    } catch (err) {
+      if (signal.aborted || isAbortError(err)) return;
       if (id === restoreRequestRef.current) {
         setRestoreError(source.file ? tr(UPLOAD_NETWORK) : tr('Netzwerkfehler beim Prüfen des Snapshots.'));
       }
     } finally {
       if (inspectAbortRef.current === controller) inspectAbortRef.current = null;
-      if (id === restoreRequestRef.current) setInspecting(false);
+      if (id === restoreRequestRef.current) {
+        setInspecting(false);
+        setInspectPhase(null);
+        setUploadProgress(null);
+      }
     }
   };
 
@@ -647,7 +703,45 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                   )}
                 </div>
 
+                {inspecting && inspectPhase === 'upload' && uploadProgress && uploadProgress.total > 0 && (() => {
+                  const pct = Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100));
+                  return (
+                    <div className="space-y-1.5" role="status" aria-live="polite">
+                      <div className="flex items-center justify-between text-xs text-slate-300 tabular-nums">
+                        <span>{tr('Backup wird hochgeladen ({loaded} / {total})...', {
+                          loaded: formatMegabytes(uploadProgress.loaded),
+                          total: formatMegabytes(uploadProgress.total)
+                        })}</span>
+                        <span>{pct} %</span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={pct}
+                        aria-label={tr('Upload-Fortschritt')}
+                        className="h-2 rounded-full bg-slate-800 overflow-hidden"
+                      >
+                        <div
+                          className="h-full bg-emerald-500 transition-[width] duration-150"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="flex justify-end gap-3 pt-2">
+                  {inspecting && (
+                    <button
+                      id="btn-cancel-inspect"
+                      type="button"
+                      onClick={cancelInspect}
+                      className="btn-secondary text-xs px-4 py-2"
+                    >
+                      {tr('Abbrechen')}
+                    </button>
+                  )}
                   <button
                     id="btn-inspect-backup"
                     type="submit"
@@ -655,9 +749,15 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                     disabled={locked || !restoreFile}
                   >
                     {inspecting ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" /> {tr('Backup wird geprüft...')}
-                      </>
+                      inspectPhase === 'upload' ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" /> {tr('Wird hochgeladen...')}
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" /> {tr('Backup wird geprüft...')}
+                        </>
+                      )
                     ) : (
                       <>
                         <CloudUpload className="w-4 h-4" aria-hidden="true" /> {tr('Backup prüfen')}

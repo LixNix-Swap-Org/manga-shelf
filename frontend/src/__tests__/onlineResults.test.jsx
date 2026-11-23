@@ -106,7 +106,7 @@ describe('OnlineResults', () => {
     expect(mp.getByText('Manga Passion')).toBeTruthy();
     expect(mp.getByRole('heading', { level: 3, name: 'Frieren' })).toBeTruthy();
     for (const text of ['Sousou no Frieren', 'Kanehito Yamada', 'Egmont', '12 Bände', 'Laufend']) expect(mp.getByText(text)).toBeTruthy();
-    expect(items[0].querySelector('img').getAttribute('src')).toBe(MP_HIT.cover_image);
+    expect(items[0].querySelector('img').getAttribute('src')).toBe(`/api/covers?url=${encodeURIComponent(MP_HIT.cover_image)}`);
     const al = within(items[1]);
     expect(al.getByText('AniList')).toBeTruthy();
     expect(al.getByText('MyAnimeList')).toBeTruthy();

@@ -17,8 +17,8 @@ server {
     listen [::]:80;
     server_name manga.deinedomain.de; # <-- deine Domain / Subdomain
 
-    # Muss über der Grenze für Backup-Uploads der App liegen (500 MB), sonst antwortet nginx mit 413 statt der App
-    client_max_body_size 512M;
+    # Muss über der Grenze für direkte Einzel-Uploads der App liegen (6 GB; die Oberfläche lädt Dateien > 16 MB gestückelt hoch)
+    client_max_body_size 8G;
 
     location / {
         # Port der App: Pterodactyl-Allocation (z. B. 25502), Docker/Headless-Server Standard 3000

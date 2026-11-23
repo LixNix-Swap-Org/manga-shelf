@@ -177,6 +177,24 @@ describe('service worker', () => {
     expect([...uploads.entries.keys()]).toEqual([abs('/uploads/cover-1.jpg')]);
   });
 
+  it('/api/covers: keeps the cached covers of this server, never a redirected answer of the host; other API calls pass', async () => {
+    const caches = fakeCaches(vi.fn());
+    const ok = '/api/covers?url=https%3A%2F%2Fmedia.example.org%2Fa.jpg';
+    const redirected = '/api/covers?url=https%3A%2F%2Fmedia.example.org%2Fb.jpg';
+    const answers = {
+      [ok]: () => response('jpg', { type: 'image/jpeg' }),
+      [redirected]: () => response('jpg', { type: 'image/jpeg', basic: false })
+    };
+    const fetchImpl = vi.fn(async (r) => answers[new URL(abs(r)).pathname + new URL(abs(r)).search]());
+    const sw = loadWorker({ version: '1', fetchImpl, caches });
+    await sw.request(ok);
+    await sw.request(redirected);
+    expect([...(await caches.open(UPLOADS_CACHE)).entries.keys()]).toEqual([abs(ok)]);
+    await sw.request(ok);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(await sw.request('/api/mangas')).toBeUndefined();
+  });
+
   it('/uploads: keeps at most 1000 images, the oldest go first', async () => {
     const caches = fakeCaches(vi.fn());
     const sw = loadWorker({ version: '1', fetchImpl: async () => response('jpg', { type: 'image/jpeg' }), caches });

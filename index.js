@@ -77,7 +77,7 @@ const { HttpError, defaultCode, errorBody, isAppCode, msg } = require('./utils/h
 const { requireEditor } = require('./middleware/auth');
 const { clientIp, createLimiterStore } = require('./middleware/rateLimit');
 const { createOriginCheck, normalizeOrigin } = require('./middleware/originCheck');
-const { ALLOWED_IMAGE_EXTS } = require('./middleware/upload');
+const { ALLOWED_IMAGE_EXTS, uploadBackup, formatLimit } = require('./middleware/upload');
 
 const authRoutes = require('./routes/auth');
 const apiKeyRoutes = require('./routes/apiKeys');
@@ -85,6 +85,7 @@ const coreRoutes = require('./routes/core');
 const backupsRoutes = require('./routes/backups');
 const systemRoutes = require('./routes/system');
 const uploadRoutes = require('./routes/uploads');
+const coverRoutes = require('./routes/covers');
 const pushRoutes = require('./routes/push');
 
 // The CSP allows https/http images because a cover may still point at another host, and inline styles because the
@@ -110,7 +111,9 @@ const API_PATH = /^\/api(?:\/|$)/i;
 const UPLOADS_PATH = /^\/uploads(?:\/|$)/i;
 const UMBRELLA_WINDOW_MS = 60 * 1000;
 const UMBRELLA_FACTORS = { api: 1, static: 2.5, uploads: 20 };
-const umbrellaBucket = (req) => (API_PATH.test(req.path) ? 'api' : UPLOADS_PATH.test(req.path) ? 'uploads' : 'static');
+// cached covers (routes/covers.js) count like uploads: a collection page loads hundreds of them at once
+const COVERS_PATH = /^\/api\/covers\/?$/i;
+const umbrellaBucket = (req) => (UPLOADS_PATH.test(req.path) || COVERS_PATH.test(req.path) ? 'uploads' : API_PATH.test(req.path) ? 'api' : 'static');
 const APP_CORS = {
     origin: true,
     credentials: false,
@@ -128,12 +131,13 @@ const CLIENT_ERROR_TEXTS = {
     415: 'Format wird nicht unterstützt'
 };
 
-const formatLimit = (bytes) => (bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))} MB` : `${Math.round(bytes / 1024)} KB`);
-
 // Limits as configured in middleware/upload.js
 function uploadErrorMessage(err) {
     switch (err.code) {
-        case 'LIMIT_FILE_SIZE': return err.field === 'backup' ? 'Backup ist größer als 500 MB' : 'Bild ist größer als 15 MB';
+        case 'LIMIT_FILE_SIZE':
+            return err.field === 'backup'
+                ? msg('Backup ist größer als {max}', { max: formatLimit(uploadBackup.limits.fileSize) })
+                : 'Bild ist größer als 15 MB';
         case 'LIMIT_UNEXPECTED_FILE': return err.field === 'images' ? 'Höchstens 10 Bilder auf einmal' : 'Unerwartetes Dateifeld im Upload';
         case 'LIMIT_FILE_COUNT': return 'Zu viele Dateien auf einmal';
         default: return 'Upload abgelehnt';
@@ -401,7 +405,7 @@ function createApp() {
 
     // core/routes.js holds every endpoint that also runs in the apps; the others are server-only. systemRoutes comes
     // first: it puts the rate limit in front of the core calendar feed.
-    for (const router of [authRoutes, apiKeyRoutes, systemRoutes, coreRoutes, backupsRoutes, uploadRoutes, pushRoutes]) {
+    for (const router of [authRoutes, apiKeyRoutes, systemRoutes, coreRoutes, backupsRoutes, uploadRoutes, coverRoutes, pushRoutes]) {
         app.use('/api', router);
     }
 
