@@ -2,27 +2,42 @@ import { useEffect, useId, useState } from 'react';
 import { BellRing } from 'lucide-react';
 import { notify } from '../../utils/notify';
 import { t } from '../../i18n/index.js';
-import { disableWebPush, enableWebPush, readWebPushState, setWebPushHour, testWebPush, webPushSupport, WEB_PUSH_DEFAULT_HOUR } from '../../utils/webPush';
+import { disableWebPush, enableWebPush, readWebPushState, setWebPushPrefs, testWebPush, webPushSupport, WEB_PUSH_DEFAULTS } from '../../utils/webPush';
 
 // i18n
 export const WEB_PUSH_TEXTS = {
   toggle: 'Erinnerungen am Erscheinungstag',
-  help: 'Meldet sich am Erscheinungstag zur gewählten Uhrzeit in diesem Browser, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft, auch bei geschlossenem Tab. Gilt nur für diesen Browser.',
+  help: 'Meldet sich in diesem Browser, auch bei geschlossenem Tab: wenn ein Band aus dem Release-Radar erscheint, eine neue Folge eines Anime auf deiner Liste läuft oder ein verliehener Band länger als deine Ausleihfrist weg ist. Gilt nur für diesen Browser.',
   insecure: 'Geht nur, wenn Manga Shelf über HTTPS aufgerufen wird.',
   unsupported: 'Dieser Browser kann hier keine Mitteilungen empfangen. Auf dem iPhone geht es nur in der Web-App vom Home-Bildschirm.',
   denied: 'Mitteilungen sind für diese Seite blockiert – erlaube sie in den Website-Einstellungen des Browsers.',
   failed: 'Erinnerungen konnten nicht umgestellt werden',
   service: 'Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.',
+  when: 'Wann',
   hour: 'Uhrzeit',
-  hourFailed: 'Uhrzeit konnte nicht gespeichert werden'
+  what: 'Melden',
+  prefsFailed: 'Auswahl konnte nicht gespeichert werden'
+};
+// i18n
+const MODE_LABELS = {
+  day: 'Am Erscheinungstag',
+  eve: 'Am Tag davor',
+  week: 'Einmal pro Woche (montags)'
+};
+// i18n
+const KIND_LABELS = {
+  volumes: 'Neue Bände',
+  episodes: 'Neue Anime-Folgen',
+  loans: 'Überfällige Ausleihen'
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 /**
- * Settings → Allgemein in a browser: the Web Push switch of the release-day reminders (off by default, per browser).
- * Greyed out with the reason where the browser cannot do it; while on, "Uhrzeit" picks the hour (server time zone, default 9)
- * and "Test senden" checks the way to this browser.
+ * Settings → Allgemein in a browser: the Web Push switch of the reminders (off by default, per browser). Greyed out with
+ * the reason where the browser cannot do it. While on: "Wann" (release day, the day before, Mondays for the week),
+ * "Uhrzeit" (server time zone), what it reports (new volumes, new episodes, overdue lendings; at least one) and
+ * "Test senden" to check the way to this browser.
  */
 export default function WebPushSwitch({ env = globalThis }) {
   const ids = useId();
@@ -30,7 +45,7 @@ export default function WebPushSwitch({ env = globalThis }) {
   const [enabled, setEnabled] = useState(support === 'ok' ? null : false);
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [hour, setHour] = useState(WEB_PUSH_DEFAULT_HOUR);
+  const [prefs, setPrefs] = useState(() => ({ ...WEB_PUSH_DEFAULTS }));
 
   useEffect(() => {
     if (support !== 'ok') return undefined;
@@ -39,7 +54,7 @@ export default function WebPushSwitch({ env = globalThis }) {
       .then((state) => {
         if (!active) return;
         setEnabled(state.subscribed);
-        setHour(state.hour);
+        setPrefs(state.prefs);
       })
       .catch(() => { if (active) setEnabled(false); });
     return () => { active = false; };
@@ -51,6 +66,7 @@ export default function WebPushSwitch({ env = globalThis }) {
     try {
       const result = on ? await enableWebPush() : await disableWebPush();
       setEnabled(Boolean(result.enabled));
+      if (result.enabled) setPrefs({ ...WEB_PUSH_DEFAULTS });
       if (result.denied) setDenied(true);
       if (result.unsupported) notify.error(t(WEB_PUSH_TEXTS.unsupported));
     } catch (e) {
@@ -62,15 +78,15 @@ export default function WebPushSwitch({ env = globalThis }) {
     }
   };
 
-  const changeHour = async (next) => {
-    const before = hour;
-    setHour(next);
+  const change = async (patch) => {
+    const before = prefs;
+    setPrefs({ ...prefs, ...patch });
     setBusy(true);
     try {
-      if (!(await setWebPushHour(next))) setHour(before);
+      if (!(await setWebPushPrefs(patch))) setPrefs(before);
     } catch (e) {
-      setHour(before);
-      notify.error(e, { fallback: t(WEB_PUSH_TEXTS.hourFailed) });
+      setPrefs(before);
+      notify.error(e, { fallback: t(WEB_PUSH_TEXTS.prefsFailed) });
     } finally {
       setBusy(false);
     }
@@ -89,6 +105,7 @@ export default function WebPushSwitch({ env = globalThis }) {
   };
 
   const reason = support === 'insecure' ? WEB_PUSH_TEXTS.insecure : support === 'unsupported' ? WEB_PUSH_TEXTS.unsupported : null;
+  const kindsOn = Object.keys(KIND_LABELS).filter((k) => prefs[k]);
   return (
     <div data-testid="web-push">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -104,19 +121,6 @@ export default function WebPushSwitch({ env = globalThis }) {
           <span>{t(WEB_PUSH_TEXTS.toggle)}</span>
         </label>
         {enabled && (
-          <label className="flex items-center gap-2 text-xs text-slate-300">
-            <span>{t(WEB_PUSH_TEXTS.hour)}</span>
-            <select
-              className="input-field bg-slate-950 !w-auto !px-3 !py-1.5"
-              value={hour}
-              disabled={busy}
-              onChange={(e) => changeHour(Number(e.target.value))}
-            >
-              {HOURS.map((h) => <option key={h} value={h}>{`${h}:00`}</option>)}
-            </select>
-          </label>
-        )}
-        {enabled && (
           <button
             type="button"
             onClick={sendTest}
@@ -131,6 +135,51 @@ export default function WebPushSwitch({ env = globalThis }) {
       <p id={`${ids}-help`} className="text-xs text-slate-400">{t(WEB_PUSH_TEXTS.help)}</p>
       {reason && <p id={`${ids}-reason`} className="text-xs text-amber-300 mt-1">{t(reason)}</p>}
       {denied && <p id={`${ids}-denied`} role="alert" className="text-xs text-amber-300 mt-1">{t(WEB_PUSH_TEXTS.denied)}</p>}
+      {enabled && (
+        <div className="mt-3 ml-1 pl-4 border-l border-slate-800 space-y-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-300">
+            <label className="flex items-center gap-2">
+              <span>{t(WEB_PUSH_TEXTS.when)}</span>
+              <select
+                className="input-field bg-slate-950 !w-auto !px-3 !py-1.5"
+                value={prefs.mode}
+                disabled={busy}
+                onChange={(e) => change({ mode: e.target.value })}
+              >
+                {Object.entries(MODE_LABELS).map(([mode, label]) => <option key={mode} value={mode}>{t(label)}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-2">
+              <span>{t(WEB_PUSH_TEXTS.hour)}</span>
+              <select
+                className="input-field bg-slate-950 !w-auto !px-3 !py-1.5"
+                value={prefs.hour}
+                disabled={busy}
+                onChange={(e) => change({ hour: Number(e.target.value) })}
+              >
+                {HOURS.map((h) => <option key={h} value={h}>{`${h}:00`}</option>)}
+              </select>
+            </label>
+          </div>
+          <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300">
+            <legend className="sr-only">{t(WEB_PUSH_TEXTS.what)}</legend>
+            <span aria-hidden="true">{t(WEB_PUSH_TEXTS.what)}</span>
+            {Object.entries(KIND_LABELS).map(([kind, label]) => (
+              <label key={kind} className="flex items-center gap-2 min-h-9 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 shrink-0"
+                  checked={Boolean(prefs[kind])}
+                  // at least one stays on: a reminder that reports nothing would only look switched on
+                  disabled={busy || (prefs[kind] && kindsOn.length === 1)}
+                  onChange={(e) => change({ [kind]: e.target.checked })}
+                />
+                <span>{t(label)}</span>
+              </label>
+            ))}
+          </fieldset>
+        </div>
+      )}
     </div>
   );
 }

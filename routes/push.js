@@ -31,13 +31,30 @@ function readSubscription(body) {
     return { endpoint, p256dh, auth };
 }
 
-/** The hour (0–23) the browser wants its reminder from; undefined keeps the stored one. */
-function readHour(body) {
-    if (body?.hour === undefined || body?.hour === null) return undefined;
-    const hour = Number(body.hour);
-    if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw badRequest('Ungültige Uhrzeit', 'PUSH_HOUR');
-    return hour;
+/**
+ * The browser's choices sent along: `hour` (0–23), `mode` (day, eve, week), `volumes`/`episodes`/`loans` (booleans).
+ * Only the given ones, as column values; a field left out keeps the stored value.
+ */
+function readPrefs(body) {
+    const prefs = {};
+    if (body?.hour !== undefined && body?.hour !== null) {
+        const hour = Number(body.hour);
+        if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw badRequest('Ungültige Uhrzeit', 'PUSH_HOUR');
+        prefs.hour = hour;
+    }
+    if (body?.mode !== undefined && body?.mode !== null) {
+        if (!push.MODES.includes(body.mode)) throw badRequest('Ungültige Auswahl', 'PUSH_MODE');
+        prefs.mode = body.mode;
+    }
+    for (const kind of push.KINDS) {
+        if (body?.[kind] === undefined || body?.[kind] === null) continue;
+        if (typeof body[kind] !== 'boolean') throw badRequest('Ungültige Auswahl', 'PUSH_KIND');
+        prefs[kind] = body[kind] ? 1 : 0;
+    }
+    return prefs;
 }
+
+const PREF_COLUMNS = ['hour', 'mode', ...push.KINDS];
 
 const endpointOf = (body) => (typeof body?.endpoint === 'string' ? body.endpoint.trim() : '');
 
@@ -46,17 +63,20 @@ router.get('/push/key', requireEditor, (req, res) => {
 });
 
 // on: stores the subscription for the caller (a browser that was subscribed for another account moves over); `hour`
-// (0–23, local server time) sets when it wants the reminder, left out it keeps the stored hour (default 9)
+// (0–23, local server time, default 9), `mode` (day, eve, week) and `volumes`/`episodes`/`loans` (default on) set
+// when and about what it wants a reminder; a field left out keeps the stored value
 router.put('/push/subscriptions', requireEditor, (req, res) => {
     const sub = readSubscription(req.body);
     const texts = push.cleanTexts(req.body?.texts);
-    const hour = readHour(req.body);
+    const prefs = readPrefs(req.body);
+    const given = PREF_COLUMNS.filter((c) => c in prefs);
     db.prepare(`
-        INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, texts, hour) VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, texts${given.map((c) => `, ${c}`).join('')})
+        VALUES (?, ?, ?, ?, ?${given.map(() => ', ?').join('')})
         ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth,
-            texts = excluded.texts, hour = CASE WHEN ? IS NULL THEN push_subscriptions.hour ELSE excluded.hour END,
+            texts = excluded.texts${given.map((c) => `, ${c} = excluded.${c}`).join('')},
             last_day = CASE WHEN push_subscriptions.user_id = excluded.user_id THEN push_subscriptions.last_day END
-    `).run(req.user.id, sub.endpoint, sub.p256dh, sub.auth, texts, hour ?? push.REMINDER_HOUR, hour ?? null);
+    `).run(req.user.id, sub.endpoint, sub.p256dh, sub.auth, texts, ...given.map((c) => prefs[c]));
     db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
         SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT ?)`).run(req.user.id, req.user.id, MAX_PER_USER);
     res.json({ success: true });
@@ -64,8 +84,8 @@ router.put('/push/subscriptions', requireEditor, (req, res) => {
 
 // is this browser subscribed for the caller? (the switch shows the server's view, not only the browser's)
 router.post('/push/subscriptions/status', requireEditor, (req, res) => {
-    const row = db.prepare('SELECT hour FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').get(endpointOf(req.body), req.user.id);
-    res.json(row ? { subscribed: true, hour: row.hour } : { subscribed: false });
+    const row = db.prepare('SELECT hour, mode, volumes, episodes, loans FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').get(endpointOf(req.body), req.user.id);
+    res.json(row ? { subscribed: true, hour: row.hour, mode: row.mode, volumes: Boolean(row.volumes), episodes: Boolean(row.episodes), loans: Boolean(row.loans) } : { subscribed: false });
 });
 
 // off (switch, logout): only the caller's own row

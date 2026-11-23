@@ -27,8 +27,17 @@ const DEFAULT_TEXTS = Object.freeze({
     box: 'Schuber {num}',
     episode: '{title} – Folge {episode}',
     more: '+ {n} weitere',
-    test: 'Erinnerungen sind eingeschaltet'
+    test: 'Erinnerungen sind eingeschaltet',
+    tomorrow: 'Morgen erscheint',
+    week: 'Diese Woche',
+    loanTitle: 'Ausleihe überfällig',
+    loan: '{title} {volumes} – seit {days} Tagen bei {name}',
+    weekdays: 'Mo,Di,Mi,Do,Fr,Sa,So'
 });
+// when a subscription gets its reminder: on the release day, the day before, or once a week (Monday) for the week
+const MODES = ['day', 'eve', 'week'];
+// what it reports; each a 0/1 column of push_subscriptions
+const KINDS = ['volumes', 'episodes', 'loans'];
 
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 const fromB64url = (text) => Buffer.from(String(text || ''), 'base64url');
@@ -170,20 +179,36 @@ const dayOf = (date, timeZone) => {
     }
 };
 
+/** Calendar arithmetic on YYYY-MM-DD strings (UTC noon, so no time zone or DST shifts a day). */
+const addDays = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+const weekdayIndex = (day) => (new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7; // Monday 0 … Sunday 6
+const mondayOf = (day) => addDays(day, -weekdayIndex(day));
+const daysBetween = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000);
+
+/** The days a subscription's reminder covers on `day`: { from, to } (inclusive). */
+function windowOf(mode, day) {
+    if (mode === 'eve') return { from: addDays(day, 1), to: addDays(day, 1) };
+    if (mode === 'week') return { from: day, to: addDays(mondayOf(day), 6) };
+    return { from: day, to: day };
+}
+
 /**
- * What comes out today for one account: radar volumes with today's exact date (all of its shelves, as the release
- * radar shows them) and confirmed next episodes of its "Schaue"/"Geplant" anime airing today. { volumes, episodes }.
+ * What one account has between `from` and `to` (local days, inclusive): radar volumes with an exact date in the window
+ * (all of its shelves, as the release radar shows them) and confirmed next episodes of its "Schaue"/"Geplant" anime
+ * airing in it. { volumes, episodes }, each with its `day`.
  */
-function releasesToday(ctx, day) {
+function releasesBetween(ctx, from, to) {
     const { releaseRadar } = require('../core/handlers/radar');
     const volumes = [];
     for (const group of releaseRadar(ctx, { query: {} }).body?.groups || []) {
         for (const item of group?.items || []) {
             if (!item || item.date_precision === 'month') continue;
-            if (String(item.release_date ?? '').trim() !== day) continue;
-            volumes.push(item);
+            const day = String(item.release_date ?? '').trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < from || day > to) continue;
+            volumes.push({ ...item, day });
         }
     }
+    volumes.sort((a, b) => a.day.localeCompare(b.day));
     const episodes = [];
     const rows = ctx.db.prepare(`
         SELECT a.title AS title, a.title_de AS title_de, a.next_airing_episode AS episode, a.next_airing_at AS at
@@ -193,38 +218,109 @@ function releasesToday(ctx, day) {
         ORDER BY a.next_airing_at, a.id
     `).all(ctx.user.id, ...FOLLOWED);
     for (const r of rows) {
-        if (dayOf(new Date(Number(r.at) * 1000), ctx.config.appTimeZone) !== day) continue;
-        episodes.push({ title: String(r.title_de || r.title || '').trim(), episode: Number(r.episode) });
+        const day = dayOf(new Date(Number(r.at) * 1000), ctx.config.appTimeZone);
+        if (day < from || day > to) continue;
+        episodes.push({ title: String(r.title_de || r.title || '').trim(), episode: Number(r.episode), day });
     }
     return { volumes, episodes };
 }
 
-/** The notification for one subscription, or null when nothing comes out: { title, body, url, tag }. */
-function buildMessage({ volumes, episodes }, texts, day) {
+/** The releases of `day` only (the release-day reminder). */
+function releasesToday(ctx, day) {
+    return releasesBetween(ctx, day, day);
+}
+
+/**
+ * The account's lent copies (its own and the household's, like "Zu erledigen") that have been away for its loan
+ * period (users.lent_reminder_days) on `day`, per series and borrower: [{ title, numbers, name, days, overdueOn }].
+ */
+function overdueLoans(ctx, day) {
+    const access = require('../core/lib/access');
+    const { readProfile } = require('../core/lib/locales');
+    const { volumeOrderSql } = require('../core/lib/volumeNumber');
+    const scope = access.inShelves('m.shelf_id', access.requestedShelfIds(ctx, null));
+    const period = readProfile(ctx.db, ctx.user.id).lent_reminder_days;
+    const rows = ctx.db.prepare(`
+        SELECT v.manga_id, m.title, v.volume_number, COALESCE(b.username, c.lent_to_name) AS name, SUBSTR(c.lent_at, 1, 10) AS lent_at
+        FROM volume_copies c
+        JOIN volumes v ON v.id = c.volume_id
+        JOIN mangas m ON m.id = v.manga_id
+        LEFT JOIN users b ON b.id = c.lent_to_user_id
+        WHERE (c.owner_user_id = ? OR c.owner_user_id IS NULL) AND (c.lent_to_user_id IS NOT NULL OR c.lent_to_name IS NOT NULL)
+          AND c.lent_at IS NOT NULL AND julianday(?) - julianday(SUBSTR(c.lent_at, 1, 10)) >= ? AND ${scope.sql}
+        ORDER BY m.title COLLATE NOCASE, m.id, ${volumeOrderSql('v')}
+    `).all(ctx.user.id, day, period, ...scope.params);
+    const groups = new Map();
+    for (const r of rows) {
+        const key = `${r.manga_id}\u0000${r.name}`;
+        const days = daysBetween(r.lent_at, day);
+        const entry = groups.get(key) || { title: String(r.title || '').trim(), numbers: [], name: String(r.name || '').trim(), days, overdueOn: addDays(r.lent_at, period) };
+        entry.numbers.push(String(r.volume_number ?? '').trim());
+        // the newest lending of the group says when the group became overdue (a reminder per newly overdue copy)
+        if (days < entry.days) Object.assign(entry, { days, overdueOn: addDays(r.lent_at, period) });
+        groups.set(key, entry);
+    }
+    return [...groups.values()];
+}
+
+/**
+ * The notification for one subscription, or null when there is nothing to say: { title, body, url, tag }.
+ * `found` = { volumes, episodes, loans }; `mode` picks the title (today, tomorrow, this week; the week lists the weekday).
+ */
+function buildMessage(found, texts, day, mode = 'day') {
+    const volumes = found.volumes || [];
+    const episodes = found.episodes || [];
+    const loans = found.loans || [];
+    const weekdays = String(texts.weekdays || DEFAULT_TEXTS.weekdays).split(',');
+    const dated = (line, d) => (mode === 'week' && d ? `${weekdays[weekdayIndex(d)] || d} ${line}` : line);
     const lines = [];
+    const add = (line) => { if (!lines.includes(line)) lines.push(line); };
     for (const v of volumes) {
         const title = String(v.manga_title ?? '').trim();
         const label = volumeLabel(v, texts);
-        const line = title ? `${title} – ${label}` : label;
-        if (!lines.includes(line)) lines.push(line);
+        add(dated(title ? `${title} – ${label}` : label, v.day));
     }
-    for (const e of episodes) {
-        const line = fill(texts.episode, { title: e.title, episode: e.episode });
-        if (!lines.includes(line)) lines.push(line);
+    for (const e of episodes) add(dated(fill(texts.episode, { title: e.title, episode: e.episode }), e.day));
+    for (const l of loans) {
+        const numbers = l.numbers.filter(Boolean);
+        const label = numbers.length && numbers.every(n => /^\d+(\.\d+)?$/.test(n)) ? fill(texts.volume, { num: numbers.join(', ') }) : numbers.join(', ');
+        add(fill(texts.loan, { title: l.title, volumes: label, days: l.days, name: l.name }).replace(/\s+–/, ' –').trim());
     }
     if (!lines.length) return null;
     const shown = lines.length > MAX_LINES ? lines.slice(0, MAX_LINES - 1) : lines;
     const rest = lines.length - shown.length;
     const body = [...shown, ...(rest ? [fill(texts.more, { n: rest })] : [])].join('\n');
-    return { title: texts.title, body, url: volumes.length ? '/?view=radar' : '/?view=anime', tag: `release-day-${day}` };
+    const releases = volumes.length + episodes.length;
+    const title = !releases ? texts.loanTitle : mode === 'eve' ? texts.tomorrow : mode === 'week' ? texts.week : texts.title;
+    const url = volumes.length ? '/?view=radar' : episodes.length ? '/?view=anime' : '/';
+    return { title, body, url, tag: `release-${mode}-${day}` };
+}
+
+/** What a subscription row reports on `day`, by its mode and kinds. */
+function findFor(ctx, sub, day) {
+    const mode = MODES.includes(sub.mode) ? sub.mode : 'day';
+    const { from, to } = windowOf(mode, day);
+    const found = { volumes: [], episodes: [], loans: [] };
+    if (sub.volumes || sub.episodes) {
+        const r = releasesBetween(ctx, from, to);
+        if (sub.volumes) found.volumes = r.volumes;
+        if (sub.episodes) found.episodes = r.episodes;
+    }
+    if (sub.loans) {
+        const loans = overdueLoans(ctx, day);
+        // weekly: every overdue lending; daily: the ones that became overdue since the last reminder (or today)
+        found.loans = mode === 'week' ? loans : loans.filter(l => l.overdueOn <= day && l.overdueOn > (sub.last_day && sub.last_day < day ? sub.last_day : addDays(day, -1)));
+    }
+    return { mode, found };
 }
 
 let run = null;
 
 /**
- * The morning reminder: once per local day (APP_TIME_ZONE) from 9:00, every subscription that has not had today's
- * run gets the releases of its account, if any. Subscriptions the push service forgot are deleted. Concurrent calls
- * share one run. Resolves { sent, gone, skipped } or null when not due.
+ * The reminder run (hourly scheduler check): once per local day (APP_TIME_ZONE), from each subscription's own hour,
+ * every subscription that is due gets what its account has in its window (weekly ones once per week, on Monday or the
+ * first check after). Subscriptions the push service forgot are deleted. Concurrent calls share one run. Resolves
+ * { sent, gone, skipped } or null when nothing is due.
  */
 function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetchImpl, shouldStop = () => false } = {}) {
     if (run) return run;
@@ -238,26 +334,29 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
     const hour = Number(parts.hour);
     const done = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(DAY_KEY);
     if (done && done.value === day) return Promise.resolve(null);
+    const monday = mondayOf(day);
+    const due = `(s.last_day IS NULL OR s.last_day <> ?) AND (s.mode <> 'week' OR s.last_day IS NULL OR s.last_day < ?)`;
     // each browser from its own hour on (the hourly check sends within that hour; a missed hour is caught up later that day)
     const subs = db.prepare(`
-        SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, u.username, u.role
+        SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, s.mode, s.volumes, s.episodes, s.loans, s.last_day, u.username, u.role
         FROM push_subscriptions s JOIN users u ON u.id = s.user_id
-        WHERE (s.last_day IS NULL OR s.last_day <> ?) AND s.hour <= ?
+        WHERE ${due} AND s.hour <= ?
         ORDER BY s.user_id, s.id
-    `).all(day, hour);
+    `).all(day, monday, hour);
     if (!subs.length) return Promise.resolve(null);
     run = (async () => {
         const report = { sent: 0, gone: 0, skipped: 0 };
-        const perUser = new Map();
+        const ctxs = new Map();
         for (const sub of subs) {
             if (shouldStop()) return report;
-            if (!perUser.has(sub.user_id)) {
-                const ctx = createCtx({ user: { id: sub.user_id, username: sub.username, role: sub.role } });
-                let found = { volumes: [], episodes: [] };
-                try { found = releasesToday(ctx, day); } catch (e) { log.warn(`[Push] Neuerscheinungen nicht lesbar: ${e?.message || e}`); }
-                perUser.set(sub.user_id, found);
+            if (!ctxs.has(sub.user_id)) ctxs.set(sub.user_id, createCtx({ user: { id: sub.user_id, username: sub.username, role: sub.role } }));
+            let message = null;
+            try {
+                const { mode, found } = findFor(ctxs.get(sub.user_id), sub, day);
+                message = buildMessage(found, textsOf(sub.texts), day, mode);
+            } catch (e) {
+                log.warn(`[Push] Erinnerung nicht lesbar: ${e?.message || e}`);
             }
-            const message = buildMessage(perUser.get(sub.user_id), textsOf(sub.texts), day);
             if (message) {
                 const result = await sendPush(sub, message, { db, fetchImpl });
                 if (result.gone) {
@@ -272,7 +371,7 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
             }
             db.prepare('UPDATE push_subscriptions SET last_day = ? WHERE id = ?').run(day, sub.id);
         }
-        const open = db.prepare('SELECT count(*) AS c FROM push_subscriptions WHERE last_day IS NULL OR last_day <> ?').get(day).c;
+        const open = db.prepare(`SELECT count(*) AS c FROM push_subscriptions s WHERE ${due}`).get(day, monday).c;
         if (!open) db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(DAY_KEY, day);
         if (report.sent || report.gone) log.info(`[Push] ${report.sent} Erinnerung${report.sent === 1 ? '' : 'en'} gesendet${report.gone ? `, ${report.gone} abgelaufene Abos entfernt` : ''}`);
         return report;
@@ -284,6 +383,8 @@ module.exports = {
     VAPID_KEY,
     DAY_KEY,
     REMINDER_HOUR,
+    MODES,
+    KINDS,
     DEFAULT_TEXTS,
     isPushEndpoint,
     vapidKeys,
@@ -294,5 +395,8 @@ module.exports = {
     cleanTexts,
     buildMessage,
     releasesToday,
+    releasesBetween,
+    overdueLoans,
+    windowOf,
     runPushRemindersIfDue
 };

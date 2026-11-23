@@ -105,13 +105,20 @@ test('routes: key, subscribe, status, test message, unsubscribe; guests and fore
     const rows = db.prepare('SELECT * FROM push_subscriptions WHERE endpoint = ?').all(b.json.endpoint);
     assert.equal(rows.length, 1);
     assert.deepEqual(JSON.parse(rows[0].texts), { title: 'New today', volume: 'Vol. {num}' });
-    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, hour: 9 });
+    const prefs = { hour: 9, mode: 'day', volumes: true, episodes: true, loans: true };
+    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, ...prefs });
     // the hour: set with the PUT, kept by a PUT without it, checked
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, hour: 24 })).status, 400);
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, hour: 7.5 })).status, 400);
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts, hour: 20 })).status, 200);
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts })).status, 200);
-    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, hour: 20 });
+    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, ...prefs, hour: 20 });
+    // when and what: checked, left out = kept
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, mode: 'month' })).status, 400);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, loans: 'no' })).status, 400);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts, mode: 'week', loans: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts })).status, 200);
+    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, ...prefs, hour: 20, mode: 'week', loans: false });
 
     // the test message goes to the real push service in production; here the endpoint is unreachable, so it fails softly
     const realFetch = globalThis.fetch;
@@ -186,6 +193,76 @@ test('daily run: today\'s radar volumes and followed episodes, once per day, fro
     assert.equal(sent.filter(s => s.url.includes('live')).length, 1, 'the 9:00 browser only once');
     assert.equal(db.prepare('SELECT value FROM app_settings WHERE key = ?').get(push.DAY_KEY).value, day);
     assert.equal(await push.runPushRemindersIfDue({ db, createCtx, now: at(19), timeZone: tz, fetchImpl }), null);
+});
+
+test('modes: the day before, once a week, and overdue lendings', async () => {
+    db.exec('DELETE FROM push_subscriptions');
+    const tz = 'Europe/Berlin';
+    const { createCtx } = require('../db');
+    const add = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    // a release day 10–16 days ahead whose Monday is still in the future (the radar shows upcoming volumes)
+    let release = add(today, 10);
+    while (new Date(`${release}T12:00:00Z`).getUTCDay() !== 3) release = add(release, 1); // a Wednesday
+    const monday = add(release, -2);
+    const atDay = (day, hour) => {
+        const probe = new Date(`${day}T${String(hour).padStart(2, '0')}:30:00Z`);
+        const offset = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).format(probe)) - hour;
+        return new Date(probe.getTime() - offset * 3600 * 1000);
+    };
+    const series = (await admin('POST', '/mangas', { title: 'Modusreihe' })).body.id;
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '2', status: 'Vorbestellt', release_date: release })).status, 200);
+    const owned = (await admin('POST', '/volumes', { manga_id: series, volume_number: '1', status: 'Vorhanden' })).body.id;
+    // lent 90 days (the default loan period) before the release day: overdue from that day on
+    db.prepare("UPDATE volume_copies SET lent_to_name = 'Oma', lent_at = ? WHERE volume_id = ?").run(add(release, -90), owned);
+
+    const eve = browser('https://fcm.googleapis.com/fcm/send/eve');
+    const week = browser('https://fcm.googleapis.com/fcm/send/week');
+    const day = browser('https://fcm.googleapis.com/fcm/send/day');
+    const loansOnly = browser('https://fcm.googleapis.com/fcm/send/loans');
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...eve.json, mode: 'eve', loans: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...week.json, mode: 'week' })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...day.json, loans: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...loansOnly.json, volumes: false, episodes: false })).status, 200);
+
+    let sent = [];
+    const fetchImpl = async (url, init) => { sent.push({ url, body: init.body }); return new Response(null, { status: 201 }); };
+    const runAt = async (d) => {
+        sent = [];
+        db.prepare('DELETE FROM app_settings WHERE key = ?').run(push.DAY_KEY);
+        await push.runPushRemindersIfDue({ db, createCtx, now: atDay(d, 10), timeZone: tz, fetchImpl });
+        const got = {};
+        for (const [name, b] of Object.entries({ eve, week, day, loansOnly })) {
+            const hit = sent.find(s => s.url.endsWith(`/${name === 'loansOnly' ? 'loans' : name}`));
+            if (hit) got[name] = JSON.parse(decrypt(b, hit.body));
+        }
+        return got;
+    };
+
+    let got = await runAt(monday);
+    assert.deepEqual(Object.keys(got), ['week'], 'Monday: only the weekly one');
+    assert.equal(got.week.title, 'Diese Woche');
+    assert.equal(got.week.body, 'Mi Modusreihe – Band 2');
+
+    got = await runAt(add(release, -1));
+    assert.deepEqual(Object.keys(got), ['eve'], 'the day before: only the evening one; the weekly one waits for next Monday');
+    assert.equal(got.eve.title, 'Morgen erscheint');
+    assert.equal(got.eve.body, 'Modusreihe – Band 2');
+
+    got = await runAt(release);
+    assert.deepEqual(Object.keys(got).sort(), ['day', 'loansOnly']);
+    assert.equal(got.day.title, 'Heute neu erschienen');
+    assert.equal(got.day.body, 'Modusreihe – Band 2');
+    assert.equal(got.loansOnly.title, 'Ausleihe überfällig');
+    assert.equal(got.loansOnly.body, 'Modusreihe Band 1 – seit 90 Tagen bei Oma');
+
+    got = await runAt(add(release, 1));
+    assert.deepEqual(got, {}, 'an overdue lending is reported once, not every day');
+
+    got = await runAt(add(monday, 7));
+    assert.deepEqual(Object.keys(got), ['week'], 'next Monday: the weekly one again');
+    assert.equal(got.week.title, 'Ausleihe überfällig');
+    assert.equal(got.week.body, 'Modusreihe Band 1 – seit 95 Tagen bei Oma', 'weekly lists every overdue lending');
 });
 
 test('buildMessage: no message without releases, more than six lines are folded', () => {

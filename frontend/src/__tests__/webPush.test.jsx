@@ -44,7 +44,7 @@ function stubServer() {
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push([init.method || 'GET', String(url), body]);
     if (String(url) === '/api/push/key') return fakeResponse(200, { publicKey: SERVER_KEY });
-    if (String(url) === '/api/push/subscriptions/status') return fakeResponse(200, { subscribed: true, hour: 7 });
+    if (String(url) === '/api/push/subscriptions/status') return fakeResponse(200, { subscribed: true, hour: 7, mode: 'day', volumes: true, episodes: false, loans: true });
     return fakeResponse(200, { success: true });
   }));
   return calls;
@@ -66,7 +66,8 @@ describe('web push helpers', () => {
 
   it('keyBytes decodes base64url; the texts carry every template', () => {
     expect(Array.from(keyBytes('AQID_-8'))).toEqual([1, 2, 3, 255, 239]);
-    expect(Object.keys(pushTexts()).sort()).toEqual(['box', 'episode', 'more', 'test', 'title', 'volume']);
+    expect(Object.keys(pushTexts()).sort()).toEqual(['box', 'episode', 'loan', 'loanTitle', 'more', 'test', 'title', 'tomorrow', 'volume', 'week', 'weekdays']);
+    expect(pushTexts().weekdays.split(',')).toHaveLength(7);
     expect(pushTexts().episode).toBe('{title} – Folge {episode}');
   });
 
@@ -123,7 +124,7 @@ describe('settings switch', () => {
     expect(screen.getByText('Geht nur, wenn Manga Shelf über HTTPS aufgerufen wird.')).toBeTruthy();
   });
 
-  it('shows the server state, the hour and "Test senden" while on', async () => {
+  it('shows the server state and the choices while on, and stores a change', async () => {
     const calls = stubServer();
     const sub = fakeSubscription();
     vi.stubGlobal('navigator', { ...globalThis.navigator, ...fakeNav(sub) });
@@ -136,6 +137,17 @@ describe('settings switch', () => {
     fireEvent.change(hour, { target: { value: '18' } });
     await waitFor(() => expect(calls.some(([m, u, b]) => m === 'PUT' && u === '/api/push/subscriptions' && b?.hour === 18)).toBe(true));
     expect(hour.value).toBe('18');
+    const when = screen.getByRole('combobox', { name: 'Wann' });
+    expect(when.value).toBe('day');
+    fireEvent.change(when, { target: { value: 'week' } });
+    await waitFor(() => expect(calls.some(([m, , b]) => m === 'PUT' && b?.mode === 'week')).toBe(true));
+    expect(screen.getByRole('option', { name: 'Einmal pro Woche (montags)' }).selected).toBe(true);
+    const episodes = screen.getByRole('checkbox', { name: 'Neue Anime-Folgen' });
+    expect(episodes.checked).toBe(false);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Überfällige Ausleihen' }));
+    await waitFor(() => expect(calls.some(([m, , b]) => m === 'PUT' && b?.loans === false)).toBe(true));
+    // the last one left cannot be switched off
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Neue Bände' }).disabled).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Test senden' }));
     await waitFor(() => expect(calls.some(([m, u]) => m === 'POST' && u === '/api/push/test')).toBe(true));
   });
