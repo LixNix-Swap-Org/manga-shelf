@@ -211,7 +211,7 @@ export default function VolumeFilterBar({
       <div className="flex flex-wrap items-center justify-between gap-3">
 
         {/* Status Filter Tabs */}
-        <div role="group" aria-label={t('Status-Filter')} className="w-full sm:w-auto flex flex-nowrap sm:flex-wrap items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs overflow-x-auto sm:overflow-visible no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0">
+        <div role="group" aria-label={t('Status-Filter')} className="w-full sm:w-auto flex flex-wrap items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs [&>button]:whitespace-nowrap">
           <button
             type="button"
             aria-pressed={volumeFilter === 'ALL'}

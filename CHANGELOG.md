@@ -7,7 +7,7 @@
 
 ### Series page
 - **Runs of missing volumes in one row:** three or more missing volumes in a row show as "Band 9 bis 29 fehlen (21 Bände)" with their price total and publisher, "Aufklappen" for the single gaps, "In die Einkaufsliste" and "Mehrere erfassen" (the batch dialog with this range). The gap notice no longer repeats the numbers when the gaps are shown in the list; a single gap card has one "Erfassen" button.
-- **Phone toolbar:** search, sort and type filters sit behind a "Filter" button (with the number of changed filters); views and status tabs stay in one line.
+- **Phone toolbar:** search, sort and type filters sit behind a "Filter" button (with the number of changed filters); views, "Auswählen" and "Filter" share one line, the status tabs wrap instead of being cut off.
 - **Quick lending:** tapping the owner pill offers "Verleihen an" (people of the shelf or "Andere Person …") for your own copy, and "Zurückbekommen von …" for a lent one. The full form stays in "Band bearbeiten".
 
 ### Start page and statistics
