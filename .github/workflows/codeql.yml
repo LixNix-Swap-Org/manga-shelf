@@ -37,6 +37,8 @@ jobs:
               - frontend/dist
               - dist
               - dist_pack
+              # test code talks to its own local server; its findings are noise
+              - test
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:javascript-typescript

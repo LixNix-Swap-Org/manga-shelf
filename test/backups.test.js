@@ -821,7 +821,8 @@ test('while an update is applied, backup changes refuse with 409 UPDATE_RUNNING 
             await admin('POST', `/backup/restore/${inspected.body.staging_id}`, PASSWORD),
             await uploadZip(Buffer.from('kein zip'), '/backup/restore'),
             await uploadZip(Buffer.from('kein zip'), '/restore'),
-            await uploadZip(Buffer.from('kein zip'), '/backup/inspect')
+            await uploadZip(Buffer.from('kein zip'), '/backup/inspect'),
+            await admin('POST', '/backup/uploads', { size: 1024, filename: 'update.zip' })
         ];
         for (const res of answers) {
             assert.equal(res.status, 409, JSON.stringify(res.body));
@@ -1511,4 +1512,146 @@ test('a database copy for a backup runs in steps: other work keeps running while
     } finally {
         fs.unlinkSync(copy);
     }
+});
+
+test('backup upload limit matches the multi-GB restore limits and formats the size error dynamically', async () => {
+    const upload = require('../middleware/upload');
+    const originalLimit = upload.uploadBackup.limits.fileSize;
+    assert.ok(originalLimit >= 6 * 1024 * 1024 * 1024, `expected >= 6 GiB limit, got ${originalLimit}`);
+    assert.equal(upload.maxBackupUploadBytes(), originalLimit);
+
+    const tooLarge = await admin('POST', '/backup/uploads', { size: originalLimit + 1, filename: 'huge.zip' });
+    assert.equal(tooLarge.status, 413);
+    assert.equal(tooLarge.body.code, 'PAYLOAD_TOO_LARGE');
+    assert.equal(tooLarge.body.msg, 'Backup ist größer als {max}');
+    assert.equal(tooLarge.body.params.max, upload.formatLimit(originalLimit));
+
+    const badSize = await admin('POST', '/backup/uploads', { size: 0, filename: 'empty.zip' });
+    assert.equal(badSize.status, 400);
+    assert.equal(badSize.body.code, 'INVALID_UPLOAD_SIZE');
+
+    const overSpace = await admin('POST', '/backup/uploads', { size: 1024 ** 4, filename: 'huge.zip' });
+    assert.equal(overSpace.status, 413);
+
+    upload.uploadBackup.limits.fileSize = 1024;
+    try {
+        const direct = await uploadZip(Buffer.alloc(2048, 1), '/backup/inspect');
+        assert.equal(direct.status, 400);
+        assert.equal(direct.body.code, 'UPLOAD_REJECTED');
+        assert.equal(direct.body.msg, 'Backup ist größer als {max}');
+        assert.equal(direct.body.params.max, '1 KB');
+    } finally {
+        upload.uploadBackup.limits.fileSize = originalLimit;
+    }
+});
+
+test('chunked backup upload validates offsets, stages on inspect, and restores the archive', async () => {
+    seedMangas(3, 'ChunkedSeed');
+    const targetTitle = 'ChunkedSeed 0';
+    const snapshot = await createSnapshot();
+    const archiveBuf = fs.readFileSync(path.join(ctx.dataDir, 'backups', snapshot));
+    assert.ok(archiveBuf.length > 1000);
+
+    // Mutate DB after snapshot so restore proves the chunked archive actually replaced it
+    dbm.db.prepare('DELETE FROM mangas WHERE title = ?').run(targetTitle);
+    assert.equal(dbm.db.prepare('SELECT 1 FROM mangas WHERE title = ?').get(targetTitle), undefined);
+
+    const init = await admin('POST', '/backup/uploads', { size: archiveBuf.length, filename: 'chunked-restore.zip' });
+    assert.equal(init.status, 201, JSON.stringify(init.body));
+    const uploadId = init.body.upload_id;
+    assert.ok(uploadId);
+    assert.equal(init.body.chunk_size, 16 * 1024 * 1024);
+
+    // Inspecting before all chunks arrived fails cleanly
+    const incomplete = await admin('POST', '/backup/inspect', { upload_id: uploadId });
+    assert.equal(incomplete.status, 409);
+    assert.equal(incomplete.body.code, 'UPLOAD_INCOMPLETE');
+
+    const c1End = Math.floor(archiveBuf.length / 3);
+    const c2End = Math.floor((2 * archiveBuf.length) / 3);
+    const putChunk = async (offset, buf) => {
+        const res = await fetch(`${ctx.base}/backup/uploads/${encodeURIComponent(uploadId)}?offset=${offset}`, {
+            method: 'PUT',
+            headers: { Cookie: admin.cookie, 'Content-Type': 'application/octet-stream' },
+            body: buf
+        });
+        return { status: res.status, body: await res.json() };
+    };
+
+    const r1 = await putChunk(0, archiveBuf.subarray(0, c1End));
+    assert.equal(r1.status, 200);
+    assert.deepEqual([r1.body.received, r1.body.complete], [c1End, false]);
+
+    // Wrong offset returns server's expected byte offset
+    const mismatch = await putChunk(0, archiveBuf.subarray(0, 10));
+    assert.equal(mismatch.status, 409);
+    assert.equal(mismatch.body.code, 'OFFSET_MISMATCH');
+    assert.equal(mismatch.body.expected, c1End);
+
+    const r2 = await putChunk(c1End, archiveBuf.subarray(c1End, c2End));
+    assert.equal(r2.status, 200);
+    assert.deepEqual([r2.body.received, r2.body.complete], [c2End, false]);
+
+    const r3 = await putChunk(c2End, archiveBuf.subarray(c2End));
+    assert.equal(r3.status, 200);
+    assert.deepEqual([r3.body.received, r3.body.complete], [archiveBuf.length, true]);
+
+    const inspected = await admin('POST', '/backup/inspect', { upload_id: uploadId });
+    assert.equal(inspected.status, 200, JSON.stringify(inspected.body));
+    assert.equal(inspected.body.source.filename, 'chunked-restore.zip');
+    assert.equal(inspected.body.source.size, archiveBuf.length);
+    assert.ok(!fs.existsSync(path.join(ctx.dataDir, 'temp', `restore-upload-${uploadId}.part`)));
+
+    const restored = await admin('POST', `/backup/restore/${inspected.body.staging_id}`, PASSWORD);
+    assert.equal(restored.status, 200, JSON.stringify(restored.body));
+    if (restored.cookie) admin.cookie = restored.cookie;
+    assert.ok(dbm.db.prepare('SELECT 1 FROM mangas WHERE title = ?').get(targetTitle));
+});
+
+test('aborted chunks roll back .part size, DELETE cleans up, and sweepTempArtefacts removes orphaned .part files', async () => {
+    const http = require('http');
+    const total = 4096;
+    const init = await admin('POST', '/backup/uploads', { size: total, filename: 'abort-test.zip' });
+    assert.equal(init.status, 201);
+    const uploadId = init.body.upload_id;
+    const partPath = path.join(ctx.dataDir, 'temp', `restore-upload-${uploadId}.part`);
+    assert.ok(fs.existsSync(partPath));
+
+    const first = await fetch(`${ctx.base}/backup/uploads/${encodeURIComponent(uploadId)}?offset=0`, {
+        method: 'PUT',
+        headers: { Cookie: admin.cookie, 'Content-Type': 'application/octet-stream' },
+        body: Buffer.alloc(1024, 0x41)
+    });
+    assert.equal(first.status, 200);
+    assert.equal(fs.statSync(partPath).size, 1024);
+
+    // Send partial TCP request claiming 2048 bytes and drop connection after 512 bytes
+    const url = new URL(`${ctx.base}/backup/uploads/${encodeURIComponent(uploadId)}?offset=1024`);
+    await new Promise((resolve) => {
+        const req = http.request({
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname + url.search,
+            method: 'PUT',
+            headers: { Cookie: admin.cookie, 'Content-Type': 'application/octet-stream', 'Content-Length': '2048' }
+        });
+        req.on('error', () => resolve());
+        req.on('close', resolve);
+        req.write(Buffer.alloc(512, 0x42));
+        setTimeout(() => req.destroy(), 30);
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(fs.statSync(partPath).size, 1024, 'aborted chunk must truncate back to committed offset');
+
+    const del = await admin('DELETE', `/backup/uploads/${uploadId}`);
+    assert.equal(del.status, 200);
+    assert.equal(fs.existsSync(partPath), false);
+    const delAgain = await admin('DELETE', `/backup/uploads/${uploadId}`);
+    assert.equal(delAgain.status, 404);
+    assert.equal(delAgain.body.code, 'UPLOAD_NOT_FOUND');
+
+    const orphan = path.join(ctx.dataDir, 'temp', 'restore-upload-orphan.part');
+    fs.writeFileSync(orphan, 'leftover');
+    require('../services/scheduler').sweepTempArtefacts();
+    assert.equal(fs.existsSync(orphan), false);
 });
