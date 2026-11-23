@@ -63,20 +63,34 @@ export async function currentSubscription(nav = navigator) {
   }
 }
 
-/** Is this browser subscribed for the signed-in account? Re-sends the texts, so a language change reaches the server. */
+/** Default hour of the reminder (server time zone), like services/push.js REMINDER_HOUR. */
+export const WEB_PUSH_DEFAULT_HOUR = 9;
+
+/**
+ * Is this browser subscribed for the signed-in account, and from which hour? Resolves { subscribed, hour }. Re-sends the
+ * texts, so a language change reaches the server (without `hour`, so the stored one stays).
+ */
 export async function readWebPushState(nav = navigator) {
   const sub = await currentSubscription(nav);
-  if (!sub) return false;
-  const { subscribed } = await api.post('/api/push/subscriptions/status', { endpoint: sub.endpoint });
+  if (!sub) return { subscribed: false, hour: WEB_PUSH_DEFAULT_HOUR };
+  const { subscribed, hour } = await api.post('/api/push/subscriptions/status', { endpoint: sub.endpoint });
   if (subscribed) await api.put('/api/push/subscriptions', { ...sub.toJSON(), texts: pushTexts() }).catch(() => {});
-  return Boolean(subscribed);
+  return { subscribed: Boolean(subscribed), hour: Number.isInteger(hour) ? hour : WEB_PUSH_DEFAULT_HOUR };
+}
+
+/** Sets the hour (0–23) this browser gets its reminder from. Resolves false without a subscription. */
+export async function setWebPushHour(hour, nav = navigator) {
+  const sub = await currentSubscription(nav);
+  if (!sub) return false;
+  await api.put('/api/push/subscriptions', { ...sub.toJSON(), texts: pushTexts(), hour });
+  return true;
 }
 
 /**
  * Switches the reminders on: asks for the permission, subscribes with the server's key (a subscription made with
  * another key is replaced) and stores it on the server. Resolves { enabled, denied, unsupported }.
  */
-export async function enableWebPush({ nav = navigator, notification = globalThis.Notification } = {}) {
+export async function enableWebPush({ nav = navigator, notification = globalThis.Notification, hour } = {}) {
   const permission = notification.permission === 'granted' ? 'granted' : await notification.requestPermission();
   if (permission !== 'granted') return { enabled: false, denied: true };
   const reg = await registration(nav);
@@ -95,7 +109,7 @@ export async function enableWebPush({ nav = navigator, notification = globalThis
     sub = null;
   }
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-  await api.put('/api/push/subscriptions', { ...sub.toJSON(), texts: pushTexts() });
+  await api.put('/api/push/subscriptions', { ...sub.toJSON(), texts: pushTexts(), ...(Number.isInteger(hour) ? { hour } : {}) });
   return { enabled: true };
 }
 

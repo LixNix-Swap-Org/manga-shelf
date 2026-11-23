@@ -7,7 +7,7 @@ const log = require('../utils/logger').child('push');
 
 const VAPID_KEY = 'push_vapid';
 const DAY_KEY = 'push_reminder_day';
-const REMINDER_HOUR = 9;
+const REMINDER_HOUR = 9; // default hour of a new subscription (push_subscriptions.hour)
 const MAX_LINES = 6;
 const TTL_SECONDS = 20 * 60 * 60;
 const SEND_TIMEOUT_MS = 10000;
@@ -226,7 +226,7 @@ let run = null;
  * run gets the releases of its account, if any. Subscriptions the push service forgot are deleted. Concurrent calls
  * share one run. Resolves { sent, gone, skipped } or null when not due.
  */
-function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, hour = REMINDER_HOUR, fetchImpl, shouldStop = () => false } = {}) {
+function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetchImpl, shouldStop = () => false } = {}) {
     if (run) return run;
     const parts = {};
     try {
@@ -235,17 +235,19 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, hour
         return Promise.resolve(null);
     }
     const day = `${parts.year}-${parts.month}-${parts.day}`;
-    if (Number(parts.hour) < hour) return Promise.resolve(null);
+    const hour = Number(parts.hour);
     const done = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(DAY_KEY);
     if (done && done.value === day) return Promise.resolve(null);
+    // each browser from its own hour on (the hourly check sends within that hour; a missed hour is caught up later that day)
+    const subs = db.prepare(`
+        SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, u.username, u.role
+        FROM push_subscriptions s JOIN users u ON u.id = s.user_id
+        WHERE (s.last_day IS NULL OR s.last_day <> ?) AND s.hour <= ?
+        ORDER BY s.user_id, s.id
+    `).all(day, hour);
+    if (!subs.length) return Promise.resolve(null);
     run = (async () => {
         const report = { sent: 0, gone: 0, skipped: 0 };
-        const subs = db.prepare(`
-            SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, u.username, u.role
-            FROM push_subscriptions s JOIN users u ON u.id = s.user_id
-            WHERE s.last_day IS NULL OR s.last_day <> ?
-            ORDER BY s.user_id, s.id
-        `).all(day);
         const perUser = new Map();
         for (const sub of subs) {
             if (shouldStop()) return report;
@@ -281,6 +283,7 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, hour
 module.exports = {
     VAPID_KEY,
     DAY_KEY,
+    REMINDER_HOUR,
     DEFAULT_TEXTS,
     isPushEndpoint,
     vapidKeys,

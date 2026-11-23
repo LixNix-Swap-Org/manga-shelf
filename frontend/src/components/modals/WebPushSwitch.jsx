@@ -2,22 +2,27 @@ import { useEffect, useId, useState } from 'react';
 import { BellRing } from 'lucide-react';
 import { notify } from '../../utils/notify';
 import { t } from '../../i18n/index.js';
-import { disableWebPush, enableWebPush, readWebPushState, testWebPush, webPushSupport } from '../../utils/webPush';
+import { disableWebPush, enableWebPush, readWebPushState, setWebPushHour, testWebPush, webPushSupport, WEB_PUSH_DEFAULT_HOUR } from '../../utils/webPush';
 
 // i18n
 export const WEB_PUSH_TEXTS = {
   toggle: 'Erinnerungen am Erscheinungstag',
-  help: 'Meldet sich am Erscheinungstag um 9 Uhr in diesem Browser, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft, auch bei geschlossenem Tab. Gilt nur für diesen Browser.',
+  help: 'Meldet sich am Erscheinungstag zur gewählten Uhrzeit in diesem Browser, wenn ein Band aus dem Release-Radar erscheint oder eine neue Folge eines Anime auf deiner Liste läuft, auch bei geschlossenem Tab. Gilt nur für diesen Browser.',
   insecure: 'Geht nur, wenn Manga Shelf über HTTPS aufgerufen wird.',
   unsupported: 'Dieser Browser kann hier keine Mitteilungen empfangen. Auf dem iPhone geht es nur in der Web-App vom Home-Bildschirm.',
   denied: 'Mitteilungen sind für diese Seite blockiert – erlaube sie in den Website-Einstellungen des Browsers.',
   failed: 'Erinnerungen konnten nicht umgestellt werden',
-  service: 'Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.'
+  service: 'Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.',
+  hour: 'Uhrzeit',
+  hourFailed: 'Uhrzeit konnte nicht gespeichert werden'
 };
+
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 /**
  * Settings → Allgemein in a browser: the Web Push switch of the release-day reminders (off by default, per browser).
- * Greyed out with the reason where the browser cannot do it; "Test senden" checks the way to this browser.
+ * Greyed out with the reason where the browser cannot do it; while on, "Uhrzeit" picks the hour (server time zone, default 9)
+ * and "Test senden" checks the way to this browser.
  */
 export default function WebPushSwitch({ env = globalThis }) {
   const ids = useId();
@@ -25,12 +30,17 @@ export default function WebPushSwitch({ env = globalThis }) {
   const [enabled, setEnabled] = useState(support === 'ok' ? null : false);
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [hour, setHour] = useState(WEB_PUSH_DEFAULT_HOUR);
 
   useEffect(() => {
     if (support !== 'ok') return undefined;
     let active = true;
     readWebPushState()
-      .then((on) => { if (active) setEnabled(on); })
+      .then((state) => {
+        if (!active) return;
+        setEnabled(state.subscribed);
+        setHour(state.hour);
+      })
       .catch(() => { if (active) setEnabled(false); });
     return () => { active = false; };
   }, [support]);
@@ -47,6 +57,20 @@ export default function WebPushSwitch({ env = globalThis }) {
       // the browser's own subscribe() failures (no push service, blocked) are DOMExceptions without a server answer
       if (e?.name === 'AbortError' || e?.name === 'NotAllowedError' || e?.name === 'InvalidStateError') notify.error(t(WEB_PUSH_TEXTS.service));
       else notify.error(e, { fallback: t(WEB_PUSH_TEXTS.failed) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeHour = async (next) => {
+    const before = hour;
+    setHour(next);
+    setBusy(true);
+    try {
+      if (!(await setWebPushHour(next))) setHour(before);
+    } catch (e) {
+      setHour(before);
+      notify.error(e, { fallback: t(WEB_PUSH_TEXTS.hourFailed) });
     } finally {
       setBusy(false);
     }
@@ -79,6 +103,19 @@ export default function WebPushSwitch({ env = globalThis }) {
           />
           <span>{t(WEB_PUSH_TEXTS.toggle)}</span>
         </label>
+        {enabled && (
+          <label className="flex items-center gap-2 text-xs text-slate-300">
+            <span>{t(WEB_PUSH_TEXTS.hour)}</span>
+            <select
+              className="input-field bg-slate-950 !w-auto !px-3 !py-1.5"
+              value={hour}
+              disabled={busy}
+              onChange={(e) => changeHour(Number(e.target.value))}
+            >
+              {HOURS.map((h) => <option key={h} value={h}>{`${h}:00`}</option>)}
+            </select>
+          </label>
+        )}
         {enabled && (
           <button
             type="button"

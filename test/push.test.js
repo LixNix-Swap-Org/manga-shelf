@@ -105,7 +105,13 @@ test('routes: key, subscribe, status, test message, unsubscribe; guests and fore
     const rows = db.prepare('SELECT * FROM push_subscriptions WHERE endpoint = ?').all(b.json.endpoint);
     assert.equal(rows.length, 1);
     assert.deepEqual(JSON.parse(rows[0].texts), { title: 'New today', volume: 'Vol. {num}' });
-    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true });
+    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, hour: 9 });
+    // the hour: set with the PUT, kept by a PUT without it, checked
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, hour: 24 })).status, 400);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, hour: 7.5 })).status, 400);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts, hour: 20 })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts })).status, 200);
+    assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, hour: 20 });
 
     // the test message goes to the real push service in production; here the endpoint is unreachable, so it fails softly
     const realFetch = globalThis.fetch;
@@ -129,7 +135,7 @@ test('routes: key, subscribe, status, test message, unsubscribe; guests and fore
     assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: false });
 });
 
-test('daily run: today\'s radar volumes and followed episodes, once per day, from 9:00; gone subscriptions are deleted', async () => {
+test('daily run: today\'s radar volumes and followed episodes, once per day, from each browser\'s hour; gone subscriptions are deleted', async () => {
     db.exec('DELETE FROM push_subscriptions');
     const tz = 'Europe/Berlin';
     const now = new Date();
@@ -144,8 +150,10 @@ test('daily run: today\'s radar volumes and followed episodes, once per day, fro
 
     const live = browser('https://fcm.googleapis.com/fcm/send/live');
     const dead = browser('https://updates.push.services.mozilla.com/wpush/v2/dead');
+    const late = browser('https://fcm.googleapis.com/fcm/send/late');
     assert.equal((await admin('PUT', '/push/subscriptions', { ...live.json, texts: { title: 'New today', volume: 'Vol. {num}', episode: '{title} ep. {episode}' } })).status, 200);
     assert.equal((await admin('PUT', '/push/subscriptions', dead.json)).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...late.json, hour: 18 })).status, 200);
 
     const sent = [];
     const fetchImpl = async (url, init) => {
@@ -169,9 +177,15 @@ test('daily run: today\'s radar volumes and followed episodes, once per day, fro
     assert.equal(message.body, 'Pushreihe – Vol. 4\nFrieren DE ep. 7');
     assert.equal(message.url, '/?view=radar');
     assert.equal(message.tag, `release-day-${day}`);
-    assert.equal(db.prepare('SELECT count(*) AS c FROM push_subscriptions').get().c, 1, 'the 410 one is gone');
+    assert.equal(sent.some(s => s.url.includes('late')), false, 'the 18:00 browser waits');
+    assert.equal(db.prepare('SELECT count(*) AS c FROM push_subscriptions').get().c, 2, 'the 410 one is gone');
+    assert.equal(db.prepare('SELECT value FROM app_settings WHERE key = ?').get(push.DAY_KEY), undefined, 'one browser still open');
+    assert.equal(await push.runPushRemindersIfDue({ db, createCtx, now: at(10), timeZone: tz, fetchImpl }), null, 'once a day, the late one not yet due');
+    assert.deepEqual(await push.runPushRemindersIfDue({ db, createCtx, now: at(18), timeZone: tz, fetchImpl }), { sent: 1, gone: 0, skipped: 0 });
+    assert.equal(sent.filter(s => s.url.includes('late')).length, 1);
+    assert.equal(sent.filter(s => s.url.includes('live')).length, 1, 'the 9:00 browser only once');
     assert.equal(db.prepare('SELECT value FROM app_settings WHERE key = ?').get(push.DAY_KEY).value, day);
-    assert.equal(await push.runPushRemindersIfDue({ db, createCtx, now: at(10), timeZone: tz, fetchImpl }), null, 'once a day');
+    assert.equal(await push.runPushRemindersIfDue({ db, createCtx, now: at(19), timeZone: tz, fetchImpl }), null);
 });
 
 test('buildMessage: no message without releases, more than six lines are folded', () => {

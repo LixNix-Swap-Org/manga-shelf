@@ -14,7 +14,7 @@
 - **"Mein Manga-Jahr":** Statistik → Verlauf starts with your year: volumes and pages read against the year before, series started, own copies bought with their list price, the most read series and the strongest month; earlier years can be picked (`GET /api/stats/year`).
 
 ### Reminders in the browser
-- **Erinnerungen am Erscheinungstag** now also in the browser (Einstellungen → Allgemein): at 9:00 on release day the server sends a push message with the radar volumes and new episodes of your anime, even with the tab closed. Needs HTTPS; on iPhone only in the web app on the home screen. Per browser, off by default, with "Test senden". The browsers' push services (Google, Mozilla, Apple, Microsoft) only carry the encrypted message; a logout switches it off for that browser.
+- **Erinnerungen am Erscheinungstag** now also in the browser (Einstellungen → Allgemein): on release day the server sends a push message at the hour you pick (9:00 by default) with the radar volumes and new episodes of your anime, even with the tab closed. Needs HTTPS; on iPhone only in the web app on the home screen. Per browser, off by default, with "Test senden". The browsers' push services (Google, Mozilla, Apple, Microsoft) only carry the encrypted message; a logout switches it off for that browser.
 
 ## 4.1.0
 

@@ -1520,7 +1520,7 @@ function migrationList(log = silentLog) {
             up: (d) => {
                 // Web Push of the release-day reminders in the browser (services/push.js): one row per browser that switched
                 // them on; `texts` holds the notification texts in that browser's UI language (the server has no catalog),
-                // `last_day` the local day of the last reminder sent to it
+                // `last_day` the local day of the last reminder sent to it, `hour` the local hour (0–23) it wants it from
                 d.exec(`
                     CREATE TABLE IF NOT EXISTS push_subscriptions (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1530,7 +1530,8 @@ function migrationList(log = silentLog) {
                         auth TEXT NOT NULL,
                         texts TEXT,
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        last_day TEXT
+                        last_day TEXT,
+                        hour INTEGER NOT NULL DEFAULT 9 CHECK (hour BETWEEN 0 AND 23)
                     );
                     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id);
                 `);

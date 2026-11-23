@@ -44,7 +44,7 @@ function stubServer() {
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push([init.method || 'GET', String(url), body]);
     if (String(url) === '/api/push/key') return fakeResponse(200, { publicKey: SERVER_KEY });
-    if (String(url) === '/api/push/subscriptions/status') return fakeResponse(200, { subscribed: true });
+    if (String(url) === '/api/push/subscriptions/status') return fakeResponse(200, { subscribed: true, hour: 7 });
     return fakeResponse(200, { success: true });
   }));
   return calls;
@@ -80,6 +80,7 @@ describe('web push helpers', () => {
     expect([method, url]).toEqual(['PUT', '/api/push/subscriptions']);
     expect(body.endpoint).toBe('https://fcm.googleapis.com/fcm/send/abc');
     expect(body.texts.title).toBe('Heute neu erschienen');
+    expect(body).not.toHaveProperty('hour');
   });
 
   it('a denied permission subscribes nothing; a subscription with another key is replaced', async () => {
@@ -122,7 +123,7 @@ describe('settings switch', () => {
     expect(screen.getByText('Geht nur, wenn Manga Shelf über HTTPS aufgerufen wird.')).toBeTruthy();
   });
 
-  it('shows the server state and offers "Test senden" while on', async () => {
+  it('shows the server state, the hour and "Test senden" while on', async () => {
     const calls = stubServer();
     const sub = fakeSubscription();
     vi.stubGlobal('navigator', { ...globalThis.navigator, ...fakeNav(sub) });
@@ -130,6 +131,11 @@ describe('settings switch', () => {
     const box = screen.getByRole('checkbox', { name: 'Erinnerungen am Erscheinungstag' });
     await waitFor(() => expect(box.checked).toBe(true));
     expect(calls[0]).toEqual(['POST', '/api/push/subscriptions/status', { endpoint: sub.endpoint }]);
+    const hour = screen.getByRole('combobox', { name: 'Uhrzeit' });
+    expect(hour.value).toBe('7');
+    fireEvent.change(hour, { target: { value: '18' } });
+    await waitFor(() => expect(calls.some(([m, u, b]) => m === 'PUT' && u === '/api/push/subscriptions' && b?.hour === 18)).toBe(true));
+    expect(hour.value).toBe('18');
     fireEvent.click(screen.getByRole('button', { name: 'Test senden' }));
     await waitFor(() => expect(calls.some(([m, u]) => m === 'POST' && u === '/api/push/test')).toBe(true));
   });
