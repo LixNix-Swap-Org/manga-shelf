@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.2.0
 
 ### Before updating
 - **Database migration 60** runs at the first start, after the usual backup: it adds the table for browser reminders (empty until someone switches them on). 4.1.0 cannot open the migrated database; going back restores that backup.
@@ -15,6 +15,15 @@
 
 ### Reminders in the browser
 - **Erinnerungen am Erscheinungstag** now also in the browser (Einstellungen → Allgemein): the server sends a push message, even with the tab closed. You pick when (on release day, the day before, or once a week on Monday for the whole week), the hour (9:00 by default) and what it reports: new volumes from the radar, new episodes of your anime, and lent volumes that have been away longer than your loan period. Needs HTTPS; on iPhone only in the web app on the home screen. Per browser, off by default, with "Test senden". The browsers' push services (Google, Mozilla, Apple, Microsoft) only carry the encrypted message; a logout switches it off for that browser.
+
+### Backups
+- **Large backups:** restoring a backup ZIP is no longer limited to 500 MB; up to 6 GB go through. Above 16 MB the file is uploaded in 16 MB pieces, so a reverse proxy limit (Cloudflare 100 MB, nginx) or a slow line no longer breaks the upload; a piece that fails is sent again. The restore dialog shows a progress bar and can cancel the upload. The phone app moving its data to a server uses the same way. Against an older server without piece uploads, the app sends the file in one piece as before.
+
+### Covers
+- **Covers from the own server:** covers from Manga Passion, AniList and other hosts are fetched once by the server and kept in `data/cache/covers`, so phones and browsers load them from your server and the cover hosts no longer see who opens the app or the shared wishlist. Only addresses a series, volume or anime of the database names are fetched; anything else, or a cover the host does not deliver right now, loads from its host as before. The cache is not part of a backup (it fills again on demand), holds at most 2 GB, and the daily maintenance removes covers no entry uses any more.
+
+### Maintenance
+- Updated dependencies: Electron 44.11.5, and minor updates of express-rate-limit, eslint, puppeteer-core, lucide-react, react-router-dom, sql.js, postcss, vitest and actions/setup-java.
 
 ## 4.1.0
 
