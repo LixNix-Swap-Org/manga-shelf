@@ -408,7 +408,7 @@ describe('VolumeEditModal: photos', () => {
     expect(await screen.findByText('Die Datei ist kein gültiges Bild')).toBeTruthy();
     expect(screen.queryAllByRole('img', { name: /^Foto / })).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Trotzdem als externen Link hinzufügen' }));
-    expect(screen.getByRole('img', { name: 'Foto 1' }).getAttribute('src')).toBe('https://example.com/page');
+    expect(screen.getByRole('img', { name: 'Foto 1' }).getAttribute('src')).toBe('/api/covers?url=https%3A%2F%2Fexample.com%2Fpage');
   });
 
   it('a downloaded image keeps the existing cover', async () => {

@@ -450,7 +450,7 @@ describe('server images in the app build', () => {
     localStorage.clear();
   });
 
-  it('covers of server paths load from the active server, remote covers stay as they are', () => {
+  it('covers of server paths load from the active server, foreign covers through its cover cache', () => {
     const candidates = [
       { id: 1, title: 'Lokal', cover_image: '/uploads/a.jpg' },
       { id: 2, title: 'Remote', cover_image: 'https://cdn.example/b.jpg' }
@@ -459,14 +459,14 @@ describe('server images in the app build', () => {
     const srcs = () => Array.from(document.querySelectorAll('img')).map((img) => img.getAttribute('src'));
 
     const web = render(<ScanCandidatesDialog {...props} />);
-    expect(srcs()).toEqual(['/uploads/a.jpg', 'https://cdn.example/b.jpg']);
+    expect(srcs()).toEqual(['/uploads/a.jpg', '/api/covers?url=https%3A%2F%2Fcdn.example%2Fb.jpg']);
     web.unmount();
 
     vi.stubEnv('VITE_APP_MODE', 'app');
     setServer({ base: 'https://shelf.example.org' });
     render(<ScanCandidatesDialog {...props} />);
     expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(srcs()).toEqual(['https://shelf.example.org/uploads/a.jpg', 'https://cdn.example/b.jpg']);
+    expect(srcs()).toEqual(['https://shelf.example.org/uploads/a.jpg', 'https://shelf.example.org/api/covers?url=https%3A%2F%2Fcdn.example%2Fb.jpg']);
     expect(Array.from(document.querySelectorAll('img')).map((img) => img.getAttribute('crossorigin')))
       .toEqual(['anonymous', null]);
   });
@@ -476,9 +476,18 @@ describe('server images in the app build', () => {
     vi.stubEnv('VITE_APP_MODE', 'app');
     setServer({ base: 'https://shelf.example.org' });
     expect(assetImgProps('/uploads/a.jpg')).toEqual({ src: 'https://shelf.example.org/uploads/a.jpg', crossOrigin: 'anonymous' });
-    expect(assetImgProps('https://cdn.example/b.jpg')).toEqual({ src: 'https://cdn.example/b.jpg' });
+    // the cover cache answers with CORP cross-origin: a plain (no-cors) image load
+    expect(assetImgProps('https://cdn.example/b.jpg')).toEqual({ src: 'https://shelf.example.org/api/covers?url=https%3A%2F%2Fcdn.example%2Fb.jpg' });
+    expect(assetImgProps('http://cdn.example/c.jpg')).toEqual({ src: 'http://cdn.example/c.jpg' });
     expect(assetImgProps('blob:https://app/1')).toEqual({ src: 'blob:https://app/1' });
     expect(assetImgProps(null)).toEqual({ src: null });
+  });
+
+  it('foreign covers go through the server, except in the local app mode (no server)', () => {
+    expect(assetImgProps('https://media.example.org/a b.jpg?x=1&y=2')).toEqual({ src: '/api/covers?url=https%3A%2F%2Fmedia.example.org%2Fa%20b.jpg%3Fx%3D1%26y%3D2' });
+    vi.stubEnv('VITE_APP_MODE', 'app');
+    localStorage.setItem('mangashelf_mode', 'local');
+    expect(assetImgProps('https://media.example.org/a.jpg')).toEqual({ src: 'https://media.example.org/a.jpg' });
   });
 
   it('every <img> of a server path goes through assetImgProps', async () => {

@@ -85,6 +85,7 @@ const coreRoutes = require('./routes/core');
 const backupsRoutes = require('./routes/backups');
 const systemRoutes = require('./routes/system');
 const uploadRoutes = require('./routes/uploads');
+const coverRoutes = require('./routes/covers');
 
 // The CSP allows https/http images because a cover may still point at another host, and inline styles because the
 // build and the React components use them; scripts and fonts (self-hosted) only come from this server.
@@ -109,7 +110,9 @@ const API_PATH = /^\/api(?:\/|$)/i;
 const UPLOADS_PATH = /^\/uploads(?:\/|$)/i;
 const UMBRELLA_WINDOW_MS = 60 * 1000;
 const UMBRELLA_FACTORS = { api: 1, static: 2.5, uploads: 20 };
-const umbrellaBucket = (req) => (API_PATH.test(req.path) ? 'api' : UPLOADS_PATH.test(req.path) ? 'uploads' : 'static');
+// cached covers (routes/covers.js) count like uploads: a collection page loads hundreds of them at once
+const COVERS_PATH = /^\/api\/covers\/?$/i;
+const umbrellaBucket = (req) => (UPLOADS_PATH.test(req.path) || COVERS_PATH.test(req.path) ? 'uploads' : API_PATH.test(req.path) ? 'api' : 'static');
 const APP_CORS = {
     origin: true,
     credentials: false,
@@ -401,7 +404,7 @@ function createApp() {
 
     // core/routes.js holds every endpoint that also runs in the apps; the others are server-only. systemRoutes comes
     // first: it puts the rate limit in front of the core calendar feed.
-    for (const router of [authRoutes, apiKeyRoutes, systemRoutes, coreRoutes, backupsRoutes, uploadRoutes]) {
+    for (const router of [authRoutes, apiKeyRoutes, systemRoutes, coreRoutes, backupsRoutes, uploadRoutes, coverRoutes]) {
         app.use('/api', router);
     }
 
