@@ -211,17 +211,33 @@ function releasesBetween(ctx, from, to) {
     volumes.sort((a, b) => a.day.localeCompare(b.day));
     const episodes = [];
     const rows = ctx.db.prepare(`
-        SELECT a.title AS title, a.title_de AS title_de, a.next_airing_episode AS episode, a.next_airing_at AS at
+        SELECT a.id AS anime_id, a.title AS title, a.title_de AS title_de, a.next_airing_episode AS episode, a.next_airing_at AS at
         FROM anime_progress p JOIN animes a ON a.id = p.anime_id
         WHERE p.user_id = ? AND p.status IN (${FOLLOWED.map(() => '?').join(', ')})
           AND a.next_airing_at IS NOT NULL AND a.next_airing_episode > 0 AND COALESCE(a.next_airing_estimated, 0) = 0
         ORDER BY a.next_airing_at, a.id
     `).all(ctx.user.id, ...FOLLOWED);
-    for (const r of rows) {
+    // an episode that aired earlier in the window (before the reminder hour) is no longer the announced next one: the
+    // anime refresh moved it to anime_airings (core/anime/store.js rememberAired). A day of slack on both sides of the
+    // window covers every time zone; the local day is checked below.
+    const fromSec = Math.floor(Date.parse(`${from}T00:00:00Z`) / 1000) - 86400;
+    const toSec = Math.floor(Date.parse(`${to}T00:00:00Z`) / 1000) + 2 * 86400;
+    const aired = ctx.db.prepare(`
+        SELECT a.id AS anime_id, a.title AS title, a.title_de AS title_de, g.episode AS episode, g.at AS at
+        FROM anime_airings g JOIN anime_progress p ON p.anime_id = g.anime_id JOIN animes a ON a.id = g.anime_id
+        WHERE p.user_id = ? AND p.status IN (${FOLLOWED.map(() => '?').join(', ')}) AND g.at >= ? AND g.at < ?
+        ORDER BY g.at, a.id
+    `).all(ctx.user.id, ...FOLLOWED, fromSec, toSec);
+    const seen = new Set();
+    for (const r of [...aired, ...rows]) {
         const day = dayOf(new Date(Number(r.at) * 1000), ctx.config.appTimeZone);
         if (day < from || day > to) continue;
-        episodes.push({ title: String(r.title_de || r.title || '').trim(), episode: Number(r.episode), day });
+        const key = `${r.anime_id}:${Number(r.episode)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        episodes.push({ title: String(r.title_de || r.title || '').trim(), episode: Number(r.episode), day, at: Number(r.at) });
     }
+    episodes.sort((a, b) => a.at - b.at);
     return { volumes, episodes };
 }
 

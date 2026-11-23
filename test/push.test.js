@@ -275,3 +275,24 @@ test('buildMessage: no message without releases, more than six lines are folded'
     const box = push.buildMessage({ volumes: [{ manga_title: 'R', volume_number: '2', type: 'schuber' }, { manga_title: 'R', volume_number: 'Vollschuber 1-5' }], episodes: [] }, texts, 'd');
     assert.equal(box.body, 'R – Schuber 2\nR – Vollschuber 1-5');
 });
+
+test('an episode that aired before the reminder hour still counts (anime_airings), without doubles', async () => {
+    const tz = 'Europe/Berlin';
+    const { createCtx } = require('../db');
+    const me = db.prepare("SELECT id, username, role FROM users WHERE username = 'admin'").get();
+    const day = '2031-03-12';
+    // 03:00 Berlin (CET, UTC+1): aired and moved to anime_airings by the refresh before the 9:00 reminder
+    const early = Math.floor(Date.parse(`${day}T02:00:00Z`) / 1000);
+    const late = Math.floor(Date.parse(`${day}T17:00:00Z`) / 1000);
+    const nextWeek = Math.floor(Date.parse('2031-03-19T02:00:00Z') / 1000);
+    const yesterday = Math.floor(Date.parse('2031-03-11T02:00:00Z') / 1000);
+    const a = db.prepare("INSERT INTO animes (title, next_airing_episode, next_airing_at) VALUES ('Fruehaus', 4, ?)").run(nextWeek).lastInsertRowid;
+    const b = db.prepare("INSERT INTO animes (title, next_airing_episode, next_airing_at) VALUES ('Abendserie', 9, ?)").run(late).lastInsertRowid;
+    const c = db.prepare("INSERT INTO animes (title) VALUES ('Nicht verfolgt')").run().lastInsertRowid;
+    db.prepare('INSERT INTO anime_airings (anime_id, episode, at) VALUES (?, 2, ?), (?, 3, ?), (?, 9, ?), (?, 1, ?)').run(a, yesterday, a, early, b, late, c, early);
+    for (const id of [a, b]) db.prepare("INSERT INTO anime_progress (anime_id, user_id, status) VALUES (?, ?, 'Schaue')").run(id, me.id);
+    const actx = createCtx({ user: me });
+    actx.config.appTimeZone = tz;
+    const { episodes } = push.releasesBetween(actx, day, day);
+    assert.deepEqual(episodes.map(e => `${e.title} ${e.episode}`), ['Fruehaus 3', 'Abendserie 9']);
+});
