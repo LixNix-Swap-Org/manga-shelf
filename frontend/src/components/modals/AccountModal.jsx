@@ -10,6 +10,7 @@ import ApiKeyCard from './ApiKeyCard';
 import TmdbAttribution from '../TmdbAttribution';
 import { WATCH_BUILD, watchAvailable } from '../../app/watch/watchState';
 import { REMINDER_BUILD, canRemind, remindersAvailable } from '../../app/reminders/reminderState';
+import { canWebPush } from '../../utils/webPush';
 import LanguageSelect from '../common/LanguageSelect';
 import { t, tn } from '../../i18n/index.js';
 import { serverText } from '../../i18n/serverText.js';
@@ -22,6 +23,8 @@ import { CalendarFeeds, DevicesSection, ResetViewField, SettingsSection, SignedI
 const CrunchyrollCard = WATCH_BUILD ? lazy(() => import('../../app/watch/CrunchyrollCard')) : null;
 // apps with the LocalNotifications plugin only: the switch of the release-day reminders
 const ReminderSwitch = REMINDER_BUILD ? lazy(() => import('../../app/reminders/ReminderSwitch')) : null;
+// browsers: the same reminders by Web Push from the server (utils/webPush.js)
+const WebPushSwitch = REMINDER_BUILD ? null : lazy(() => import('./WebPushSwitch'));
 
 /** Own password change (PUT /api/auth/password): current password, new password twice. Other devices are logged out. */
 function PasswordForm({ onClose }) {
@@ -518,6 +521,7 @@ function LentReminderField({ offline }) {
  */
 function GeneralTab({ user = null, offline = false }) {
   const reminders = ReminderSwitch && canRemind(user) && remindersAvailable();
+  const webPush = WebPushSwitch && !offline && canWebPush(user);
   return (
     <div className="space-y-4">
       <SettingsSection title={t('Sprache')} first>
@@ -533,6 +537,11 @@ function GeneralTab({ user = null, offline = false }) {
         {reminders && (
           <Suspense fallback={null}>
             <ReminderSwitch />
+          </Suspense>
+        )}
+        {webPush && (
+          <Suspense fallback={null}>
+            <WebPushSwitch />
           </Suspense>
         )}
       </SettingsSection>

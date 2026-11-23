@@ -1,7 +1,7 @@
 // the password marker of local profiles: no bcrypt hash, so no password ever matches it
 export const LOCAL_PASSWORD_HASH = '!local-profile';
 // i18n-ignore: SQL
-const SERVER_ONLY_SETTINGS = "substr(key, 1, 14) = 'calendar_feed:' OR key IN ('revoked_sessions', 'jwt_secret')";
+const SERVER_ONLY_SETTINGS = "substr(key, 1, 14) = 'calendar_feed:' OR key IN ('revoked_sessions', 'jwt_secret', 'push_vapid')";
 
 const tableExists = (conn, name) => Boolean(conn.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
 
@@ -18,6 +18,8 @@ export function sanitizeImportedDatabase(conn) {
     if (tableExists(conn, 'anime_sync')) changed += conn.prepare("DELETE FROM anime_sync WHERE service = 'anilist'").run().changes || 0;
     // calendar feed tokens: their own table since migration 50, app_settings keys before
     if (tableExists(conn, 'calendar_feeds')) changed += conn.prepare('DELETE FROM calendar_feeds').run().changes || 0;
+    // browser push subscriptions (migration 60) only reach a server
+    if (tableExists(conn, 'push_subscriptions')) changed += conn.prepare('DELETE FROM push_subscriptions').run().changes || 0;
     changed += conn.prepare(`DELETE FROM app_settings WHERE ${SERVER_ONLY_SETTINGS}`).run().changes || 0;
     return changed;
   } finally {

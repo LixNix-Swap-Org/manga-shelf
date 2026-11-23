@@ -483,3 +483,49 @@ test('readingStreaks: gaps end a run; the current run counts up to last month', 
     assert.deepEqual(readingStreaks(['2025-01'], '2026-04'), { longest: 1, longest_end: '2025-01', current: 0 });
     assert.deepEqual(readingStreaks([], '2026-04'), { longest: 0, longest_end: null, current: 0 });
 });
+
+test('year review: reads and pages against the year before, series started, best month, top series and own purchases', async () => {
+    db.exec('DELETE FROM mangas');
+    const me = db.prepare("SELECT id FROM users WHERE username = 'admin'").get().id;
+    const year = new Date().getFullYear();
+    const a = await newSeries('Jahresreihe A');
+    const b = await newSeries('Jahresreihe B');
+    const usd = await newSeries('Dollarreihe', { currency: 'USD' });
+    const a1 = await addVolume(a, '1', { pages: 200, price: 8, purchase_date: `${year - 1}-12-01` });
+    const a2 = await addVolume(a, '2', { pages: 210, price: 8, purchase_date: `${year}-02-03` });
+    const a3 = await addVolume(a, '3', { pages: 220, price: 9.5, purchase_date: `${year}-03` });
+    const b1 = await addVolume(b, '1', { pages: 100, purchase_date: `${year}-03-04` });
+    await addVolume(usd, '1', { price: 12, purchase_date: `${year}-01-01` });
+    await addVolume(b, '2', { pages: 100 });
+    const setRead = (volumeId, at) => db.prepare('INSERT OR REPLACE INTO volume_reads (catalog_volume_id, user_id, read_at) VALUES ((SELECT catalog_volume_id FROM volumes WHERE id = ?), ?, ?)')
+        .run(volumeId, me, at);
+    setRead(a1, `${year - 1}-11-10 12:00:00`);
+    setRead(a2, `${year}-01-10 12:00:00`);
+    setRead(a3, `${year}-01-20 12:00:00`);
+    setRead(b1, `${year}-02-02 12:00:00`);
+
+    const res = await admin('GET', '/stats/year');
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const r = res.body;
+    assert.equal(r.year, year);
+    assert.deepEqual(r.years, [year, year - 1]);
+    assert.deepEqual(r.read, { volumes: 3, pages: 530, previous_year: 1, started: 1 }, 'A was started the year before, only B is new');
+    assert.deepEqual(r.best_month, { month: `${year}-01`, volumes: 2 });
+    assert.equal(r.top_series.title, 'Jahresreihe A');
+    assert.equal(r.top_series.volumes, 2);
+    assert.deepEqual(r.bought, { volumes: 4, total: 17.5, other_currency: 1 }, 'B 1 has no price, the USD volume is counted apart');
+
+    const before = (await admin('GET', `/stats/year?year=${year - 1}`)).body;
+    assert.deepEqual(before.read, { volumes: 1, pages: 200, previous_year: 0, started: 1 });
+    assert.deepEqual(before.bought, { volumes: 1, total: 8, other_currency: 0 });
+
+    const empty = (await admin('GET', '/stats/year?year=2001')).body;
+    assert.deepEqual(empty.read, { volumes: 0, pages: 0, previous_year: 0, started: 0 });
+    assert.equal(empty.best_month, null);
+    assert.equal(empty.top_series, null);
+
+    for (const bad of ['abc', '1800', String(year + 5), '2020.5']) {
+        assert.equal((await admin('GET', `/stats/year?year=${bad}`)).status, 400, bad);
+    }
+    assert.equal((await admin('GET', '/stats/year?user_id=999')).status, 404);
+});

@@ -1513,6 +1513,35 @@ function migrationList(log = silentLog) {
                 const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
                 if (!cols.has('lent_reminder_days')) d.exec('ALTER TABLE users ADD COLUMN lent_reminder_days INTEGER NOT NULL DEFAULT 90;');
             }
+        },
+        {
+            version: 60,
+            name: 'add_push_subscriptions',
+            up: (d) => {
+                // Web Push of the release-day reminders in the browser (services/push.js): one row per browser that switched
+                // them on; `texts` holds the notification texts in that browser's UI language (the server has no catalog),
+                // `last_day` the local day of the last reminder sent to it, `hour` the local hour (0–23) it wants it from,
+                // `mode` when (day: on the release day, eve: the day before, week: Mondays for the week), `volumes`,
+                // `episodes`, `loans` what it reports (radar volumes, followed anime episodes, overdue lendings)
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS push_subscriptions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        endpoint TEXT NOT NULL UNIQUE,
+                        p256dh TEXT NOT NULL,
+                        auth TEXT NOT NULL,
+                        texts TEXT,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        last_day TEXT,
+                        hour INTEGER NOT NULL DEFAULT 9 CHECK (hour BETWEEN 0 AND 23),
+                        mode TEXT NOT NULL DEFAULT 'day' CHECK (mode IN ('day', 'eve', 'week')),
+                        volumes INTEGER NOT NULL DEFAULT 1 CHECK (volumes IN (0, 1)),
+                        episodes INTEGER NOT NULL DEFAULT 1 CHECK (episodes IN (0, 1)),
+                        loans INTEGER NOT NULL DEFAULT 1 CHECK (loans IN (0, 1))
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id);
+                `);
+            }
         }
     ];
 }

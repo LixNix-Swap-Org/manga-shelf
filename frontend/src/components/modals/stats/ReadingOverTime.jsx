@@ -7,6 +7,7 @@ import useLatestRequest from '../../../hooks/useLatestRequest';
 import { countLabel, fmtNumber, monthLabel, monthShort } from '../statsFormat';
 import { getVolumeDisplayTitle } from '../../../utils/volumeHelpers';
 import { shelfQuery } from '../../../utils/shelfScope';
+import YearReviewCard from './YearReviewCard';
 import { t, tn } from '../../../i18n/index.js';
 
 const readSummary = (m, sep = ' · ') => `${monthLabel(m.month)}: ${countLabel(m.volumes, 'Band', 'Bände')}${sep}${countLabel(m.pages, 'Seite', 'Seiten')}`;
@@ -85,6 +86,8 @@ export default function ReadingOverTime({ readers = [], user, onNavigate, shelfI
           </select>
         </label>
       )}
+
+      <YearReviewCard userId={userId} shelfId={shelfId} onNavigate={onNavigate} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">

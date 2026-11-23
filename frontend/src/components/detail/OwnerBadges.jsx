@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Handshake, Users } from 'lucide-react';
+import { Check, Handshake, Undo2, Users } from 'lucide-react';
 import { t } from '../../i18n/index.js';
 import { formatNumber } from '../../utils/format';
 
@@ -33,12 +33,26 @@ export function copiesPerOwner(vol) {
 }
 
 /**
+ * What "Verleihen" in the owner pill offers `userId` for a volume: their lent copies (to take back) and the first copy
+ * of theirs that is not lent (to lend). Null when they own no copy.
+ */
+export function lendChoices(vol, userId) {
+  if (userId === null || userId === undefined) return null;
+  const mine = (vol?.copies || []).filter((c) => c.owner_user_id !== null && String(c.owner_user_id) === String(userId));
+  if (mine.length === 0) return null;
+  return { lent: mine.filter((c) => c.lent_to), free: mine.find((c) => !c.lent_to) || null };
+}
+
+/**
  * Owners of a volume: the people icon and one coloured circle with initials per owner, in an amber pill like the
  * "Besitz" side of the reader/owner chip. A small number on a circle says that person has more than one copy.
- * Nothing with only one person on the shelf.
+ * Nothing with only one person on the shelf. With `onToggleOwner` (admins) the pill opens the owners list; with `lend`
+ * ({ userId, people, onLend }) it also offers to lend the user's own copy to a shelf member or another person, or to
+ * take a lent copy back (PUT /api/volumes/:id/copies/:copyId { lent }); the full form stays in "Band bearbeiten".
  */
-export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwner = null }) {
+export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwner = null, lend = null }) {
   const [open, setOpen] = useState(false);
+  const [otherName, setOtherName] = useState(null);
   const [pos, setPos] = useState({ left: 8, top: 8 });
   const anchorRef = useRef(null);
   const popoverRef = useRef(null);
@@ -46,9 +60,21 @@ export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwn
   const members = Array.isArray(people)
     ? people.filter((p) => !READ_ONLY_ROLES.includes(p.app_role ?? p.role))
     : [];
-  const interactive = multiUser && owners.length > 0 && Boolean(onToggleOwner) && members.length > 1;
+  const canToggle = Boolean(onToggleOwner) && members.length > 1;
+  const lending = lend?.onLend ? lendChoices(vol, lend.userId) : null;
+  const lendTargets = lending?.free
+    ? (lend.people || []).filter((p) => String(p.user_id ?? p.id) !== String(lend.userId))
+    : [];
+  const hasLendMenu = Boolean(lending);
+  const interactive = multiUser && owners.length > 0 && (canToggle || Boolean(lending));
+  const doLend = (copy, lent) => {
+    setOpen(false);
+    setOtherName(null);
+    lend.onLend(vol, copy, lent);
+  };
 
   useEffect(() => {
+    if (!open) setOtherName(null);
     if (!open || !interactive || !anchorRef.current) return undefined;
     const updatePos = () => {
       const rect = anchorRef.current?.getBoundingClientRect();
@@ -57,7 +83,9 @@ export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwn
       const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
       const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
       const left = Math.max(8, Math.min(rect.left, vw - width - 8));
-      const openUp = rect.bottom + 180 > vh && rect.top > 180;
+      // the menu is taller with the lending part; phones keep ~80 px for the bottom bar
+      const est = hasLendMenu ? 320 : 180;
+      const openUp = rect.bottom + est > vh - 80 && rect.top > est;
       setPos({
         left,
         top: openUp ? undefined : rect.bottom + 6,
@@ -91,7 +119,7 @@ export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwn
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onResize);
     };
-  }, [open, interactive]);
+  }, [open, interactive, hasLendMenu]);
 
   if (!multiUser || owners.length === 0) return null;
   const copies = copiesPerOwner(vol);
@@ -132,7 +160,7 @@ export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwn
       <button
         ref={anchorRef}
         type="button"
-        aria-label={t('Besitzer')}
+        aria-label={canToggle ? t('Besitzer') : t('Besitzer und Verleihen')}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={(e) => {
@@ -147,12 +175,13 @@ export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwn
         <div
           ref={popoverRef}
           role="dialog"
-          aria-label={t('Besitzer')}
+          aria-label={canToggle ? t('Besitzer') : t('Besitzer und Verleihen')}
           data-owner-popover
           onClick={(e) => e.stopPropagation()}
           style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, width: 208 }}
           className="z-[90] rounded-xl border border-slate-700 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md text-xs text-slate-100"
         >
+          {canToggle && (<>
           <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{t('Besitzer')}</p>
           <div className="space-y-0.5 max-h-52 overflow-y-auto custom-scrollbar">
             {members.map((m) => {
@@ -187,6 +216,77 @@ export default function OwnerBadges({ vol, multiUser, people = null, onToggleOwn
               );
             })}
           </div>
+          </>)}
+          {lending && (
+            <div data-lend-menu className={canToggle ? 'mt-1 pt-1 border-t border-slate-800' : ''}>
+              {lending.lent.map((copy) => (
+                <button
+                  key={`back-${copy.id}`}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); doLend(copy, null); }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-emerald-300 hover:bg-slate-800 transition-colors"
+                >
+                  <Undo2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{t('Zurückbekommen von {name}', { name: copy.lent_to })}</span>
+                </button>
+              ))}
+              {lending.free && (
+                <>
+                  <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{t('Verleihen an')}</p>
+                  <div className="space-y-0.5 max-h-40 overflow-y-auto custom-scrollbar">
+                    {lendTargets.map((p) => {
+                      const uid = p.user_id ?? p.id;
+                      const label = p.display_name || p.username || p.name;
+                      return (
+                        <button
+                          key={`lend-${uid}`}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); doLend(lending.free, { user_id: Number(uid) }); }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-slate-200 hover:bg-slate-800 transition-colors"
+                        >
+                          <Handshake className="w-3.5 h-3.5 text-violet-300 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {otherName === null ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setOtherName(''); }}
+                      className="w-full px-2 py-1.5 rounded-lg text-left text-slate-300 hover:bg-slate-800 transition-colors"
+                    >
+                      {t('Andere Person …')}
+                    </button>
+                  ) : (
+                    <form
+                      className="flex items-center gap-1.5 px-1 py-1"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const name = otherName.trim();
+                        if (name) doLend(lending.free, { name });
+                      }}
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        maxLength={64}
+                        aria-label={t('Name')}
+                        placeholder={t('Name')}
+                        value={otherName}
+                        onChange={(e) => setOtherName(e.target.value)}
+                        className="input-field bg-slate-950 py-1 text-base sm:text-xs min-w-0 flex-1"
+                      />
+                      <button type="submit" disabled={!otherName.trim()} className="px-2 py-1 rounded-lg bg-violet-500/20 border border-violet-500/40 text-violet-200 font-semibold disabled:opacity-50">
+                        {t('Verleihen')}
+                      </button>
+                    </form>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>,
         document.body
       )}

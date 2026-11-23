@@ -86,6 +86,7 @@ const backupsRoutes = require('./routes/backups');
 const systemRoutes = require('./routes/system');
 const uploadRoutes = require('./routes/uploads');
 const coverRoutes = require('./routes/covers');
+const pushRoutes = require('./routes/push');
 
 // The CSP allows https/http images because a cover may still point at another host, and inline styles because the
 // build and the React components use them; scripts and fonts (self-hosted) only come from this server.
@@ -404,7 +405,7 @@ function createApp() {
 
     // core/routes.js holds every endpoint that also runs in the apps; the others are server-only. systemRoutes comes
     // first: it puts the rate limit in front of the core calendar feed.
-    for (const router of [authRoutes, apiKeyRoutes, systemRoutes, coreRoutes, backupsRoutes, uploadRoutes, coverRoutes]) {
+    for (const router of [authRoutes, apiKeyRoutes, systemRoutes, coreRoutes, backupsRoutes, uploadRoutes, coverRoutes, pushRoutes]) {
         app.use('/api', router);
     }
 

@@ -7,6 +7,7 @@ import { formatMoney } from '../../utils/format';
 import { editionCurrency } from '../../utils/editions';
 import { VolumeLanguagePill } from '../common/LanguagePill';
 import { assetImgProps } from '../../utils/api';
+import GapRunRow from './GapRunRow';
 import { t, tn } from '../../i18n/index.js';
 import { conditionLabel, statusLabel } from '../../utils/enumLabels';
 
@@ -33,12 +34,17 @@ export default function VolumeGridView({
   canToggleOwned = canToggle,
   selectionMode = false,
   isSelected = () => false,
-  onSelectVolume
+  onSelectVolume,
+  gapRunProps = null,
+  lendProps = null
 }) {
   const mayToggleOthers = canToggleOthers ?? user?.role === 'admin';
   return (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1800px]:grid-cols-7 gap-3 sm:gap-3.5 mb-8">
           {displayVolumeItems.map((item, itemIdx) => {
+            if (item.isGapRun) {
+              return <GapRunRow key={`gap-run-${item.key}`} run={item} variant="card" mpGapMap={mpGapMap} manga={manga} gapsOfficial={gapsOfficial} canEdit={canEdit} {...gapRunProps} />;
+            }
             if (item.isGap) {
               const gapMeta = item.gapMeta || getRegularGapMeta(mpGapMap, item.gapNumber);
               const gapPrice = gapMeta?.price != null ? formatEuro(gapMeta.price) : '';
@@ -61,9 +67,11 @@ export default function VolumeGridView({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-xs">
-                        <Sparkles className="w-2.5 h-2.5 text-amber-400" /> {t('Fehlend')}
-                      </span>
+                      {!canEdit && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0 shadow-xs">
+                          <Sparkles className="w-2.5 h-2.5 text-amber-400" /> {t('Fehlend')}
+                        </span>
+                      )}
                       {canEdit && (
                         <button
                           type="button"
@@ -133,26 +141,6 @@ export default function VolumeGridView({
                     </div>
                   </div>
 
-                  {/* Bottom Row: Quick Add Prompt */}
-                  <div className="w-full mt-auto pt-2 border-t border-amber-500/20 flex items-center justify-between gap-1.5 shrink-0 text-xs">
-                    <span className="text-slate-400 text-[11px] flex items-center gap-1.5">
-                      <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                      {canEdit ? t('Klicken zum Erfassen') : t('Noch zu sammeln')}
-                    </span>
-                    {canEdit && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFillingGapNumber(item.gapNumber);
-                        }}
-                        className="hit-44 text-amber-400 hover:text-amber-300 font-semibold text-xs flex items-center gap-1 hover:underline cursor-pointer"
-                        aria-label={t('Band {gapNumber} zu Sammlung hinzufügen', { gapNumber: item.gapNumber })}
-                      >
-                        <span>{t('+ Zu Sammlung')}</span>
-                      </button>
-                    )}
-                  </div>
                 </div>
               );
             }
@@ -274,6 +262,7 @@ export default function VolumeGridView({
                     multiUser={readers.length > 1}
                     people={mayToggleOthers && canToggleOwned && !selectionMode ? readers : null}
                     onToggleOwner={mayToggleOthers && canToggleOwned && !selectionMode ? handleToggleVolume : null}
+                    lend={selectionMode ? null : lendProps}
                   />
                   <LentBadge vol={vol} />
                 </div>

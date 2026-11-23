@@ -29,7 +29,8 @@ export default function GapNotices({
   duplicateEntries = [], canEdit, isOffline = false, showGaps, detectedGaps = [], detectedGapEntries = [],
   announcedGapCount = 0, volumeFilter, volumeSearch = '', gapsAllowedByFilters, volumeViewMode,
   mpGapData, mpGapLoading, mpGapNotice, fillingGapLoading, canSyncVolumeCount, gapEditionUnconfirmed,
-  handleSyncTotalVolumes, handleBatchFillGaps, handleSelectMpEdition, setShowMpEditionModal, collecting = 'aktiv'
+  handleSyncTotalVolumes, handleBatchFillGaps, handleSelectMpEdition, setShowMpEditionModal, collecting = 'aktiv',
+  ghostsShown = false
 }) {
   const searching = Boolean(String(volumeSearch ?? '').trim());
   const gapsVisible = gapsAllowedByFilters ?? ((volumeFilter === 'ALL' || volumeFilter === 'Fehlt') && !searching);
@@ -41,7 +42,8 @@ export default function GapNotices({
   // a guessed edition shows only the confirm banner: confirming already takes over its volume count
   const showDiscrepancy = Boolean(canEdit && !isOffline && canSyncVolumeCount && mpGapData?.discrepancy && !searching);
   const officialTotal = mpGapData?.total_official_volumes;
-  const extraGapCount = detectedGapEntries.filter(e => e.type !== 'volume').length;
+  const extraGapLabels = detectedGapEntries.filter(e => e.type !== 'volume').map(e => String(e.label));
+  const extraGapCount = extraGapLabels.length;
   const regularGapCount = detectedGaps.length - extraGapCount;
   const fillDisabled = fillingGapLoading || unconfirmed;
   const fillTitle = unconfirmed ? t('Erst die Manga-Passion-Edition bestätigen') : undefined;
@@ -125,7 +127,19 @@ export default function GapNotices({
           <div className="flex items-start gap-2">
             <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
             <span>
-              <strong>{t('{count} entdeckt:', { count: formatCount(detectedGaps.length, 'Lücke', 'Lücken') })}</strong> {detectedGaps.slice(0, 8).map(gapLabel).join(', ')}{detectedGaps.length > 8 ? t(' (+ {count} weitere)', { count: detectedGaps.length - 8 }) : ''}{extraGapCount > 0 ? t(' · davon {count}', { count: formatCount(extraGapCount, 'Sonderausgabe/Schuber', 'Sonderausgaben/Schuber') }) : ''}
+              {ghostsShown ? (
+                // the volumes show every regular gap (runs as one row): name only what they cannot show
+                <>
+                  <strong>{t('{count} entdeckt', { count: formatCount(detectedGaps.length, 'Lücke', 'Lücken') })}</strong>
+                  {extraGapCount > 0 && (
+                    <>{' · '}{t('davon Sonderausgabe/Schuber: {list}', { list: extraGapLabels.join(', ') })}</>
+                  )}
+                </>
+              ) : (
+                <>
+                  <strong>{t('{count} entdeckt:', { count: formatCount(detectedGaps.length, 'Lücke', 'Lücken') })}</strong> {detectedGaps.slice(0, 8).map(gapLabel).join(', ')}{detectedGaps.length > 8 ? t(' (+ {count} weitere)', { count: detectedGaps.length - 8 }) : ''}{extraGapCount > 0 ? t(' · davon {count}', { count: formatCount(extraGapCount, 'Sonderausgabe/Schuber', 'Sonderausgaben/Schuber') }) : ''}
+                </>
+              )}
               {announcedGapCount > 0 && <span className="ml-1.5 text-amber-200/80">{tn('+ {n} angekündigt', '+ {n} angekündigt', announcedGapCount)}</span>}
               {mpGapData?.matched && mpGapData.edition?.title && (
                 <span className="ml-1.5 text-amber-300/80 text-[11px]">

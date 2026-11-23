@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { buildMpGapMap, detectGapEntries, countAnnouncedEntries, announcedGapNumbers, isGapEditionUnconfirmed, canFixVolumeCount, gapStatusText } from '../utils/volumeHelpers';
+import { buildMpGapMap, detectGapEntries, countAnnouncedEntries, announcedGapNumbers, isGapEditionUnconfirmed, canFixVolumeCount, gapStatusText, gapVolumeNumber } from '../utils/volumeHelpers';
 import { apiFetch, readJson, TIMEOUTS } from '../utils/api';
 import { notify, notifyResponseError } from '../utils/notify';
 import { formatCount } from '../utils/format';
@@ -180,8 +180,13 @@ export default function useMpGaps({ id, canEdit, volumes, manga, fetchManga, set
     } : undefined);
   };
 
-  const handleBatchFillGaps = async (targetStatus = 'Fehlt', { extrasOnly = false } = {}) => {
-    const labels = detectedGapEntries.filter(e => (e.type !== 'volume') === extrasOnly).map(e => e.label);
+  // `numbers` limits it to these regular volumes (a run of gaps on the series page)
+  const handleBatchFillGaps = async (targetStatus = 'Fehlt', { extrasOnly = false, numbers = null } = {}) => {
+    const only = Array.isArray(numbers) ? new Set(numbers) : null;
+    const labels = detectedGapEntries
+      .filter(e => (e.type !== 'volume') === extrasOnly)
+      .filter(e => !only || only.has(gapVolumeNumber(e.label)))
+      .map(e => e.label);
     if (!canEdit || labels.length === 0 || fillingGapLoading) return;
     if (isGapEditionUnconfirmed(mpGapData)) {
       notify.error(t('Die Manga-Passion-Edition „{edition}“ ist nicht bestätigt. Bitte zuerst „Edition bestätigen“ oder eine andere Edition wählen, sonst werden Bände dieser Vermutung erfasst.', { edition: mpGapData.edition?.title || '?' }));

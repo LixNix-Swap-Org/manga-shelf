@@ -280,7 +280,7 @@ describe('touch targets of the volume cards and photo order buttons', () => {
     const icons = ['Foto für Band 5 hochladen', 'Band 5 bearbeiten', 'Band 5 löschen'].map((name) => screen.getByRole('button', { name }));
     for (const button of icons) expect(classesOf(button)).toEqual(expect.arrayContaining(['hit-44', '[@media(pointer:coarse)]:p-2.5']));
     expect(classesOf(icons[0].parentElement)).toContain('[@media(pointer:coarse)]:gap-2.5');
-    expect(classesOf(screen.getByRole('button', { name: 'Band 6 zu Sammlung hinzufügen' }))).toContain('hit-44');
+    expect(classesOf(screen.getByRole('button', { name: 'Band 6 erfassen' }))).toContain('hit-44');
     expect(classesOf(screen.getByRole('button', { name: '2 Fotos von Band 5 öffnen' }))).toContain('hit-44');
   });
 

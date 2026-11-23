@@ -35,8 +35,9 @@ import { apiFetch, readJson, TIMEOUTS } from './utils/api';
 import { readCache, cacheOwner, LIST_KEY } from './utils/dataCache';
 import { OUTBOX_SYNCED_EVENT } from './utils/outbox';
 import { useDetailScroll, findDuplicateEntries, backLinkTarget } from './components/detail/detailPage';
-import { inferVolumeType, normalizePubName, getSeriesProgress, getVolumeProgressCounts, buildDisplayVolumeItems, hasUserRead } from './utils/volumeHelpers';
+import { inferVolumeType, normalizePubName, getSeriesProgress, getVolumeProgressCounts, buildDisplayVolumeItems, hasUserRead, groupGapRuns, gapVolumeNumber } from './utils/volumeHelpers';
 import { t } from './i18n/index.js';
+import { notify, notifyResponseError } from './utils/notify';
 import { useShelfAccess } from './hooks/useShelfViewer';
 import { editionCurrency } from './utils/editions';
 
@@ -250,6 +251,43 @@ export default function MangaDetail({ user, onUnauthorized }) {
   const selectionProps = selecting
     ? { selectionMode: true, isSelected: selection.isSelected, onSelectVolume: selectVolume }
     : {};
+
+  // runs of three or more gaps fold into one row in the card and list views (the spine shelf keeps every ghost)
+  const [expandedGapRuns, setExpandedGapRuns] = useState(() => new Set());
+  const groupedVolumeItems = useMemo(() => groupGapRuns(displayVolumeItems, { expanded: expandedGapRuns }), [displayVolumeItems, expandedGapRuns]);
+  const shoppingGapNumbers = useMemo(() => new Set(detectedGapEntries
+    .filter((e) => e.type === 'volume').map((e) => gapVolumeNumber(e.label)).filter((n) => n !== null)), [detectedGapEntries]);
+  const gapRunProps = {
+    isOffline,
+    shoppingGapNumbers,
+    fillingGapLoading,
+    fillDisabled: fillingGapLoading || Boolean(gapEditionUnconfirmed),
+    fillTitle: gapEditionUnconfirmed ? t('Erst die Manga-Passion-Edition bestätigen') : undefined,
+    onToggle: (key) => setExpandedGapRuns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    }),
+    onToShopping: (numbers) => handleBatchFillGaps('Fehlt', { numbers }),
+    onAddRange: (range) => setShowBatchModal(range)
+  };
+
+  // quick lending from the owner pill (U8): the user's own copy to a shelf member or another person, or back again
+  const lendProps = canEdit && !isOffline && user?.id ? {
+    userId: user.id,
+    people: readers,
+    onLend: async (vol, copy, lent) => {
+      try {
+        const res = await apiFetch(`/api/volumes/${vol.id}/copies/${copy.id}`, { method: 'PUT', body: { lent } });
+        if (!res.ok) { await notifyResponseError(res, t('Fehler beim Speichern')); return; }
+        notify.success(lent ? t('Verliehen') : t('Zurückbekommen'));
+        fetchManga();
+      } catch (err) {
+        notify.error(err);
+      }
+    }
+  } : null;
 
   // while loading: the title the shelf already knows, else null (the previous title stays, no generic title in between)
   const listTitle = useMemo(
@@ -691,6 +729,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
             handleSelectMpEdition={handleSelectMpEdition}
             setShowMpEditionModal={setShowMpEditionModal}
             collecting={manga.collecting}
+            ghostsShown={displayVolumeItems.some((item) => item.isGap) && volumeViewMode !== 'spine'}
           />
           </NoticesGroup>
 
@@ -721,7 +760,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
               {/* LIST VIEW */}
               {volumeViewMode === 'list' && (
                 <VolumeListView
-                  displayVolumeItems={displayVolumeItems}
+                  displayVolumeItems={groupedVolumeItems}
+                  gapRunProps={gapRunProps}
+                  lendProps={lendProps}
                   mpGapMap={mpGapMap}
                   manga={manga}
                   user={user}
@@ -749,7 +790,9 @@ export default function MangaDetail({ user, onUnauthorized }) {
                   canToggleOwned={canToggleOwned}
                   canToggleOthers={canToggleOthers}
                   gapsOfficial={gapsOfficial}
-                  displayVolumeItems={displayVolumeItems}
+                  displayVolumeItems={groupedVolumeItems}
+                  gapRunProps={gapRunProps}
+                  lendProps={lendProps}
                   handleDeleteVolume={handleDeleteVolume}
                   handleOpenEditVolume={handleOpenEditVolume}
                   handleToggleVolume={handleToggleVolume}

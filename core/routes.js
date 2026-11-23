@@ -96,6 +96,7 @@ const routes = [
     { method: 'PUT', path: '/stats/settings', role: 'admin', handler: (ctx, input) => stats.clearStartDate(ctx, input) || settings.updateSettings(ctx, input) },
     { method: 'GET', path: '/users/:id/stats', role: 'auth', handler: reads.userStats },
     { method: 'GET', path: '/stats/reading', role: 'auth', handler: stats.reading },
+    { method: 'GET', path: '/stats/year', role: 'auth', handler: stats.yearReview },
 
     { method: 'GET', path: '/tags', role: 'auth', handler: mangas.tags },
     { method: 'GET', path: '/trash', role: 'auth', handler: trash.list },

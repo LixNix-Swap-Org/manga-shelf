@@ -631,6 +631,45 @@ export const buildDisplayVolumeItems = ({
   return items;
 };
 
+/** From this many gaps in a row on, the card and list views show them as one row ("Band 9 bis 29 fehlen"). */
+export const GAP_RUN_MIN = 3;
+
+/**
+ * Folds runs of at least `minRun` ghost entries with consecutive numbers (as buildDisplayVolumeItems placed them) into
+ * one `{ isGapRun, key, from, to, gaps }` item. A run whose key is in `expanded` keeps its single ghosts right after the
+ * run item, so the row can fold them again. Shorter runs and every volume stay as they are.
+ */
+export const groupGapRuns = (items, { expanded = new Set(), minRun = GAP_RUN_MIN } = {}) => {
+  const list = Array.isArray(items) ? items : [];
+  const out = [];
+  let run = [];
+  const flush = () => {
+    if (run.length >= minRun) {
+      const from = run[0].gapNumber;
+      const to = run[run.length - 1].gapNumber;
+      const key = `${from}-${to}`;
+      const open = expanded.has(key);
+      out.push({ isGapRun: true, key, from, to, gaps: run, expanded: open });
+      if (open) out.push(...run);
+    } else {
+      out.push(...run);
+    }
+    run = [];
+  };
+  for (const item of list) {
+    const prev = run[run.length - 1];
+    if (item?.isGap && prev && Math.abs(item.gapNumber - prev.gapNumber) === 1) {
+      run.push(item);
+      continue;
+    }
+    flush();
+    if (item?.isGap) run.push(item);
+    else out.push(item);
+  }
+  flush();
+  return out;
+};
+
 // i18n-ignore: values of the "Für wen?" select, not shown
 export const FOR_ME = 'me';
 export const FOR_NOBODY = 'nobody';
