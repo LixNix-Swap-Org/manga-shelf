@@ -10,8 +10,7 @@
 - **Phone toolbar:** search, sort and type filters sit behind a "Filter" button (with the number of changed filters); views, "Auswählen" and "Filter" share one line, the status tabs wrap instead of being cut off.
 - **Quick lending:** tapping the owner pill offers "Verleihen an" (people of the shelf or "Andere Person …") for your own copy, and "Zurückbekommen von …" for a lent one. The full form stays in "Band bearbeiten".
 
-### Start page and statistics
-- **Slim key figures on phones:** the four figures sit in one narrow strip without icons.
+### Statistics
 - **"Mein Manga-Jahr":** Statistik → Verlauf starts with your year: volumes and pages read against the year before, series started, own copies bought with their list price, the most read series and the strongest month; earlier years can be picked (`GET /api/stats/year`).
 
 ### Reminders in the browser

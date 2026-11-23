@@ -1,11 +1,9 @@
-// "Mein Manga-Jahr" in the reading statistics (U6), quick lending in the owner pill (U8) and the slim key figures on
-// phones (U5).
+// "Mein Manga-Jahr" in the reading statistics (U6), quick lending in the owner pill (U8).
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import YearReviewCard, { yearDelta } from '../components/modals/stats/YearReviewCard';
 import OwnerBadges, { lendChoices } from '../components/detail/OwnerBadges';
-import CollectionStats from '../components/dashboard/CollectionStats';
 import { fakeResponse } from './fakeResponse';
 
 afterEach(() => {
@@ -140,17 +138,5 @@ describe('quick lending in the owner pill', () => {
     const menu = screen.getByRole('dialog', { name: 'Besitzer' });
     expect(within(menu).getByRole('button', { name: /max/, pressed: true })).toBeTruthy();
     expect(menu.querySelector('[data-lend-menu]').textContent).toMatch('Verleihen an');
-  });
-});
-
-describe('key figures on phones', () => {
-  it('one slim strip below sm: tiles drop their panel and icons', () => {
-    const { container } = render(<CollectionStats totalSeries={12} totalOwnedVolumes={340} totalCollectionValue={2400} completedSeries={3} />);
-    const section = container.firstElementChild;
-    expect(String(section.className)).toMatch('grid-cols-4');
-    expect(String(section.className)).toMatch('max-sm:rounded-2xl');
-    const tile = section.firstElementChild;
-    expect(String(tile.className)).toMatch('max-sm:!bg-transparent');
-    expect(String(tile.querySelector('svg').parentElement.className)).toMatch('max-sm:hidden');
   });
 });

@@ -474,7 +474,7 @@ manga-shelf/
 │           │   ├── DashboardHeader.jsx # header, search + scanner + scope button, "Neuer Manga", "Statistiken", install and the account menu (`#btn-account-menu`: "Verwaltung", "Einstellungen", logout; plain buttons, Escape closes it), connection pill, "Mehr" menu (Anime first, then statistics, add or radar, Verwaltung), preconnect hint while an online search is pending
 │           │   ├── AdminCenter.jsx # "Verwaltung" (lazy, ToolDialog): the sections of adminSections.js (Konto, Personen & Regale, Daten, System); each entry closes it and opens the dialog the header used to open directly, for the same roles
 │           │   ├── MainViewSwitcher.jsx # tabs Sammlung / Einkaufsliste / Anime / Radar; inside Radar, RadarKindSwitch picks "Manga-Termine" (`?view=radar`) or "Anime-Folgen" (`?view=episodes`)
-│           │   ├── CollectionStats.jsx # key figure bar (below sm one slim strip without tile panels and icons)
+│           │   ├── CollectionStats.jsx # key figure bar
 │           │   ├── CollectionToolbar.jsx # status chips, publisher, collecting status, genre, language and shelf (each only with more than one), sorting, grouping, author chip, view
 │           │   ├── SavedFilters.jsx   # "Gemerkte Filter" in the shelf/person chip: GET/POST/DELETE /api/saved-filters; sets kept in the browser (older builds, or saved while offline) go to the server on the next load
 │           │   ├── MangaCollectionGrid.jsx # grid/list page by page, groups, scroll position, searchExtras slot (online row or section, empty-panel buttons)
