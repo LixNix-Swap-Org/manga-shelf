@@ -1,5 +1,5 @@
 // Volume editor dialog: composes the volumeEdit/ field groups around useVolumeEditForm.
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TriangleExclamationPoint, X } from 'lucide-react';
 import VolumePhotoManager from './VolumePhotoManager';
 import EditHeader from './volumeEdit/EditHeader';
@@ -15,6 +15,15 @@ import LastChanged from './volumeEdit/LastChanged';
 import useVolumeEditForm from '../../hooks/useVolumeEditForm';
 import useDialogA11y from '../../hooks/useDialogA11y';
 import { t } from '../../i18n/index.js';
+import { askConfirm } from '../modals/askConfirm';
+
+// a confirmation (ConfirmDialog, also the askConfirm one) owns the keyboard while it is open
+const confirmOpen = () => Boolean(document.querySelector('[role="dialog"][data-confirm]'));
+
+/** Asks before unsaved input of the editor goes; resolves true when it may. */
+export const confirmDiscard = () => askConfirm(t('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.'), {
+  title: t('Ungespeicherte Änderungen verwerfen?'), confirmLabel: t('Verwerfen')
+});
 
 export default function VolumeEditModal({ isOpen, activeVolume, ...props }) {
   if (!isOpen || !activeVolume) return null;
@@ -35,6 +44,7 @@ function VolumeEditDialog({
   const {
     editVolForm,
     setEditVolForm,
+    isEditDirty,
     savingVol,
     uploadingVolImage,
     showUrlInput,
@@ -64,6 +74,47 @@ function VolumeEditDialog({
   const mpLookup = isMpVolume(activeVolume, manga) && isMpVolume(editVolForm, manga);
 
   const dialogRef = useDialogA11y(true);
+  // closing (backdrop, X, "Abbrechen", Escape, the browser's back) asks first while there is unsaved input: changed
+  // fields or an open copy form with changes; owners and copies added or removed are stored already
+  const copyDraft = useRef(false);
+  const onCopyDraft = useCallback((changed) => { copyDraft.current = changed; }, []);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = isEditDirty;
+  const asking = useRef(false);
+  const requestClose = useCallback(async () => {
+    if (!dirtyRef.current && !copyDraft.current) { onClose(); return; }
+    if (asking.current) return;
+    asking.current = true;
+    try {
+      if (await confirmDiscard()) onClose();
+    } finally {
+      asking.current = false;
+    }
+  }, [onClose]);
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || confirmOpen()) return;
+      if (!dirtyRef.current && !copyDraft.current) return;
+      // only while the editor is the topmost dialog (a picture opened from it closes first)
+      const modal = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].pop();
+      if (modal && modal !== dialogRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      requestClose();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [requestClose, dialogRef]);
+  // the outer "Speichern" would drop an open copy form's input: asked first
+  const saveVolume = async (e) => {
+    if (copyDraft.current) {
+      e.preventDefault();
+      if (!(await confirmDiscard())) return;
+      copyDraft.current = false;
+      return handleSaveVolume({ preventDefault() {} });
+    }
+    return handleSaveVolume(e);
+  };
   // an owners toggle adds or drops a copy: the copies list reads them again
   const [ownersVersion, setOwnersVersion] = useState(0);
 
@@ -75,7 +126,7 @@ function VolumeEditDialog({
           aria-label={t('Band bearbeiten')}
           tabIndex={-1}
           className="outline-none dialog-overlay z-50 bg-black/80 backdrop-blur-md animate-fade-in"
-          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+          onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
         >
           <div
             className="dialog-box glass-panel max-w-lg max-h-[92vh] supports-[height:100dvh]:max-h-[92dvh] short:max-h-none flex flex-col rounded-2xl sm:rounded-3xl border border-slate-700/80 shadow-2xl relative overflow-hidden"
@@ -84,10 +135,10 @@ function VolumeEditDialog({
             <EditHeader
               editVolForm={editVolForm}
               activeVolume={activeVolume}
-              onClose={onClose}
+              onClose={requestClose}
             />
 
-            <form onSubmit={handleSaveVolume} noValidate className="flex flex-col flex-1 min-h-0 overflow-hidden short:overflow-visible">
+            <form onSubmit={saveVolume} noValidate className="flex flex-col flex-1 min-h-0 overflow-hidden short:overflow-visible">
               {/* Scrollable Form Body */}
               <div className="flex-1 overflow-y-auto short:overflow-visible p-4 sm:p-6 space-y-4 custom-scrollbar">
                 {/* Manga Passion only knows German editions: the stored and the edited volume language must both be German */}
@@ -131,6 +182,7 @@ function VolumeEditDialog({
                   ownersVersion={ownersVersion}
                   volume={activeVolume}
                   onChanged={() => handleOwnersChanged({})}
+                  onDraftChange={onCopyDraft}
                 />
 
                 {/* Volume Cover & Images Section */}
@@ -197,7 +249,7 @@ function VolumeEditDialog({
                 savingVol={savingVol}
                 handleDeleteVolume={handleDeleteVolume}
                 activeVolume={activeVolume}
-                onClose={onClose}
+                onClose={requestClose}
               />
             </form>
           </div>

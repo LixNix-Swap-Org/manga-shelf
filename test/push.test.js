@@ -296,3 +296,48 @@ test('an episode that aired before the reminder hour still counts (anime_airings
     const { episodes } = push.releasesBetween(actx, day, day);
     assert.deepEqual(episodes.map(e => `${e.title} ${e.episode}`), ['Fruehaus 3', 'Abendserie 9']);
 });
+
+test('a browser switched on after today\'s run still gets today\'s reminder; demoted accounts get none and can still switch off', async () => {
+    db.exec('DELETE FROM push_subscriptions');
+    const tz = 'Europe/Berlin';
+    const now = new Date();
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const series = (await admin('POST', '/mangas', { title: 'Spätreihe' })).body.id;
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '2', status: 'Vorbestellt', release_date: day })).status, 200);
+    const { createCtx } = require('../db');
+    const at = (hour) => {
+        const probe = new Date(`${day}T${String(hour).padStart(2, '0')}:30:00Z`);
+        const offset = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).format(probe)) - hour;
+        return new Date(probe.getTime() - offset * 3600 * 1000);
+    };
+    const sent = [];
+    const fetchImpl = async (url) => { sent.push(String(url)); return new Response(null, { status: 201 }); };
+    const run = (hour) => push.runPushRemindersIfDue({ db, createCtx, now: at(hour), timeZone: tz, fetchImpl });
+
+    const first = browser('https://fcm.googleapis.com/fcm/send/first');
+    assert.equal((await admin('PUT', '/push/subscriptions', first.json)).status, 200);
+    db.prepare('DELETE FROM app_settings WHERE key = ?').run(push.DAY_KEY);
+    assert.deepEqual(await run(9), { sent: 1, gone: 0, skipped: 0 });
+    assert.equal(db.prepare('SELECT value FROM app_settings WHERE key = ?').get(push.DAY_KEY).value, day, 'the day is done');
+
+    // switched on at noon for 12:00: the next hourly check sends it the same day
+    const later = browser('https://fcm.googleapis.com/fcm/send/later');
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...later.json, hour: 12 })).status, 200);
+    assert.deepEqual(await run(13), { sent: 1, gone: 0, skipped: 0 });
+    assert.equal(sent.filter((u) => u.includes('later')).length, 1);
+    assert.equal(sent.filter((u) => u.includes('first')).length, 1, 'the 9:00 browser only once');
+
+    // an editor demoted to guest: no reminder, and the day is not kept open for them
+    assert.equal((await admin('POST', '/users', { username: 'herab', password: 'password123', role: 'editor' })).status, 200);
+    const demoted = ctx.client();
+    assert.equal((await demoted('POST', '/auth/login', { username: 'herab', password: 'password123' })).status, 200);
+    const theirs = browser('https://fcm.googleapis.com/fcm/send/demoted');
+    assert.equal((await demoted('PUT', '/push/subscriptions', theirs.json)).status, 200);
+    db.prepare("UPDATE users SET role = 'guest' WHERE username = 'herab'").run();
+    assert.equal(await run(14), null, 'nothing due for admins and editors');
+    assert.equal(sent.some((u) => u.includes('demoted')), false);
+    // the guest still sees and ends the subscription (switch, logout)
+    assert.deepEqual((await demoted('POST', '/push/subscriptions/status', { endpoint: theirs.json.endpoint })).body.subscribed, true);
+    assert.deepEqual((await demoted('DELETE', '/push/subscriptions', { endpoint: theirs.json.endpoint })).body, { success: true, removed: 1 });
+    assert.equal((await demoted('PUT', '/push/subscriptions', theirs.json)).status, 403, 'switching on stays for editors');
+});

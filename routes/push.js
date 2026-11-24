@@ -1,9 +1,10 @@
 // Web Push of the release-day reminders (services/push.js), server-only: the apps plan their reminders on the device.
 // GET /push/key gives the VAPID public key, PUT/DELETE /push/subscriptions switch one browser on or off, POST /push/test
-// sends a test message to it. Editors and admins only, like the reminder switch of the apps.
+// sends a test message to it. Editors and admins only, like the reminder switch of the apps; checking and switching off
+// a browser works for every signed-in account, so an account demoted to guest still gets rid of its subscription.
 const express = require('express');
 const { db } = require('../db');
-const { requireEditor } = require('../middleware/auth');
+const { requireAuth, requireEditor } = require('../middleware/auth');
 const { createRateLimiter } = require('../middleware/rateLimit');
 const { badRequest, notFound } = require('../utils/httpError');
 const push = require('../services/push');
@@ -77,19 +78,21 @@ router.put('/push/subscriptions', requireEditor, (req, res) => {
             texts = excluded.texts${given.map((c) => `, ${c} = excluded.${c}`).join('')},
             last_day = CASE WHEN push_subscriptions.user_id = excluded.user_id THEN push_subscriptions.last_day END
     `).run(req.user.id, sub.endpoint, sub.p256dh, sub.auth, texts, ...given.map((c) => prefs[c]));
+    // a browser switched on (or moved to a later hour) after today's run finished still gets today's reminder
+    db.prepare('DELETE FROM app_settings WHERE key = ?').run(push.DAY_KEY);
     db.prepare(`DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
         SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT ?)`).run(req.user.id, req.user.id, MAX_PER_USER);
     res.json({ success: true });
 });
 
 // is this browser subscribed for the caller? (the switch shows the server's view, not only the browser's)
-router.post('/push/subscriptions/status', requireEditor, (req, res) => {
+router.post('/push/subscriptions/status', requireAuth, (req, res) => {
     const row = db.prepare('SELECT hour, mode, volumes, episodes, loans FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').get(endpointOf(req.body), req.user.id);
     res.json(row ? { subscribed: true, hour: row.hour, mode: row.mode, volumes: Boolean(row.volumes), episodes: Boolean(row.episodes), loans: Boolean(row.loans) } : { subscribed: false });
 });
 
 // off (switch, logout): only the caller's own row
-router.delete('/push/subscriptions', requireEditor, (req, res) => {
+router.delete('/push/subscriptions', requireAuth, (req, res) => {
     const endpoint = endpointOf(req.body);
     if (!endpoint) throw badRequest('Push-Abo fehlt', 'PUSH_ENDPOINT');
     const removed = db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').run(endpoint, req.user.id).changes;

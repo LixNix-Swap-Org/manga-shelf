@@ -321,9 +321,13 @@ export default function useVolumeEditForm({ activeVolume, mangaId, canEdit, onCl
     notifyTrashed(vol ? `„${getVolumeDisplayTitle(vol)}“` : null, result.trash_id, onSuccess);
   };
 
+  // unsaved input: a field differs from what the server stored (what a save would send)
+  const isEditDirty = Object.keys(buildSaveBody(editVolForm, baseRef.current)).length > 0;
+
   return {
     editVolForm,
     setEditVolForm,
+    isEditDirty,
     savingVol,
     uploadingVolImage,
     showUrlInput,

@@ -10,6 +10,7 @@ import { t, tn } from '../i18n/index.js';
 import { askConfirm } from '../components/modals/askConfirm';
 import { serverText } from '../i18n/serverText.js';
 import { releaseRemindersChanged } from '../app/reminders/reminderState';
+import { ownersUndoBody } from '../utils/ownersUndo.js';
 
 /** Error text of a failed response: the JSON `error`, else the fallback (proxies answer 502/504/413 with HTML). */
 export async function readApiError(res, fallback) {
@@ -327,15 +328,13 @@ export default function useVolumeActions({
   // AddVolumeBar finds the cancel here until the page passes it as onCancelUpload
   handleUploadNewSingleCover.cancel = cancelNewCoverUpload;
 
-  // undo of an un-own: the owner row comes back with its own price and date, the volume date as it was before
+  // undo of an un-own: the owner row comes back with its own price, date, condition and lending (as in the editor's
+  // owners field), the volume date as it was before
   const undoUnown = (vol, data) => withVolumeLock(vol.id, async () => {
     const removed = data.removed_owner;
-    const body = { owned: true, previous_purchase_date: data.previous_purchase_date ?? null };
-    if (removed.purchase_date) body.purchase_date = removed.purchase_date;
-    if (removed.price !== null && removed.price !== undefined) body.price = removed.price;
-    if (String(removed.user_id) !== String(user?.id)) body.user_id = removed.user_id;
-    // further copies of the person come back too (migration 56)
-    if (Array.isArray(data.removed_extra_copies) && data.removed_extra_copies.length) body.extra_copies = data.removed_extra_copies;
+    const target = String(removed.user_id) !== String(user?.id) ? { user_id: removed.user_id } : {};
+    const body = ownersUndoBody({ previous_purchase_date: null, ...data }, true, target);
+    if (!body) return;
     try {
       const res = await apiFetch(`/api/volumes/${vol.id}/owners`, { method: 'POST', body });
       if (res.ok) {

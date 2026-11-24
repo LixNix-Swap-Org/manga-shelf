@@ -16,6 +16,7 @@ import { findDuplicateEntries } from '../MangaDetail';
 import { buildMpGapMap } from '../utils/volumeHelpers';
 import { fakeResponse } from './fakeResponse';
 import { TIMEOUTS } from '../utils/api';
+import ConfirmHost from '../components/modals/askConfirm';
 
 const jsonResponse = (body, status = 200) => fakeResponse(status, body);
 
@@ -287,6 +288,28 @@ describe('MangaHeroCard', () => {
     const props = baseProps();
     render(<SeriesInfo {...props} manga={{ ...props.manga, updated_by_name: 'Lena', updated_at: '2026-11-12 08:00:00' }} />);
     expect(screen.getByTestId('series-last-changed').textContent).toMatch(/^Zuletzt geändert von Lena am /);
+  });
+
+  it('the X of "Reihe bearbeiten" asks only with typed input; "Abbrechen" discards at once', async () => {
+    render(<ConfirmHost />);
+    const clean = baseProps({ editing: true });
+    const { unmount } = render(<MangaHeroCard {...clean} />);
+    fireEvent.click(document.getElementById('btn-series-edit-close'));
+    await waitFor(() => expect(clean.cancelEditing).toHaveBeenCalledTimes(1));
+    unmount();
+
+    const dirty = baseProps({ editing: true, isEditDirty: true });
+    render(<MangaHeroCard {...dirty} />);
+    fireEvent.click(document.getElementById('btn-series-edit-close'));
+    await screen.findByText('Ungespeicherte Änderungen verwerfen?');
+    fireEvent.click(document.querySelector('[data-confirm] [data-confirm-action="cancel"]'));
+    await waitFor(() => expect(screen.queryByText('Ungespeicherte Änderungen verwerfen?')).toBeNull());
+    expect(dirty.cancelEditing).not.toHaveBeenCalled();
+    fireEvent.click(document.getElementById('btn-series-edit-close'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Verwerfen' }));
+    await waitFor(() => expect(dirty.cancelEditing).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Abbrechen' }).at(-1));
+    expect(dirty.cancelEditing).toHaveBeenCalledTimes(2);
   });
 
   it('offers Abgebrochen and keeps a legacy stored status selectable', () => {

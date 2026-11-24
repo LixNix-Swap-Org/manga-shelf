@@ -356,7 +356,7 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
     const subs = db.prepare(`
         SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, s.mode, s.volumes, s.episodes, s.loans, s.last_day, u.username, u.role
         FROM push_subscriptions s JOIN users u ON u.id = s.user_id
-        WHERE ${due} AND s.hour <= ?
+        WHERE ${due} AND s.hour <= ? AND u.role IN ('admin', 'editor')
         ORDER BY s.user_id, s.id
     `).all(day, monday, hour);
     if (!subs.length) return Promise.resolve(null);
@@ -387,7 +387,9 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
             }
             db.prepare('UPDATE push_subscriptions SET last_day = ? WHERE id = ?').run(day, sub.id);
         }
-        const open = db.prepare(`SELECT count(*) AS c FROM push_subscriptions s WHERE ${due}`).get(day, monday).c;
+        // a demoted account's browser (guest, visitor) waits silently and does not keep the day open
+        const open = db.prepare(`SELECT count(*) AS c FROM push_subscriptions s JOIN users u ON u.id = s.user_id
+            WHERE ${due} AND u.role IN ('admin', 'editor')`).get(day, monday).c;
         if (!open) db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(DAY_KEY, day);
         if (report.sent || report.gone) log.info(`[Push] ${report.sent} Erinnerung${report.sent === 1 ? '' : 'en'} gesendet${report.gone ? `, ${report.gone} abgelaufene Abos entfernt` : ''}`);
         return report;

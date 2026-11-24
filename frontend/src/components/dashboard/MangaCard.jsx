@@ -29,7 +29,7 @@ export function seriesSummary(manga, { owned, total, extras }, readState, defaul
     return parts.filter(Boolean).join(', ');
   }
   parts.push(total > 0 ? t('{owned} von {volumes}', { owned, volumes: formatCount(total, 'Band', 'Bänden') }) : formatCount(owned, 'Band', 'Bände'));
-  if (extras > 0) parts.push(tn('{n} Extras', '{n} Extras', extras));
+  if (extras > 0) parts.push(tn('{n} Extra', '{n} Extras', extras));
   if (readState.read > 0) parts.push(readState.complete ? t('alle gelesen') : t('{read} von {owned} gelesen', { read: readState.read, owned: readState.owned }));
   else parts.push(t('ungelesen'));
   return parts.filter(Boolean).join(', ');

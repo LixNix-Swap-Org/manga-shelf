@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BookCheck, BookX, Calendar, Check, CircleCheck, Coins, ListChecks, Tag, Trash, X } from 'lucide-react';
 import { currencySymbol, formatCount, formatNumber } from '../../utils/format';
 import { localDateString } from '../../hooks/useVolumeActions';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 import { rich } from '../../i18n/react.jsx';
 import { statusLabel } from '../../utils/enumLabels.js';
 import { askConfirm } from '../modals/askConfirm.jsx';
@@ -31,14 +31,33 @@ function useScrollPaddingAbove(ref) {
   }, [ref]);
 }
 
+/**
+ * The question before a bulk status change that takes owned volumes out of "Vorhanden": the change removes their
+ * copies with prices, dates, conditions and lendings (trg_volumes_copies_status); the undo brings them back. Null when
+ * nothing of that would go (the same rule as statusLossText in the volume editor).
+ */
+export const bulkStatusLossText = (status, volumes) => {
+  if (!status || status === 'Vorhanden') return null; // i18n-ignore: stored status value
+  const filled = (v) => v !== null && v !== undefined && v !== '';
+  const losing = (Array.isArray(volumes) ? volumes : []).filter((v) => v?.status === 'Vorhanden' // i18n-ignore: stored status value
+    && (Array.isArray(v.copies) ? v.copies : []).some((c) => c.owner_user_id != null || filled(c.price) || filled(c.purchase_date) || filled(c.condition) || filled(c.lent_to)));
+  if (losing.length === 0) return null;
+  return tn(
+    '{n} ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.',
+    '{n} ausgewählte Bände sind im Besitz: Ihre Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten, Zustand und Ausleihen. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.',
+    losing.length
+  );
+};
+
 export const bulkDeleteConfirmText = (count) => t('{count} wirklich löschen? Der Lesestatus aller Benutzer für diese Bände wird ebenfalls gelöscht. Direkt danach lässt sich das noch rückgängig machen.', { count: formatCount(count, 'Band', 'Bände') });
 
 // Sticky bar of the selection mode: a button's request goes to onApply(change, doneText); doneText is translated here and
 // handleBulkEdit shows it as given. `readerId` is the reader whose "Gelesen" state changes (the selected reader when allowed).
 export default function BulkActionBar({
   count, visibleCount, allVisibleSelected, onSelectAllVisible, onClear, onClose, onApply, busy = false, userId, readerId, currency = 'EUR',
-  people = [], user = null,
-  confirmDelete = (text) => askConfirm(text, { confirmLabel: t('Löschen') })
+  people = [], user = null, selectedVolumes = [],
+  confirmDelete = (text) => askConfirm(text, { confirmLabel: t('Löschen') }),
+  confirmStatus = (text) => askConfirm(text, { title: t('Status ändern'), confirmLabel: t('Trotzdem speichern') })
 }) {
   const barRef = useRef(null);
   useScrollPaddingAbove(barRef);
@@ -86,6 +105,12 @@ export default function BulkActionBar({
         t('{name} besitzt den Band nicht mehr', { name: selectedOwner.name })
       );
     }
+  };
+  const submitStatus = async (e) => {
+    e.preventDefault();
+    const loss = bulkStatusLossText(status, selectedVolumes);
+    if (loss && !(await confirmStatus(loss))) return;
+    apply({ set: { status } }, t('auf „{status}“ gesetzt', { status: statusLabel(status) }));
   };
   const remove = async () => {
     if (await confirmDelete(bulkDeleteConfirmText(count))) apply({ delete: true }, t('gelöscht'));
@@ -193,7 +218,7 @@ export default function BulkActionBar({
       {panel === 'status' && (
         <form
           className="flex flex-wrap items-center gap-2"
-          onSubmit={(e) => { e.preventDefault(); apply({ set: { status } }, t('auf „{status}“ gesetzt', { status: statusLabel(status) })); }}
+          onSubmit={submitStatus}
         >
           <label htmlFor="bulk-status" className="text-xs text-slate-400">{t('Neuer Status')}</label>
           <select id="bulk-status" value={status} onChange={(e) => setStatus(e.target.value)} className="input-field text-base sm:text-xs py-2 w-auto">

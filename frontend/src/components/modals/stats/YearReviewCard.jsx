@@ -23,7 +23,12 @@ export function yearDelta(current, previous, year) {
  * be picked among the years with a dated read or purchase; the reader is the one chosen for the reading tab.
  */
 export default function YearReviewCard({ userId, shelfId = null, onNavigate }) {
-  const [year, setYear] = useState(null);
+  // the picked year belongs to one reader and shelf: another one starts at the current year again (an old pick could
+  // lie outside the new reader's years and leave the card on zeros)
+  const scope = `${userId ?? ''}|${shelfId ?? ''}`;
+  const [choice, setChoice] = useState({ scope, year: null });
+  const year = choice.scope === scope ? choice.year : null;
+  const setYear = (value) => setChoice({ scope, year: value });
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const begin = useLatestRequest();

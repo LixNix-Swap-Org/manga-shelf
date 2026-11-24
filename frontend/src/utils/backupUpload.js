@@ -4,9 +4,15 @@
 export const BACKUP_CHUNK_SIZE = 16 * 1024 * 1024;
 export const BACKUP_CHUNK_THRESHOLD = 16 * 1024 * 1024;
 
-const RETRYABLE_HTTP = new Set([408, 502, 503, 504]);
+const RETRYABLE_HTTP = new Set([408, 429, 502, 503, 504]);
 const MAX_CHUNK_RETRIES = 2;
 const MAX_OFFSET_RESETS = 3;
+
+/** A 429 (a proxy's or the server's rate limit) waits as long as Retry-After says, 2 s at least and 30 s at most. */
+const rateLimitWait = (res) => {
+  const seconds = Number(res?.res?.headers?.get?.('Retry-After'));
+  return Math.min(30000, Math.max(2000, Number.isFinite(seconds) ? seconds * 1000 : 0));
+};
 
 const isAbort = (err, signal) => Boolean(signal?.aborted || err?.name === 'AbortError');
 
@@ -151,7 +157,7 @@ export async function uploadAndInspectBackup({
         }
 
         if (RETRYABLE_HTTP.has(res.status) && attempt < MAX_CHUNK_RETRIES) {
-          await waitMs(400 * (attempt + 1), signal);
+          await waitMs(res.status === 429 ? rateLimitWait(res) : 400 * (attempt + 1), signal);
           continue;
         }
 

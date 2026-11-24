@@ -240,6 +240,43 @@ function restoreExtraCopies(db, rows) {
     }
 }
 
+/** The household copies of a volume (no owner) with everything a bulk undo needs to put them back, oldest first. */
+function householdCopies(db, volumeId) {
+    return db.prepare(`SELECT id, purchase_price, purchase_date, condition, created_at, lent_to_user_id, lent_to_name, lent_at
+        FROM volume_copies WHERE volume_id = ? AND owner_user_id IS NULL ORDER BY id`).all(volumeId);
+}
+
+/**
+ * Makes the household copies of a volume exactly the snapshot `rows` of householdCopies (price, date, condition and
+ * lending included), as long as no personal copy stands there now (a personal copy replaces the household's). The
+ * rows go in before the stand-in is removed, so the volume never counts as without copies in between.
+ */
+function restoreHouseholdCopies(db, volumeId, rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) return;
+    if (db.prepare('SELECT 1 FROM volume_copies WHERE volume_id = ? AND owner_user_id IS NOT NULL').get(volumeId)) return;
+    const kept = [];
+    for (const r of list) {
+        const values = [r.purchase_price ?? null, r.purchase_date ?? null, r.condition ?? null,
+            lentUser(db, r.lent_to_user_id), r.lent_to_name ?? null, r.lent_at ?? null];
+        const id = Number(r.id);
+        const stored = Number.isSafeInteger(id) ? db.prepare('SELECT volume_id, owner_user_id FROM volume_copies WHERE id = ?').get(id) : null;
+        if (stored && stored.volume_id === volumeId && stored.owner_user_id === null) {
+            db.prepare(`UPDATE volume_copies SET purchase_price = ?, purchase_date = ?, condition = ?, lent_to_user_id = ?, lent_to_name = ?,
+                lent_at = ?, created_at = COALESCE(?, created_at) WHERE id = ?`).run(...values, r.created_at ?? null, id);
+            kept.push(id);
+            continue;
+        }
+        // the copy's own id when it is free again, so that open views keep pointing at it
+        const result = db.prepare(`INSERT INTO volume_copies (id, volume_id, purchase_price, purchase_date, condition, lent_to_user_id,
+            lent_to_name, lent_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`)
+            .run(stored || !Number.isSafeInteger(id) ? null : id, volumeId, ...values, r.created_at ?? null);
+        kept.push(Number(result.lastInsertRowid));
+    }
+    db.prepare(`DELETE FROM volume_copies WHERE volume_id = ? AND owner_user_id IS NULL AND id NOT IN (${kept.map(() => '?').join(',')})`)
+        .run(volumeId, ...kept);
+}
+
 /**
  * The copies matching `where` (over volume_copies c and volumes v) in the answer shape, by volume id, oldest first:
  * { id, owner_user_id, owner (null: the household's), price, purchase_date, condition, lent_to_user_id, lent_to
@@ -290,6 +327,8 @@ module.exports = {
     addCopy,
     addExtraCopy,
     extraCopies,
+    householdCopies,
+    restoreHouseholdCopies,
     restoreExtraCopies,
     removeCopy,
     hasCopy,

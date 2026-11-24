@@ -15,7 +15,7 @@ const { HttpError, msg, msgList, badRequest, forbidden, notFound, conflict } = r
 const { MAX_NOTES_LENGTH } = require('../csvExchange');
 const { moveVolumeToTrash, forgetTrashedVolume } = require('../lib/trash');
 const { addRead, removeRead } = require('../lib/marks');
-const { hasOwner, removeCopy, followVolumeValue, setOwners, extraCopies, restoreExtraCopies } = require('../lib/copies');
+const { hasOwner, removeCopy, followVolumeValue, setOwners, extraCopies, restoreExtraCopies, householdCopies, restoreHouseholdCopies } = require('../lib/copies');
 const { parseLanguage } = require('../lib/language');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseSortAfter, parseYear, parsePriority, isValidDate, parseDate,
@@ -507,7 +507,7 @@ function bulkSnapshot(ctx, vol, { readUser, readOnly = false }) {
     const entry = readOnly
         ? { id: vol.id, deleted: false, read_only: true }
         : { id: vol.id, deleted: false, volume: Object.fromEntries(BULK_SNAPSHOT_COLUMNS.map((key) => [key, vol[key] ?? null])), owners: ownerRows(ctx, vol.id),
-            extra_copies: extraCopies(ctx.db, vol.id) };
+            extra_copies: extraCopies(ctx.db, vol.id), household: householdCopies(ctx.db, vol.id) };
     if (readUser) {
         entry.read_user = readUser;
         entry.reads = ctx.db.prepare('SELECT user_id, read_at FROM shelf_volume_reads WHERE volume_id = ? AND user_id = ?').all(vol.id, readUser);
@@ -708,10 +708,12 @@ function revertBulk(ctx, token) {
     const member = ctx.db.prepare('SELECT 1 FROM shelf_members WHERE shelf_id = ? AND user_id = ?');
     // marks come back for members of that shelf only (an account deleted meanwhile is a member of none)
     const members = (rows, shelfId) => (Array.isArray(rows) ? rows : []).filter((row) => member.get(shelfId, row.user_id));
-    const putOwners = (volumeId, owners, shelfId, extras = []) => {
+    const putOwners = (volumeId, owners, shelfId, extras = [], household = []) => {
         const all = Array.isArray(owners) ? owners : [];
         const kept = members(all, shelfId);
         restoreOwners(ctx, volumeId, kept, { household: all.length === 0 });
+        // the household's copy comes back as it was: its own price, date, condition and lending
+        if (all.length === 0) restoreHouseholdCopies(ctx.db, volumeId, household);
         // further copies of a person (migration 56) come back with their first one
         restoreExtraCopies(ctx.db, (Array.isArray(extras) ? extras : []).filter((c) => c.volume_id === volumeId));
         if (kept.length < all.length) syncStatusWithOwners(ctx.db, volumeId);
@@ -755,7 +757,7 @@ function revertBulk(ctx, token) {
                             ctx.db.prepare(`UPDATE volumes SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => snap.volume[k] ?? null), snap.id);
                             catalogWrite.commit(ctx, 'volume', stored);
                         }
-                        putOwners(snap.id, snap.owners, shelfId, snap.extra_copies);
+                        putOwners(snap.id, snap.owners, shelfId, snap.extra_copies, snap.household);
                         touchVolumes(ctx, snap.id);
                     }
                     if (snap.read_user) {

@@ -10,6 +10,7 @@ import WishControl from './WishControl';
 import { authorShelfPath, splitAuthors } from '../../utils/seriesMeta';
 import CollectingControl from './CollectingControl';
 import EditionSwitcher from './EditionSwitcher';
+import { askConfirm } from '../modals/askConfirm';
 import SeriesEditPanel, { COVER_UPLOAD_TEXT } from './SeriesEditPanel';
 import WebtoonPill from '../common/WebtoonPill';
 import LanguagePill from '../common/LanguagePill';
@@ -73,6 +74,7 @@ export default function MangaHeroCard({
   setEditing,
   startEditing,
   cancelEditing,
+  isEditDirty = false,
   setFormData,
   totalOwnedValue,
   totalTarget,
@@ -96,6 +98,13 @@ export default function MangaHeroCard({
   const chapters = getChapterProgress(manga || {});
   const beginEdit = () => (startEditing ? startEditing() : setEditing(true));
   const endEdit = () => (cancelEditing ? cancelEditing() : setEditing(false));
+  // the X asks before typed input goes ("Abbrechen" says what it does and discards at once)
+  const closeEdit = async () => {
+    if (isEditDirty && !(await askConfirm(tr('Deine Eingaben wurden noch nicht gespeichert und gehen verloren.'), {
+      title: tr('Ungespeicherte Änderungen verwerfen?'), confirmLabel: tr('Verwerfen')
+    }))) return;
+    endEdit();
+  };
   // the hook reads the file synchronously; clearing the input lets the same file be picked again
   const handleCoverInput = (e) => {
     handleCoverUpload(e);
@@ -312,7 +321,7 @@ export default function MangaHeroCard({
                     {tr('Sammlungs-Fortschritt')}
                   </span>
                   <span className="text-slate-400 font-mono">
-                    <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : tr('im Besitz')}{extrasCount > 0 ? ` ${tn('+ {n} Extras', '+ {n} Extras', extrasCount)}` : ''} 
+                    <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : tr('im Besitz')}{extrasCount > 0 ? ` ${tn('+ {n} Extra', '+ {n} Extras', extrasCount)}` : ''} 
                     {completionPct !== null && ` (${completionPct}%)`}
                   </span>
                 </div>
@@ -351,6 +360,7 @@ export default function MangaHeroCard({
           manga={manga}
           movableShelves={movableShelves}
           onCancel={endEdit}
+          onClose={closeEdit}
           onEditionsChanged={onEditionsChanged}
           saving={saving}
           setEditLookupResults={setEditLookupResults}

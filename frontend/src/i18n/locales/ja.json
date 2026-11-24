@@ -30,7 +30,7 @@
   "(öffnet in neuem Tab)": "(新しいタブで開きます)",
   "+ Band {volume} gelesen": "+ {volume}巻を既読",
   "+ Foto": "+ 写真",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "other": "+ 他{n}件の特典"
   },
   "+ {n} angekündigt|+ {n} angekündigt": {
@@ -3438,7 +3438,7 @@
   "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
     "other": "収納ボックスや特別巻などのおまけ{n}点"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "other": "特典{n}件"
   },
   "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {
@@ -3514,6 +3514,9 @@
     "other": "{n}週間"
   },
   "{n} abgeschlossen": "{n}件完結",
+  "{n} ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.|{n} ausgewählte Bände sind im Besitz: Ihre Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten, Zustand und Ausleihen. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": {
+    "other": "選択した{n}冊は所有中です：所有者、購入価格、購入日、状態、貸出とともに所持本が削除されます。直後の10秒間は元に戻せます。"
+  },
   "{n} eigene Staffel|{n} eigene Staffeln": {
     "other": "独自シーズン{n}件"
   },

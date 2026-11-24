@@ -32,7 +32,7 @@
   "(öffnet in neuem Tab)": "(se abre en una pestaña nueva)",
   "+ Band {volume} gelesen": "+ Tomo {volume} leído",
   "+ Foto": "+ Foto",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "one": "+ {n} extra",
     "many": "+ {n} extras",
     "other": "+ {n} extras"
@@ -3586,7 +3586,7 @@
     "many": "{n} extras como estuches o tomos especiales",
     "other": "{n} extras como estuches o tomos especiales"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "one": "{n} extra",
     "many": "{n} extras",
     "other": "{n} extras"
@@ -3712,6 +3712,11 @@
     "other": "{n} semanas"
   },
   "{n} abgeschlossen": "{n} completados",
+  "{n} ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.|{n} ausgewählte Bände sind im Besitz: Ihre Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten, Zustand und Ausleihen. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": {
+    "one": "{n} tomo seleccionado está en posesión: su ejemplar se elimina, con propietario, precio de compra, fecha de compra, estado y préstamo. Justo después puedes deshacerlo durante 10 segundos.",
+    "many": "{n} tomos seleccionados están en posesión: sus ejemplares se eliminan, con propietarios, precios de compra, fechas de compra, estado y préstamos. Justo después puedes deshacerlo durante 10 segundos.",
+    "other": "{n} tomos seleccionados están en posesión: sus ejemplares se eliminan, con propietarios, precios de compra, fechas de compra, estado y préstamos. Justo después puedes deshacerlo durante 10 segundos."
+  },
   "{n} eigene Staffel|{n} eigene Staffeln": {
     "one": "{n} temporada propia",
     "many": "{n} temporadas propias",

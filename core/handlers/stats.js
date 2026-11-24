@@ -5,6 +5,7 @@ const { animeStats } = require('../anime/stats');
 const { badRequest, notFound } = require('../errors');
 const access = require('../lib/access');
 const { qstr } = require('../lib/query');
+const { zonedToday } = require('../radar');
 
 /** Last `count` months (YYYY-MM) up to and including `now`, oldest first. */
 function lastMonthKeys(now, count) {
@@ -622,7 +623,8 @@ function yearReview(realCtx, { query } = {}) {
     const q = query || {};
     const ctx = access.scopedCtx(realCtx, access.requestedShelfIds(realCtx, qstr(q.shelf_id)));
     const user = readerFromQuery(realCtx, ctx, q);
-    const current = ctx.now().getFullYear();
+    // the year of the app's time zone (APP_TIMEZONE), not of the host: on New Year's night they can differ
+    const current = zonedToday(ctx.now(), ctx.config.appTimeZone).getFullYear();
     const rawYear = qstr(q.year);
     const year = rawYear === undefined || rawYear === '' ? current : Number(rawYear);
     if (!Number.isSafeInteger(year) || year < 1900 || year > current + 1) throw badRequest('Ungültiges Jahr');
@@ -696,7 +698,8 @@ function yearReview(realCtx, { query } = {}) {
         body: {
             user: { id: user.id, username: user.username },
             year,
-            years: [...years].filter((y) => y <= current).sort((a, b) => b - a),
+            // the asked year stays in the list, so the picker keeps showing it (and the way back) for a reader without data there
+            years: [...years.add(year)].filter((y) => y <= current).sort((a, b) => b - a),
             read: { volumes, pages, previous_year: previous, started },
             best_month: bestMonth,
             top_series: topSeries,

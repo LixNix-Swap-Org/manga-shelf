@@ -549,10 +549,10 @@ describe('useVolumeActions', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('un-owning offers "Rückgängig", which restores the owner row with its date, price and the volume date', async () => {
+  it('un-owning offers "Rückgängig", which restores the owner row with its date, price, condition, lending and the volume date', async () => {
     const fetchMock = vi.fn(async () => res(200, {
       status: 'Fehlt', owners: [], owned_by_me: false, previous_purchase_date: '2024-03-01',
-      removed_owner: { user_id: 2, price: 6.5, purchase_date: '2024-03-01', condition: null }
+      removed_owner: { user_id: 2, price: 6.5, purchase_date: '2024-03-01', condition: 'Gut', lent_to_user_id: null, lent_to_name: 'Tom', lent_at: '2024-05-01' }
     }));
     vi.stubGlobal('fetch', fetchMock);
     const { result, fetchManga } = renderActions();
@@ -564,7 +564,9 @@ describe('useVolumeActions', () => {
     fetchMock.mockImplementation(async () => res(200, { status: 'Vorhanden' }));
     await act(async () => { await toast.action.onClick(); });
     expect(fetchMock.mock.calls[1][0]).toBe('/api/volumes/5/owners');
-    expect(bodyOf(fetchMock.mock.calls[1])).toEqual({ owned: true, purchase_date: '2024-03-01', price: 6.5, previous_purchase_date: '2024-03-01' });
+    expect(bodyOf(fetchMock.mock.calls[1])).toEqual({
+      owned: true, purchase_date: '2024-03-01', price: 6.5, condition: 'Gut', lent: { name: 'Tom', at: '2024-05-01' }, previous_purchase_date: '2024-03-01'
+    });
     expect(fetchManga).toHaveBeenCalledTimes(2);
   });
 
