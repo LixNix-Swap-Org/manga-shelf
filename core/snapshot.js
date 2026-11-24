@@ -173,7 +173,6 @@ function groupBy(rows, key) {
  * rows). Shared by the detail route and the offline snapshot.
  */
 function buildMangaDetail(manga, volumes, readsByVolume, ownersByVolume, users, userId, editions = [], chapters = [], catalogFlags = null) {
-    delete manga.manga_passion_edition_data;
     // the catalog entry (migration 41) and what this shelf set itself (migration 46): never anything about a shelf the
     // caller does not belong to (catalogWrite.seriesFlags), and no catalog id (a reused id would tell the entry existed)
     manga.catalog = catalogWrite.view(manga.catalog_series_id, manga.local_fields, manga.catalog_source_fields, catalogFlags);

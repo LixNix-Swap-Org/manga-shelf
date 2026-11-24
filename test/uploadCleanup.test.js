@@ -132,7 +132,7 @@ test('the token index finds exactly the orphans a plain substring scan finds', (
     });
 
     const rows = [
-        ...db.prepare('SELECT cover_image, banner_image, description, manga_passion_edition_data FROM mangas').all(),
+        ...db.prepare('SELECT cover_image, banner_image, description FROM mangas').all(),
         ...db.prepare(`SELECT c.cover_image, c.banner_image, c.description, c.mp_edition_data FROM catalog_series c
             WHERE EXISTS (SELECT 1 FROM mangas m WHERE m.catalog_series_id = c.id)`).all(),
         ...db.prepare('SELECT cover_image, images, notes FROM volumes').all()

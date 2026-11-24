@@ -11,7 +11,7 @@ const backupsDir = path.join(dataDir, 'backups');
 const UNDO_SNAPSHOT = /^(vor-wiederherstellung|vor-update)-.+\.zip$/;
 
 const REFERENCE_COLUMNS = {
-    mangas: ['cover_image', 'banner_image', 'description', 'manga_passion_edition_data'],
+    mangas: ['cover_image', 'banner_image', 'description'],
     volumes: ['cover_image', 'images', 'notes'],
     animes: ['cover_image', 'banner_image'],
     catalog_series: ['cover_image', 'banner_image', 'description', 'mp_edition_data'],

@@ -208,11 +208,13 @@ test('manga_passion_id: PUT without the field keeps the link, an invalid id is a
 test('GET /mangas leaves out description and edition data; the detail keeps the description only', async () => {
     const id = await createManga({ title: 'Schlanke Liste', description: 'Lange Beschreibung' });
     await addVolume(id, '1');
-    db.prepare('UPDATE mangas SET manga_passion_edition_data = ? WHERE id = ?').run(JSON.stringify({ description: 'x' }), id);
+    // the edition data sits on the catalog entry (migration 51), the series column is gone (migration 61)
+    db.prepare('UPDATE catalog_series SET mp_edition_data = ? WHERE id = (SELECT catalog_series_id FROM mangas WHERE id = ?)').run(JSON.stringify({ description: 'x' }), id);
 
     const row = await listRow(id);
     assert.equal('description' in row, false);
     assert.equal('manga_passion_edition_data' in row, false);
+    assert.equal('mp_edition_data' in row, false);
     for (const key of ['title', 'cover_image', 'owned_volumes', 'volume_count', 'read_volume_count', 'regular_owned', 'max_regular_number', 'total_value', 'manga_passion_id', 'status', 'total_volumes']) {
         assert.ok(key in row, key);
     }
