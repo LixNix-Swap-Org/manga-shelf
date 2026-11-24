@@ -14,7 +14,7 @@ test('an undefined parameter is refused with its position or name; null and the 
         prepare: (sql) => {
             const stmt = conn.prepare(sql);
             const fix = (params) => params.map((p) => (p === undefined ? null : p));
-            return { run: (...p) => stmt.run(...fix(p)), get: (...p) => stmt.get(...fix(p)), all: (...p) => stmt.all(...fix(p)), columns: () => stmt.columns() };
+            return { run: (...p) => stmt.run(...fix(p)), get: (...p) => stmt.get(...fix(p)), all: (...p) => stmt.all(...fix(p)), setReadBigInts: (on) => stmt.setReadBigInts(on) };
         }
     };
     for (const db of [dbFromConnection(conn), lenient]) {
@@ -25,7 +25,10 @@ test('an undefined parameter is refused with its position or name; null and the 
         assert.equal(conn.prepare('SELECT count(*) AS n FROM t').get().n, 0, 'nothing was written');
         ctx.db.prepare('INSERT INTO t (a, b) VALUES (?, ?)').run(null, Buffer.from('x'));
         assert.equal(ctx.db.prepare('SELECT count(*) AS n FROM t WHERE a IS NULL').get().n, 1);
-        assert.deepEqual(ctx.db.prepare('SELECT a, b FROM t').columns().map((c) => c.name), ['a', 'b'], 'other calls reach the statement');
+        // other calls reach the statement (setReadBigInts exists on node:sqlite since Node 22.5)
+        const big = ctx.db.prepare('SELECT count(*) AS n FROM t');
+        big.setReadBigInts(true);
+        assert.equal(big.get().n, 1n);
         conn.exec('DELETE FROM t');
     }
     // wrapping twice changes nothing
