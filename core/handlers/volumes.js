@@ -19,7 +19,7 @@ const { hasOwner, removeCopy, followVolumeValue, setOwners, extraCopies, restore
 const { parseLanguage } = require('../lib/language');
 const {
     VOLUME_STATUSES, VOLUME_TYPES, BULK_SET_FIELDS, isBlank, parsePrice, parsePages, parseSortAfter, parseYear, parsePriority, isValidDate, parseDate,
-    parseWholeNumber, parseIdList, parseBulkSet, parseFlag, isValidReadAt
+    parseWholeNumber, parseIdList, parseBulkSet, parseFlag, isValidReadAt, isImageRef
 } = require('../lib/validate');
 
 const MAX_BATCH_VOLUMES = 300;
@@ -118,16 +118,31 @@ function updatedField(body, key, stored, parse) {
     return parsed;
 }
 
-// Photo list as a JSON array of strings, given as an array or a JSON string (empty = none)
-const parseImagesInput = (val) => {
+/** The entries of a stored photo list (a JSON array of strings), [] for none or a damaged value. */
+const storedImages = (stored) => {
+    try {
+        const list = JSON.parse(stored || '[]');
+        return Array.isArray(list) ? list : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+// Photo list as a JSON array of strings, given as an array or a JSON string (empty = none). Every new entry must be an
+// image reference (isImageRef); an entry the stored list already holds stays allowed, so an old row can still be saved.
+const parseImagesInput = (val, stored = null) => {
     if (val === null || val === undefined || val === '') return { value: null };
     let list = val;
     if (typeof val === 'string') {
         try { list = JSON.parse(val); } catch (e) { return { error: true }; }
     }
     if (!Array.isArray(list) || list.length > 50 || !list.every(x => typeof x === 'string' && x.length <= 1000)) return { error: true };
+    const kept = storedImages(stored);
+    if (!list.every(x => isImageRef(x) || kept.includes(x))) return { error: true };
     return { value: JSON.stringify(list) };
 };
+
+const IMAGE_URL_ERROR = 'Ungültige Bild-URL';
 
 /** Parses the numeric fields of a request body; returns { values } or { error }. */
 function parseNumericFields(source, parsers) {
@@ -203,6 +218,7 @@ function create(ctx, { body }) {
     const notesVal = cleanNotes(notes);
     const language = parseVolumeLanguage(body.language);
     if (language.error) throw badRequest(VOLUME_LANGUAGE_ERROR, 'LANGUAGE_INVALID');
+    if (!isBlank(cover_image) && !isImageRef(String(cover_image))) throw badRequest(IMAGE_URL_ERROR);
     let imagesVal = null;
     if (images) {
         const parsedImages = parseImagesInput(images);
@@ -379,9 +395,14 @@ function update(ctx, { params, body }) {
 
     let imagesVal = vol.images;
     if (body.images !== undefined) {
-        const parsedImages = parseImagesInput(body.images);
+        const parsedImages = parseImagesInput(body.images, vol.images);
         if (parsedImages.error) throw badRequest('Ungültige Bilderliste');
         imagesVal = parsedImages.value;
+    }
+    // a new cover must be an image reference; the stored one (or one of the stored photos) sent back stays allowed
+    if (!isBlank(body.cover_image) && !sameAsStored(body.cover_image, vol.cover_image) && !isImageRef(String(body.cover_image))
+        && !storedImages(vol.images).includes(String(body.cover_image).trim())) {
+        throw badRequest(IMAGE_URL_ERROR);
     }
 
     let cover_image = body.cover_image !== undefined

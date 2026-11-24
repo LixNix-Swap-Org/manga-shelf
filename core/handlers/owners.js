@@ -3,7 +3,7 @@ const {
     OWNED_STATUS, isLegacyReadStatus, addOwner, listOwners, syncStatusWithOwners, convertLegacyRead, purchaseDateFromRemainingOwners
 } = require('../lib/owners');
 const { hasCopy, hasOwner, claimHouseholdCopy, updateCopy, removeCopy, extraCopies, addExtraCopy } = require('../lib/copies');
-const { resolveTargetUser, volumeAccess } = require('../lib/access');
+const { resolveTargetUser, volumeAccess, canSeeUser } = require('../lib/access');
 const { badRequest, notFound } = require('../errors');
 const { isBlank, parsePrice, parseFlag, isValidDate, parseDate, parseCondition } = require('../lib/validate');
 const { FIELD_ERRORS, DATE_ERROR } = require('./volumes');
@@ -12,8 +12,12 @@ const { touchVolumes } = require('../lib/volumeChanges');
 
 const MAX_EXTRA_COPIES = 4;
 
-/** `extra_copies` of an undo body: [{ price, purchase_date, condition, lent_to_user_id, lent_to_name, lent_at }], checked. */
-function readExtraCopies(raw) {
+/**
+ * `extra_copies` of an undo body: [{ price, purchase_date, condition, lent_to_user_id, lent_to_name, lent_at }], checked.
+ * A borrower account the caller may not see by name is not linked (the copy keeps the name as a person without an
+ * account), like PUT /volumes/:id/copies/:copyId refuses it.
+ */
+function readExtraCopies(ctx, raw) {
     if (raw === undefined || raw === null) return [];
     if (!Array.isArray(raw) || raw.length > MAX_EXTRA_COPIES) throw badRequest('Ungültige weitere Exemplare');
     return raw.map((c) => {
@@ -24,7 +28,7 @@ function readExtraCopies(raw) {
         const lentAt = parseDate(c.lent_at);
         if (price.error || date.error || condition.error || lentAt.error) throw badRequest('Ungültige weitere Exemplare');
         const name = typeof c.lent_to_name === 'string' ? c.lent_to_name.trim().slice(0, 64) : null;
-        const lentUser = Number.isInteger(c.lent_to_user_id) ? c.lent_to_user_id : null;
+        const lentUser = Number.isInteger(c.lent_to_user_id) && canSeeUser(ctx, c.lent_to_user_id) ? c.lent_to_user_id : null;
         return {
             price: price.value ?? null, purchase_date: date.value ?? null, condition: condition.value ?? null,
             lent_to_user_id: lentUser, lent_to_name: name || null, lent_at: (lentUser || name) ? lentAt.value ?? null : null
@@ -50,7 +54,7 @@ function toggleOwner(ctx, { params, body }) {
     const restoreDate = Object.prototype.hasOwnProperty.call(body, 'previous_purchase_date') ? parseDate(body.previous_purchase_date) : null;
     if (restoreDate?.error) throw badRequest(DATE_ERROR);
     // undo of a toggle: the further copies the earlier answer reported (removed_extra_copies, migration 56)
-    const restoreExtras = readExtraCopies(body.extra_copies);
+    const restoreExtras = readExtraCopies(ctx, body.extra_copies);
 
     let status;
     let removedOwner = null;

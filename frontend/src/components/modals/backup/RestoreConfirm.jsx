@@ -13,6 +13,9 @@ const ROWS = [
 
 // i18n
 const SCHEMA_NEWER_FALLBACK = 'Das Backup stammt aus einer neueren Version von Manga Shelf – erst Manga Shelf aktualisieren.';
+// the server's own line (routes/backups.js), used when an older server sends the count without the line
+// i18n
+const MISSING_UPLOADS_TEXT = 'Bilder, die das Backup nennt, aber weder im Backup noch auf diesem Server liegen: {count}. Diese Cover und Fotos fehlen nach dem Einspielen.';
 
 /** Step 1 result of the two-step restore: what the backup holds, what it would replace, and the warnings. */
 export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerChange, restoring, onConfirm, onCancel, username = '', passwordError = '' }) {
@@ -27,7 +30,7 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
     source, created_at: createdAt, created_at_source: createdAtSource, app_version: appVersion,
     current_app_version: currentAppVersion, schema_version: schemaVersion, current_schema_version: currentSchemaVersion,
     schema_newer: schemaNewer, counts = {}, current_counts: currentCounts = {}, uploads_bytes: uploadsBytes,
-    current_user: currentUser, relogin, expires_at: expiresAt
+    current_user: currentUser, relogin, expires_at: expiresAt, missing_uploads: missingUploads
   } = inspection;
   const warnings = Array.isArray(inspection.warnings) ? inspection.warnings : [];
 
@@ -46,8 +49,12 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
   const schemaIndex = schemaNewer ? warnings.findIndex(w => /neueren Version/.test(w)) : -1;
   const userLine = relogin ? (userIndex >= 0 ? shown(userIndex) : t('Du wirst danach abgemeldet.')) : null;
   const schemaLine = schemaNewer ? (schemaIndex >= 0 ? shown(schemaIndex) : t(SCHEMA_NEWER_FALLBACK)) : null;
+  // a backup without (some of) its images: own box, it is easy to miss in the list and cannot be undone by the images
+  const hasMissing = Number.isFinite(missingUploads) && missingUploads > 0;
+  const imagesIndex = hasMissing ? warnings.findIndex(w => /weder im Backup noch auf diesem Server/.test(w)) : -1;
+  const imagesLine = hasMissing ? (imagesIndex >= 0 ? shown(imagesIndex) : t(MISSING_UPLOADS_TEXT, { count: formatNumber(missingUploads) })) : null;
   const otherLines = warnings
-    .map((w, i) => (w === warnings[userIndex] || w === warnings[schemaIndex] ? null : shown(i)))
+    .map((w, i) => (w === warnings[userIndex] || w === warnings[schemaIndex] || w === warnings[imagesIndex] ? null : shown(i)))
     .filter(Boolean);
   const blocked = schemaNewer && !allowNewer;
   const date = createdAt ? formatDateTime(createdAt) : '';
@@ -108,11 +115,11 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
           ))}
           <tr>
             <th scope="row" className="text-left font-medium py-1.5">{t('Bilder')}</th>
-            <td className="text-right font-mono py-1.5 px-2">
+            <td className={`text-right font-mono py-1.5 px-2 ${hasMissing ? 'text-amber-300 font-semibold' : ''}`}>
               {formatNumber(counts.uploads ?? 0)}
               {uploadsBytes > 0 && <span className="text-slate-400"> ({formatMegabytes(uploadsBytes)})</span>}
             </td>
-            <td className="text-right font-mono py-1.5 pl-2 text-slate-400">–</td>
+            <td className="text-right font-mono py-1.5 pl-2">{Number.isFinite(currentCounts.uploads) ? formatNumber(currentCounts.uploads) : '–'}</td>
           </tr>
         </tbody>
       </table>
@@ -140,6 +147,13 @@ export default function RestoreConfirm({ inspection, allowNewer, onAllowNewerCha
             />
             {t('Trotzdem einspielen (nicht empfohlen)')}
           </label>
+        </div>
+      )}
+
+      {imagesLine && (
+        <div role="note" className="bg-amber-500/10 border border-amber-500/50 text-amber-100 p-3 rounded-xl text-sm font-semibold flex gap-2">
+          <TriangleExclamationPoint className="w-4 h-4 shrink-0 mt-0.5 text-amber-300" aria-hidden="true" />
+          <span>{imagesLine}</span>
         </div>
       )}
 

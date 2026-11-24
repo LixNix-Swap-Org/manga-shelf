@@ -4,7 +4,7 @@ const { inferVolumeType } = require('./lib/volumeType');
 const { isLegacyReadStatus, OWNED_STATUS } = require('./lib/owners');
 const { canonicalVolumeNumber } = require('./lib/volumeNumber');
 const { msg, msgData, isMsg } = require('./errors');
-const { VOLUME_STATUSES: STATUSES, VOLUME_TYPES: TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, parseSortAfter } = require('./lib/validate');
+const { VOLUME_STATUSES: STATUSES, VOLUME_TYPES: TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, parseSortAfter, isImageRef } = require('./lib/validate');
 const { parseLanguage, normalizeRegion, normalizeCurrency, isWorkKey } = require('./lib/language');
 
 const DELIMITER = ';';
@@ -405,6 +405,7 @@ function readSeriesMeta(get, line, warnings) {
         const value = get(key);
         if (!value) continue;
         if (value.length > max) warn(label, shorten(value), maxChars(max));
+        else if ((field === 'cover_image' || field === 'banner_image') && !isImageRef(value)) warn(label, shorten(value));
         else meta[field] = value;
     }
     return meta;
@@ -545,6 +546,10 @@ function mapCsvRows(rows) {
             warnings.push(ignoredValue(line, 'Band-Cover', shorten(coverImage), maxChars(MAX_URL_LENGTH)));
             coverImage = null;
         }
+        if (coverImage && !isImageRef(coverImage)) {
+            warnings.push(ignoredValue(line, 'Band-Cover', shorten(coverImage)));
+            coverImage = null;
+        }
         const imagesRaw = get(row, 'images');
         let imageList = imagesRaw ? imagesRaw.split('|').map(s => s.trim()).filter(Boolean) : [];
         if (imageList.length > MAX_IMAGES) {
@@ -555,6 +560,8 @@ function mapCsvRows(rows) {
             warnings.push(ignoredValue(line, 'Bilder', shorten(image), msg('maximal {max} Zeichen je Bild', { max: MAX_URL_LENGTH })));
         }
         imageList = imageList.filter(s => s.length <= MAX_URL_LENGTH);
+        for (const image of imageList.filter(s => !isImageRef(s))) warnings.push(ignoredValue(line, 'Bilder', shorten(image)));
+        imageList = imageList.filter(isImageRef);
         const volumeLanguageRaw = get(row, 'volume_language');
         const volumeLanguage = volumeLanguageRaw ? parseLanguage(volumeLanguageRaw) : null;
         if (volumeLanguageRaw && !volumeLanguage) warnings.push(ignoredValue(line, 'Bandsprache', shorten(volumeLanguageRaw)));

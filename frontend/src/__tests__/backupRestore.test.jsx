@@ -475,6 +475,40 @@ describe('BackupRestoreModal two-step restore', () => {
     expect(withPasswordWarnings(inspection()).warnings).toEqual(['Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.']);
   });
 
+  it('images the backup names but nobody has: an own box (not in the list), the counts table shows the server\'s images', async () => {
+    const imagesLine = 'Bilder, die das Backup nennt, aber weder im Backup noch auf diesem Server liegen: 1561. Diese Cover und Fotos fehlen nach dem Einspielen.';
+    mockFetch({
+      'GET /api/backups': () => json(200, { backups: [snapshot()] }),
+      'POST /api/backup/inspect': () => json(200, inspection({
+        counts: { mangas: 162, volumes: 1384, users: 5, admins: 2, uploads: 0 },
+        uploads_bytes: 0,
+        current_counts: { mangas: 0, volumes: 0, users: 1, uploads: 0 },
+        missing_uploads: 1561,
+        warnings: [imagesLine, 'Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.']
+      }))
+    });
+    renderBackup();
+    await openConfirmation();
+    const box = screen.getByRole('note');
+    expect(box.textContent).toBe(imagesLine);
+    const list = screen.getByRole('list', { name: 'Hinweise zur Wiederherstellung' });
+    expect(within(list).queryByText(imagesLine)).toBeNull();
+    const imagesRow = screen.getByRole('row', { name: /^Bilder/ });
+    expect(within(imagesRow).getAllByRole('cell').map(c => c.textContent)).toEqual(['0', '0']);
+  });
+
+  it('images: an older server without the line still gets the box from missing_uploads; none without missing images', async () => {
+    mockFetch({
+      'GET /api/backups': () => json(200, { backups: [snapshot()] }),
+      'POST /api/backup/inspect': () => json(200, inspection({ missing_uploads: 3 }))
+    });
+    renderBackup();
+    await openConfirmation();
+    expect(screen.getByRole('note').textContent).toMatch(/weder im Backup noch auf diesem Server liegen: 3\./);
+    const imagesRow = screen.getByRole('row', { name: /^Bilder/ });
+    expect(within(imagesRow).getAllByRole('cell')[1].textContent).toBe('–');
+  });
+
   it('newer schema: red box, restore disabled until the override is ticked, then allow_newer_schema is sent', async () => {
     const schemaLine = 'Backup stammt aus einer neueren Version (Schema v15 > v14) – erst Manga Shelf aktualisieren.';
     vi.stubGlobal('location', { ...window.location, reload: vi.fn() });
@@ -791,6 +825,77 @@ describe('BackupRestoreModal large chunked uploads', () => {
       '/api/backup/uploads/up-r?offset=15'
     ]);
   });
+  it('UPLOAD_BUSY after a dropped piece: waits and tries again; a piece the server kept moves on via OFFSET_MISMATCH', async () => {
+    vi.useFakeTimers();
+    try {
+      const putUrls = [];
+      let attempt = 0;
+      const pending = uploadAndInspectBackup({
+        file: new Uint8Array(20),
+        filename: 'busy.zip',
+        threshold: 5,
+        chunkSize: 10,
+        request: {
+          postForm: vi.fn(),
+          postJson: async (url) => (url === '/api/backup/uploads'
+            ? { ok: true, status: 201, data: { upload_id: 'up-b', chunk_size: 10 }, res: null }
+            : { ok: true, status: 200, data: { staging_id: STAGING }, res: null }),
+          putChunk: async (url) => {
+            putUrls.push(url);
+            attempt++;
+            // the connection drops, the server still reads the old stream twice, then it has kept the whole piece
+            if (attempt === 1) throw new TypeError('Failed to fetch');
+            if (attempt === 2 || attempt === 3) return { ok: false, status: 409, data: { code: 'UPLOAD_BUSY' }, res: null };
+            if (attempt === 4) return { ok: false, status: 409, data: { code: 'OFFSET_MISMATCH', expected: 10 }, res: null };
+            return { ok: true, status: 200, data: { received: 20 }, res: null };
+          },
+          deleteUpload: vi.fn()
+        }
+      });
+      await vi.runAllTimersAsync();
+      const res = await pending;
+      expect(res.ok).toBe(true);
+      expect(res.data.staging_id).toBe(STAGING);
+      expect(putUrls).toEqual([
+        '/api/backup/uploads/up-b?offset=0',
+        '/api/backup/uploads/up-b?offset=0',
+        '/api/backup/uploads/up-b?offset=0',
+        '/api/backup/uploads/up-b?offset=0',
+        '/api/backup/uploads/up-b?offset=10'
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('UPLOAD_BUSY that never ends gives up after its retries and deletes the upload', async () => {
+    vi.useFakeTimers();
+    try {
+      const putChunk = vi.fn(async () => ({ ok: false, status: 409, data: { code: 'UPLOAD_BUSY' }, res: null }));
+      const deleteUpload = vi.fn();
+      const pending = uploadAndInspectBackup({
+        file: new Uint8Array(20),
+        filename: 'busy.zip',
+        threshold: 5,
+        chunkSize: 10,
+        request: {
+          postForm: vi.fn(),
+          postJson: async () => ({ ok: true, status: 201, data: { upload_id: 'up-c', chunk_size: 10 }, res: null }),
+          putChunk,
+          deleteUpload
+        }
+      });
+      await vi.runAllTimersAsync();
+      const res = await pending;
+      expect(res.ok).toBe(false);
+      expect(res.data.code).toBe('UPLOAD_BUSY');
+      expect(putChunk).toHaveBeenCalledTimes(7);
+      expect(deleteUpload).toHaveBeenCalledWith('/api/backup/uploads/up-c');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('falls back to one multipart upload when an older server has no chunked upload route', async () => {
     const bytes = new Uint8Array(25);
     const postForm = vi.fn(async () => ({ ok: true, status: 200, data: { staging_id: STAGING }, res: null }));

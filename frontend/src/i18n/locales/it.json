@@ -569,6 +569,7 @@
   "Bild-URL oder Manga-Passion-Link (z. B. https://www.manga-passion.de/volumes/9736/...)": "URL dell’immagine o link di Manga Passion (ad es. https://www.manga-passion.de/volumes/9736/...)",
   "Bilder": "Immagini",
   "Bilder (Uploads)": "Immagini (upload)",
+  "Bilder, die das Backup nennt, aber weder im Backup noch auf diesem Server liegen: {count}. Diese Cover und Fotos fehlen nach dem Einspielen.": "Immagini indicate dal backup che non si trovano né nel backup né su questo server: {count}. Queste copertine e foto mancheranno dopo il ripristino.",
   "Bildergalerie": "Galleria immagini",
   "Bild|Bilder": {
     "one": "immagine",

@@ -68,7 +68,9 @@ export default function VolumeFilterBar({
     <div className="flex flex-col gap-3 mb-6 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80 shadow-lg">
       {/* Top Bar: View Mode Switcher + Gap Indicator */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/60">
-        <div className="w-full sm:w-auto flex flex-nowrap sm:flex-wrap items-center gap-2">
+        {/* phones: views, "Auswählen" and "Filter" share one line from 375 px; narrower screens wrap "Filter" instead of
+            letting it stick out of the card */}
+        <div className="w-full sm:w-auto flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-slate-400 hidden sm:flex items-center gap-1.5">
             <Library className="w-3.5 h-3.5 text-brand-400" />
             {t('Ansicht:')}
@@ -78,7 +80,7 @@ export default function VolumeFilterBar({
               type="button"
               aria-pressed={volumeViewMode === 'grid'}
               onClick={() => handleSetVolumeViewMode('grid')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-2 sm:px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
                 volumeViewMode === 'grid'
                   ? 'bg-brand-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -92,7 +94,7 @@ export default function VolumeFilterBar({
               type="button"
               aria-pressed={volumeViewMode === 'spine'}
               onClick={() => handleSetVolumeViewMode('spine')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-2 sm:px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
                 volumeViewMode === 'spine'
                   ? 'bg-brand-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -106,7 +108,7 @@ export default function VolumeFilterBar({
               type="button"
               aria-pressed={volumeViewMode === 'list'}
               onClick={() => handleSetVolumeViewMode('list')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-2 sm:px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
                 volumeViewMode === 'list'
                   ? 'bg-brand-700 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -124,7 +126,7 @@ export default function VolumeFilterBar({
               aria-pressed={selectionMode}
               aria-label={t('Auswählen')}
               onClick={onToggleSelectionMode}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
                 selectionMode
                   ? 'bg-brand-600/30 text-white border-brand-400/70 shadow-sm'
                   : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
@@ -142,7 +144,7 @@ export default function VolumeFilterBar({
             aria-controls={`${panelId}-a ${panelId}-b`}
             aria-label={hiddenSet ? t('Filter ({n} geändert)', { n: hiddenSet }) : t('Filter')}
             onClick={() => setPanelOpen((v) => !v)}
-            className={`sm:hidden ml-auto shrink-0 flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold ${panelOpen || hiddenSet ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
+            className={`sm:hidden ml-auto shrink-0 flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold ${panelOpen || hiddenSet ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-brand-400 shrink-0" aria-hidden="true" />
             <span>{t('Filter')}</span>

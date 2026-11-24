@@ -141,3 +141,48 @@ test('a lending date ahead of today is refused', async () => {
     assert.equal(res.status, 400);
     assert.equal(res.body.error, 'Das Datum des Verleihens liegt in der Zukunft');
 });
+
+test('a copy is lent only to an account the lender may see by name; others answer like an unknown account', async () => {
+    // "fremd" has a shelf of their own and shares none with ed
+    const stranger = (await admin('POST', '/users', { username: 'fremd', password: 'password123', role: 'editor', shelf_mode: 'personal' })).body.user.id;
+    const { mangaId, volumeId } = await ownedVolume('Verleih Regal');
+    const copy = (await volumeOf(editor, mangaId)).copies[0];
+    const toStranger = await editor('PUT', `/volumes/${volumeId}/copies/${copy.id}`, { lent: { user_id: stranger } });
+    const toNobody = await editor('PUT', `/volumes/${volumeId}/copies/${copy.id}`, { lent: { user_id: 99999 } });
+    assert.deepEqual([toStranger.status, toStranger.body.error], [400, 'Unbekanntes Konto']);
+    assert.deepEqual(toStranger.body, toNobody.body, 'an account outside the shelf cannot be told from a missing one');
+    assert.equal(JSON.stringify(toStranger.body).includes('fremd'), false);
+    const strangerClient = ctx.client();
+    assert.equal((await strangerClient('POST', '/auth/login', { username: 'fremd', password: 'password123' })).status, 200);
+    assert.deepEqual((await strangerClient('GET', '/copies/lent')).body.borrowed, []);
+
+    // an account sharing a shelf with the lender is fine
+    const toAdmin = await editor('PUT', `/volumes/${volumeId}/copies/${copy.id}`, { lent: { user_id: ids.admin } });
+    assert.equal(toAdmin.status, 200, JSON.stringify(toAdmin.body));
+    assert.equal(toAdmin.body.copy.lent_to, 'admin');
+    // the borrower stored now stays editable after the two share no shelf any more (only the date changes)
+    const { db } = require('../db');
+    const shelfId = db.prepare('SELECT shelf_id FROM mangas WHERE id = ?').get(mangaId).shelf_id;
+    const membership = db.prepare('SELECT role FROM shelf_members WHERE shelf_id = ? AND user_id = ?').get(shelfId, ids.admin);
+    db.prepare('DELETE FROM shelf_members WHERE shelf_id = ? AND user_id = ?').run(shelfId, ids.admin);
+    try {
+        const kept = await editor('PUT', `/volumes/${volumeId}/copies/${copy.id}`, { lent: { user_id: ids.admin, at: '2026-01-02' } });
+        assert.equal(kept.status, 200, JSON.stringify(kept.body));
+        assert.equal(kept.body.copy.lent_at, '2026-01-02');
+    } finally {
+        db.prepare('INSERT INTO shelf_members (shelf_id, user_id, role) VALUES (?, ?, ?)').run(shelfId, ids.admin, membership.role);
+    }
+
+    // the undo of "Besitze ich" off does not link a further copy to an account the lender cannot see: it keeps the name
+    const extra = (await editor('POST', `/volumes/${volumeId}/copies`, {})).body.copy;
+    assert.equal((await editor('POST', `/volumes/${volumeId}/owners`, { owned: false })).status, 200);
+    const forged = await editor('POST', `/volumes/${volumeId}/owners`, {
+        owned: true,
+        extra_copies: [{ price: null, purchase_date: null, condition: null, lent_to_user_id: stranger, lent_to_name: 'fremd', lent_at: '2026-01-01' }]
+    });
+    assert.equal(forged.status, 200, JSON.stringify(forged.body));
+    const restored = (await volumeOf(editor, mangaId)).copies.find((c) => c.id !== copy.id && c.lent_to);
+    assert.ok(extra.id);
+    assert.equal(restored.lent_to_user_id, null);
+    assert.equal(restored.lent_to, 'fremd');
+});

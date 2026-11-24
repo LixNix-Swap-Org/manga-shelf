@@ -1174,3 +1174,40 @@ test('restore: backup without the current user ends the session cleanly instead 
     const fresh = ctx.client();
     assert.equal((await fresh('POST', '/auth/login', { username: 'someone-else', password: 'password123' })).status, 200);
 });
+
+test('cover, banner and volume photos: only image addresses; a stored odd value sent back unchanged still saves', async () => {
+    // a fresh session: earlier tests end the editor's sessions
+    const editor = ctx.client();
+    const login = await editor('POST', '/auth/login', { username: 'ed', password: 'password123' });
+    assert.equal(login.status, 200, JSON.stringify(login.body));
+    const bad = ['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'file:///etc/passwd', '//evil.example/a.jpg'];
+    for (const value of bad) {
+        for (const field of ['cover_image', 'banner_image']) {
+            const res = await editor('POST', '/mangas', { title: `Bild ${field}`, [field]: value });
+            assert.deepEqual([res.status, res.body.error], [400, 'Ungültige Bild-URL'], `${field} ${value}`);
+        }
+    }
+    const created = await editor('POST', '/mangas', { title: 'Bilder ok', cover_image: 'https://img.example.org/a.jpg', banner_image: '/uploads/b.jpg' });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const id = created.body.id;
+    assert.equal((await editor('PUT', `/mangas/${id}`, { cover_image: 'javascript:alert(1)' })).status, 400);
+
+    for (const value of bad) {
+        const cover = await editor('POST', '/volumes', { manga_id: id, volume_number: '1', cover_image: value });
+        assert.deepEqual([cover.status, cover.body.error], [400, 'Ungültige Bild-URL'], value);
+        const photos = await editor('POST', '/volumes', { manga_id: id, volume_number: '1', images: ['/uploads/a.jpg', value] });
+        assert.deepEqual([photos.status, photos.body.error], [400, 'Ungültige Bilderliste'], value);
+    }
+    const vol = await editor('POST', '/volumes', { manga_id: id, volume_number: '1', images: ['/uploads/a.jpg', 'data:image/png;base64,AAAA'] });
+    assert.equal(vol.status, 200, JSON.stringify(vol.body));
+    assert.equal((await editor('PUT', `/volumes/${vol.body.id}`, { cover_image: 'javascript:alert(1)' })).status, 400);
+    assert.equal((await editor('PUT', `/volumes/${vol.body.id}`, { images: ['javascript:alert(1)'] })).status, 400);
+
+    // rows from before the check keep working: the stored value sent back (the app sends the whole row) is not refused
+    const { db } = require('../db');
+    db.prepare('UPDATE mangas SET cover_image = ? WHERE id = ?').run('legacy:cover', id);
+    db.prepare('UPDATE volumes SET cover_image = ?, images = ? WHERE id = ?').run('legacy:cover', JSON.stringify(['legacy:cover']), vol.body.id);
+    assert.equal((await editor('PUT', `/mangas/${id}`, { title: 'Bilder ok 2', cover_image: 'legacy:cover' })).status, 200);
+    const resent = await editor('PUT', `/volumes/${vol.body.id}`, { notes: 'neu', cover_image: 'legacy:cover', images: ['legacy:cover', '/uploads/c.jpg'] });
+    assert.equal(resent.status, 200, JSON.stringify(resent.body));
+});
