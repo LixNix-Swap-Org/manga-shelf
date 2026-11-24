@@ -14,8 +14,12 @@ const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 /**
  * `lent` of the body: null (given back), { user_id } (an account, not the copy's owner) or { name } (a person without an
  * account, 1-64 characters), with an optional { at } (date, default today in the app time zone).
+ * An account has to be one the caller may see by name (access.canSeeUser, the rule of GET /users/directory: itself,
+ * everyone sharing a shelf with it, every account for an admin), so a housemate with a shelf of their own can borrow, but
+ * the names of other accounts cannot be probed by id: such an id answers like a missing one. `currentLentUserId` (the
+ * borrower stored now) stays allowed, so a lending to somebody the caller no longer shares a shelf with can be edited.
  */
-function readLending(ctx, lent, ownerId) {
+function readLending(ctx, lent, ownerId, { currentLentUserId = null } = {}) {
     if (lent === null) return { lent_to_user_id: null, lent_to_name: null, lent_at: null };
     if (typeof lent !== 'object' || Array.isArray(lent)) throw badRequest('Ungültige Angabe zum Verleihen');
     const at = parseDate(lent.at);
@@ -28,6 +32,9 @@ function readLending(ctx, lent, ownerId) {
         const id = access.parseId(lent.user_id);
         const user = id && ctx.db.prepare('SELECT id, username FROM users WHERE id = ?').get(id);
         if (!user) throw badRequest('Unbekanntes Konto');
+        if (ctx.user && user.id !== currentLentUserId && !access.canSeeUser(ctx, user.id)) {
+            throw badRequest('Unbekanntes Konto');
+        }
         if (user.id === ownerId) throw badRequest('Ein Exemplar kann nicht an seinen Besitzer verliehen werden');
         return { lent_to_user_id: user.id, lent_to_name: user.username, lent_at: lentAt };
     }
@@ -45,7 +52,7 @@ function updateCopy(ctx, { params, body }) {
     const copyId = access.parseId(params.copyId);
     if (!volumeId || !copyId) throw notFound('Exemplar');
     access.volumeAccess(ctx, volumeId, 'editor');
-    const copy = ctx.db.prepare('SELECT id, owner_user_id FROM volume_copies WHERE id = ? AND volume_id = ?').get(copyId, volumeId);
+    const copy = ctx.db.prepare('SELECT id, owner_user_id, lent_to_user_id FROM volume_copies WHERE id = ? AND volume_id = ?').get(copyId, volumeId);
     if (!copy) throw notFound('Exemplar');
     if (copy.owner_user_id !== null && copy.owner_user_id !== ctx.user.id && ctx.user.role !== 'admin') {
         throw forbidden('Nur wer das Exemplar besitzt, kann es ändern');
@@ -68,7 +75,7 @@ function updateCopy(ctx, { params, body }) {
         if (condition.error) throw badRequest('Ungültiger Zustand');
         set.condition = condition.value;
     }
-    if (given('lent')) Object.assign(set, readLending(ctx, body.lent, copy.owner_user_id));
+    if (given('lent')) Object.assign(set, readLending(ctx, body.lent, copy.owner_user_id, { currentLentUserId: copy.lent_to_user_id }));
     const keys = Object.keys(set);
     if (keys.length) {
         ctx.db.prepare(`UPDATE volume_copies SET ${keys.map(k => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map(k => set[k]), copy.id);

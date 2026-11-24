@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { db, tempDir, migrateDbFile, validateDbFile, openRawDb } = require('../db');
+const { db, tempDir, uploadsDir, migrateDbFile, validateDbFile, openRawDb } = require('../db');
 const auth = require('../middleware/auth');
 const { requireAdmin, signSessionToken, setAuthCookie, clearAuthCookie } = auth;
 const { uploadBackup, maxBackupUploadBytes, formatLimit } = require('../middleware/upload');
@@ -18,6 +18,7 @@ const {
     unlinkQuietly, removeJournalFiles, isDiskFull, dbFilePath, SPACE_MARGIN_BYTES
 } = require('../services/restore');
 const update = require('../services/update');
+const uploadCleanup = require('../services/uploadCleanup');
 const disk = require('../utils/disk');
 const { trackJob } = require('../services/lifecycle');
 const { sendError } = require('../utils/httpError');
@@ -118,6 +119,7 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
         removeJournalFiles(copy);
         migrateDbFile(copy);
         const withoutPassword = accountsWithoutPassword(copy);
+        const missingUploads = uploadsMissingAfterRestore(copy, uploads.list);
 
         const current = latestSchemaVersion();
         const live = readLiveCounts();
@@ -132,6 +134,7 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
             warnings.push(msg('Backup stammt aus einer älteren Version (Schema v{version}); es wird beim Einspielen auf v{current} aktualisiert.', { version: facts.schema_version, current }));
         }
         if (withoutPassword.length) warnings.push(noPasswordWarning(withoutPassword));
+        if (missingUploads > 0) warnings.push(missingUploadsWarning(missingUploads));
         warnings.push(msg('Alle anderen Sitzungen (andere Geräte und Benutzer) werden beendet.'));
 
         return {
@@ -146,6 +149,8 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
             counts: { ...facts.counts, uploads: uploads.list.length },
             uploads_bytes: uploads.bytes,
             current_counts: live,
+            // covers and photos the backup's rows point at that neither the archive nor this server holds
+            missing_uploads: missingUploads,
             current_user: { username, exists: Boolean(facts.user && facts.user.exists), role: facts.user ? facts.user.role : null },
             relogin: !(facts.user && facts.user.exists && facts.user.role === 'admin'),
             accounts_without_password: withoutPassword,
@@ -161,8 +166,33 @@ async function inspectArchive(source, { username, snapshotTimeMs = null }) {
 
 function readLiveCounts() {
     const count = (table) => db.prepare(`SELECT count(*) AS c FROM ${table}`).get().c;
-    return { mangas: count('mangas'), volumes: count('volumes'), users: count('users') };
+    return { mangas: count('mangas'), volumes: count('volumes'), users: count('users'), uploads: uploadCleanup.uploadFileNames().length };
 }
+
+/**
+ * How many uploads the (migrated) backup database names that would be missing after the restore: a restore only adds
+ * the archive's images to uploads/ and deletes none, so a name counts when neither the archive nor this server has the
+ * file (a backup without images, "nur Datenbank", restored on a new server). 0 when the copy cannot be read.
+ */
+function uploadsMissingAfterRestore(dbFile, archiveUploads) {
+    let conn;
+    try {
+        conn = openRawDb(dbFile, { readOnly: true });
+        const inArchive = new Set(archiveUploads.map(u => u.name));
+        let missing = 0;
+        for (const name of uploadCleanup.namedUploads(conn)) {
+            if (!inArchive.has(name) && !fs.existsSync(path.join(uploadsDir, name))) missing++;
+        }
+        return missing;
+    } catch (e) {
+        log.warn('[Backup Inspect] Could not count the images of the backup:', e.message);
+        return 0;
+    } finally {
+        try { conn && conn.close(); } catch (e) { /* ignore */ }
+    }
+}
+
+const missingUploadsWarning = (count) => msg('Bilder, die das Backup nennt, aber weder im Backup noch auf diesem Server liegen: {count}. Diese Cover und Fotos fehlen nach dem Einspielen.', { count });
 
 const STAGING_TTL_MS = 15 * 60 * 1000;
 const MAX_STAGED = 3;

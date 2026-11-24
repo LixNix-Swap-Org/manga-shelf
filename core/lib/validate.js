@@ -196,7 +196,15 @@ const parseBulkSet = (set) => {
     return { value };
 };
 
+// What a stored cover, banner or volume photo may name: a server path (/uploads/…, not the protocol-relative //host or
+// /\host), an http(s) address or an inline image (data:image/…, old covers). Anything else (javascript:, data:text/html,
+// file:, vbscript: …) is refused, so a link that opens the image ("Original" in the gallery) can never run a script.
+const IMAGE_REF = /^(?:\/(?![/\\])|https?:\/\/|data:image\/)/i;
+/** True for an allowed image reference (see IMAGE_REF); blank values are the callers' business. */
+const isImageRef = (value) => typeof value === 'string' && IMAGE_REF.test(value.trim());
+
 module.exports = {
+    isImageRef,
     VOLUME_STATUSES, VOLUME_TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, BULK_SET_FIELDS,
     isBlank, parsePrice, parseIntInRange, parsePages, parseSortAfter, parseChapter, parseYear, parseFlag, parseTrueFlag, parsePriority, parseWishPriority,
     isValidDate, isValidReadAt, parseDate, parseWholeNumber, parsePositiveInt, parseOptionalId, parseSeriesFormat, parseTotalChapters,
