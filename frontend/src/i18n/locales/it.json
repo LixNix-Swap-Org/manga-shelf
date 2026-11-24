@@ -3712,6 +3712,11 @@
     "other": "{n} settimane"
   },
   "{n} abgeschlossen": "{n} completati",
+  "{n} ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.|{n} ausgewählte Bände sind im Besitz: Ihre Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten, Zustand und Ausleihen. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": {
+    "one": "{n} volume selezionato è posseduto: la sua copia viene rimossa, con proprietario, prezzo d’acquisto, data d’acquisto, condizione e prestito. Subito dopo puoi annullare per 10 secondi.",
+    "many": "{n} volumi selezionati sono posseduti: le loro copie vengono rimosse, con proprietari, prezzi d’acquisto, date d’acquisto, condizione e prestiti. Subito dopo puoi annullare per 10 secondi.",
+    "other": "{n} volumi selezionati sono posseduti: le loro copie vengono rimosse, con proprietari, prezzi d’acquisto, date d’acquisto, condizione e prestiti. Subito dopo puoi annullare per 10 secondi."
+  },
   "{n} eigene Staffel|{n} eigene Staffeln": {
     "one": "{n} stagione personalizzata",
     "many": "{n} stagioni personalizzate",

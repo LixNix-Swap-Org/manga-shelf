@@ -3613,6 +3613,10 @@
     "other": "{n} weeks"
   },
   "{n} abgeschlossen": "{n} completed",
+  "{n} ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.|{n} ausgewählte Bände sind im Besitz: Ihre Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten, Zustand und Ausleihen. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": {
+    "one": "{n} selected volume is owned: its copy is removed, with owner, purchase price, purchase date, condition and lending. You can undo this for 10 seconds right afterwards.",
+    "other": "{n} selected volumes are owned: their copies are removed, with owners, purchase prices, purchase dates, condition and lendings. You can undo this for 10 seconds right afterwards."
+  },
   "{n} eigene Staffel|{n} eigene Staffeln": {
     "one": "{n} custom season",
     "other": "{n} custom seasons"

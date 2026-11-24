@@ -3811,6 +3811,12 @@
     "other": "{n} недели"
   },
   "{n} abgeschlossen": "{n} завершено",
+  "{n} ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.|{n} ausgewählte Bände sind im Besitz: Ihre Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten, Zustand und Ausleihen. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": {
+    "one": "{n} выбранный том в наличии: его экземпляр будет удалён вместе с владельцем, ценой и датой покупки, состоянием и выдачей. Сразу после этого можно отменить в течение 10 секунд.",
+    "few": "{n} выбранных тома в наличии: их экземпляры будут удалены вместе с владельцами, ценами и датами покупки, состоянием и выдачами. Сразу после этого можно отменить в течение 10 секунд.",
+    "many": "{n} выбранных томов в наличии: их экземпляры будут удалены вместе с владельцами, ценами и датами покупки, состоянием и выдачами. Сразу после этого можно отменить в течение 10 секунд.",
+    "other": "{n} выбранного тома в наличии: их экземпляры будут удалены вместе с владельцами, ценами и датами покупки, состоянием и выдачами. Сразу после этого можно отменить в течение 10 секунд."
+  },
   "{n} eigene Staffel|{n} eigene Staffeln": {
     "one": "{n} свой сезон",
     "few": "{n} своих сезона",

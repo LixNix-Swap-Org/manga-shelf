@@ -823,6 +823,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
               userId={user?.id}
               user={user}
               people={readers}
+              selectedVolumes={volumes.filter((v) => selection.selected.has(v.id))}
               currency={editionCurrency(manga)}
               readerId={canToggleOthers && selectedReaderId !== 'ALL' ? selectedReaderId : user?.id}
             />

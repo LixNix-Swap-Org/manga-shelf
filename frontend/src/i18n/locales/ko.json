@@ -3514,6 +3514,9 @@
     "other": "{n}주"
   },
   "{n} abgeschlossen": "{n}개 완료",
+  "{n} ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.|{n} ausgewählte Bände sind im Besitz: Ihre Exemplare werden entfernt, mit Besitzern, Kaufpreisen, Kaufdaten, Zustand und Ausleihen. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.": {
+    "other": "선택한 {n}권은 소장 중입니다: 소유자, 구매 가격, 구매일, 상태, 대여 정보와 함께 소장본이 삭제됩니다. 직후 10초 동안 되돌릴 수 있습니다."
+  },
   "{n} eigene Staffel|{n} eigene Staffeln": {
     "other": "사용자 시즌 {n}개"
   },

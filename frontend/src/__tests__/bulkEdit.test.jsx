@@ -13,7 +13,7 @@ import MangaDetail from '../MangaDetail';
 import { clearDataCache } from '../utils/dataCache';
 import useVolumeSelection, { rangeBetween } from '../hooks/useVolumeSelection';
 import useVolumeActions, { BULK_UNDO_MS } from '../hooks/useVolumeActions';
-import BulkActionBar, { bulkDeleteConfirmText } from '../components/detail/BulkActionBar';
+import BulkActionBar, { bulkDeleteConfirmText, bulkStatusLossText } from '../components/detail/BulkActionBar';
 import { fakeResponse } from './fakeResponse';
 import { recordToasts } from './toastLog';
 
@@ -85,6 +85,27 @@ describe('BulkActionBar', () => {
     expect(p.onApply).toHaveBeenLastCalledWith({ read: { read: true, user_id: 9 } }, 'als gelesen markiert');
     fireEvent.click(screen.getByRole('button', { name: 'Ungelesen' }));
     expect(p.onApply).toHaveBeenLastCalledWith({ read: { read: false, user_id: 9 } }, 'als ungelesen markiert');
+  });
+
+  it('a status change that takes owned volumes out of "Vorhanden" asks first; no answer, no change', async () => {
+    const owned = { id: 1, status: 'Vorhanden', copies: [{ id: 7, owner_user_id: null, price: 9.5, lent_to: 'Tom' }] };
+    const placeholder = { id: 2, status: 'Vorhanden', copies: [{ id: 8, owner_user_id: null, price: null }] };
+    const missing = { id: 3, status: 'Fehlt', copies: [] };
+    expect(bulkStatusLossText('Vorhanden', [owned])).toBeNull();
+    expect(bulkStatusLossText('Fehlt', [placeholder, missing])).toBeNull();
+    expect(bulkStatusLossText('Fehlt', [owned, placeholder, missing])).toBe('1 ausgewählter Band ist im Besitz: Sein Exemplar wird entfernt, mit Besitzer, Kaufpreis, Kaufdatum, Zustand und Ausleihe. Direkt danach lässt sich das 10 Sekunden lang rückgängig machen.');
+    expect(bulkStatusLossText('Fehlt', [owned, { ...owned, id: 4 }])).toMatch(/^2 ausgewählte Bände sind im Besitz/);
+
+    const confirmStatus = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const p = props({ confirmStatus, selectedVolumes: [owned, missing] });
+    render(<BulkActionBar {...p} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Status…' }));
+    fireEvent.change(screen.getByLabelText('Neuer Status'), { target: { value: 'Fehlt' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' })); });
+    expect(confirmStatus).toHaveBeenCalledWith(bulkStatusLossText('Fehlt', [owned]));
+    expect(p.onApply).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' })); });
+    expect(p.onApply).toHaveBeenCalledWith({ set: { status: 'Fehlt' } }, 'auf „Fehlt“ gesetzt');
   });
 
   it('delete asks first; the visible-selection button switches to clearing', async () => {
