@@ -800,6 +800,7 @@
   "Der Name ist zu lang": "Le nom est trop long",
   "Der Papierkorb ist leer.": "La corbeille est vide.",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "Le service push du navigateur est injoignable pour le moment. Réessaie plus tard.",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "Le service push ne reconnaît plus ce navigateur. Réactive les rappels, s'il te plaît.",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "La clé est valable jusqu'à ce qu'elle soit régénérée ou supprimée chez TMDB.",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "La clé est valable jusqu'à sa suppression dans la Cloud Console.",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "La clé doit contenir de {min} à {max} caractères",

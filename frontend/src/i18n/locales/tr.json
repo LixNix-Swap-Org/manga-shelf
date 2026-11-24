@@ -779,6 +779,7 @@
   "Der Name ist zu lang": "Ad çok uzun",
   "Der Papierkorb ist leer.": "Çöp kutusu boş.",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "Tarayıcının push hizmetine şu anda ulaşılamıyor. Lütfen daha sonra tekrar dene.",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "Push hizmeti bu tarayıcıyı artık tanımıyor. Lütfen hatırlatıcıları yeniden aç.",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "Anahtar, TMDB'de yeniden oluşturulana veya silinene kadar geçerlidir.",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "Anahtar, Cloud Console'da silinene kadar geçerlidir.",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "Anahtar {min} ile {max} karakter uzunluğunda olmalı",

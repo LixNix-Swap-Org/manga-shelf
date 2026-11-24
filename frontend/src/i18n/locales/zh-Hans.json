@@ -758,6 +758,7 @@
   "Der Name ist zu lang": "名称过长",
   "Der Papierkorb ist leer.": "回收站是空的。",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "浏览器的推送服务目前无法连接，请稍后再试。",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "推送服务已不再识别此浏览器。请重新开启提醒。",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "密钥在 TMDB 重新生成或删除之前一直有效。",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "该密钥在 Cloud Console 中被删除之前一直有效。",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "密钥长度必须为 {min} 到 {max} 个字符",

@@ -272,8 +272,11 @@ function overdueLoans(ctx, day) {
         const days = daysBetween(r.lent_at, day);
         const entry = groups.get(key) || { title: String(r.title || '').trim(), numbers: [], name: String(r.name || '').trim(), days, overdueOn: addDays(r.lent_at, period) };
         entry.numbers.push(String(r.volume_number ?? '').trim());
-        // the newest lending of the group says when the group became overdue (a reminder per newly overdue copy)
-        if (days < entry.days) Object.assign(entry, { days, overdueOn: addDays(r.lent_at, period) });
+        // the newest lending of the group says when the group became overdue (a reminder per newly overdue copy); the
+        // text names the longest time away, so an old lending is not made to look recent by a newer one
+        if (days > entry.days) entry.days = days;
+        const overdueOn = addDays(r.lent_at, period);
+        if (overdueOn > entry.overdueOn) entry.overdueOn = overdueOn;
         groups.set(key, entry);
     }
     return [...groups.values()];
@@ -309,7 +312,20 @@ function buildMessage(found, texts, day, mode = 'day') {
     const releases = volumes.length + episodes.length;
     const title = !releases ? texts.loanTitle : mode === 'eve' ? texts.tomorrow : mode === 'week' ? texts.week : texts.title;
     const url = volumes.length ? '/?view=radar' : episodes.length ? '/?view=anime' : '/';
-    return { title, body, url, tag: `release-${mode}-${day}` };
+    return { title, body, url, tag: releases ? `release-${mode}-${day}` : `loan-${mode}-${day}` };
+}
+
+/**
+ * The notifications for one subscription: one, or two on a release (or eve) day that also has newly overdue lendings,
+ * so the lendings do not stand under "Heute neu erschienen" / "Morgen erscheint". The weekly one stays one list.
+ */
+function buildMessages(found, texts, day, mode = 'day') {
+    const releases = (found.volumes || []).length + (found.episodes || []).length;
+    if (mode === 'week' || !releases || !(found.loans || []).length) return [buildMessage(found, texts, day, mode)].filter(Boolean);
+    return [
+        buildMessage({ volumes: found.volumes, episodes: found.episodes }, texts, day, mode),
+        buildMessage({ loans: found.loans }, texts, day, mode)
+    ].filter(Boolean);
 }
 
 /** What a subscription row reports on `day`, by its mode and kinds. */
@@ -324,8 +340,10 @@ function findFor(ctx, sub, day) {
     }
     if (sub.loans) {
         const loans = overdueLoans(ctx, day);
-        // weekly: every overdue lending; daily: the ones that became overdue since the last reminder (or today)
-        found.loans = mode === 'week' ? loans : loans.filter(l => l.overdueOn <= day && l.overdueOn > (sub.last_day && sub.last_day < day ? sub.last_day : addDays(day, -1)));
+        // weekly: every overdue lending; daily: the ones that became overdue since the last reminder (or today). A
+        // browser's first reminder (no last_day yet) names every lending that is overdue already, once.
+        const since = !sub.last_day ? null : sub.last_day < day ? sub.last_day : addDays(day, -1);
+        found.loans = mode === 'week' || !since ? loans : loans.filter(l => l.overdueOn <= day && l.overdueOn > since);
     }
     return { mode, found };
 }
@@ -366,21 +384,29 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
         for (const sub of subs) {
             if (shouldStop()) return report;
             if (!ctxs.has(sub.user_id)) ctxs.set(sub.user_id, createCtx({ user: { id: sub.user_id, username: sub.username, role: sub.role } }));
-            let message = null;
+            let messages = [];
             try {
                 const { mode, found } = findFor(ctxs.get(sub.user_id), sub, day);
-                message = buildMessage(found, textsOf(sub.texts), day, mode);
+                messages = buildMessages(found, textsOf(sub.texts), day, mode);
             } catch (e) {
                 log.warn(`[Push] Erinnerung nicht lesbar: ${e?.message || e}`);
             }
-            if (message) {
-                const result = await sendPush(sub, message, { db, fetchImpl });
-                if (result.gone) {
+            if (messages.length) {
+                let gone = false;
+                let failed = false;
+                for (const message of messages) {
+                    const result = await sendPush(sub, message, { db, fetchImpl });
+                    if (result.gone) { gone = true; break; }
+                    if (!result.ok) { failed = true; break; }
+                }
+                if (gone) {
                     db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
                     report.gone++;
                     continue;
                 }
-                if (!result.ok) continue; // tried again at the next hourly check
+                // tried again at the next hourly check (a message that got through comes again under the same tag,
+                // so the browser replaces it instead of showing it twice)
+                if (failed) continue;
                 report.sent++;
             } else {
                 report.skipped++;
@@ -412,6 +438,7 @@ module.exports = {
     textsOf,
     cleanTexts,
     buildMessage,
+    buildMessages,
     releasesToday,
     releasesBetween,
     overdueLoans,

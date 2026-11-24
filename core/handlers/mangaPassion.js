@@ -74,7 +74,7 @@ async function gaps(ctx, { params, query }) {
 function seriesAnswer(row) {
     if (!row) return row;
     const rest = { ...row };
-    for (const key of ['catalog_series_id', 'local_fields', 'manga_passion_edition_data']) delete rest[key];
+    for (const key of ['catalog_series_id', 'local_fields']) delete rest[key];
     return rest;
 }
 

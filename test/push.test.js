@@ -341,3 +341,69 @@ test('a browser switched on after today\'s run still gets today\'s reminder; dem
     assert.deepEqual((await demoted('DELETE', '/push/subscriptions', { endpoint: theirs.json.endpoint })).body, { success: true, removed: 1 });
     assert.equal((await demoted('PUT', '/push/subscriptions', theirs.json)).status, 403, 'switching on stays for editors');
 });
+
+test('lendings: a new browser hears of the ones overdue already, once; a release day sends them apart; the text names the longest time away', async () => {
+    db.exec('DELETE FROM push_subscriptions');
+    const tz = 'Europe/Berlin';
+    const { createCtx } = require('../db');
+    const add = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const release = add(today, 3);
+    const atDay = (day, hour) => {
+        const probe = new Date(`${day}T${String(hour).padStart(2, '0')}:30:00Z`);
+        const offset = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).format(probe)) - hour;
+        return new Date(probe.getTime() - offset * 3600 * 1000);
+    };
+    const series = (await admin('POST', '/mangas', { title: 'Leihreihe' })).body.id;
+    const lend = async (number, lentAt) => {
+        const id = (await admin('POST', '/volumes', { manga_id: series, volume_number: number, status: 'Vorhanden' })).body.id;
+        db.prepare("UPDATE volume_copies SET lent_to_name = 'Tante', lent_at = ? WHERE volume_id = ?").run(lentAt, id);
+    };
+    // band 1 away for 120 days, band 2 for 95 by the release day: both overdue (90 days) before the browser is switched on
+    await lend('1', add(release, -120));
+    await lend('2', add(release, -95));
+    // band 3 becomes overdue on the release day itself
+    await lend('3', add(release, -90));
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '4', status: 'Vorbestellt', release_date: release })).status, 200);
+
+    let sent = [];
+    const fetchImpl = async (url, init) => { sent.push({ url, body: init.body }); return new Response(null, { status: 201 }); };
+    const runAt = async (d, b) => {
+        sent = [];
+        db.prepare('DELETE FROM app_settings WHERE key = ?').run(push.DAY_KEY);
+        await push.runPushRemindersIfDue({ db, createCtx, now: atDay(d, 10), timeZone: tz, fetchImpl });
+        return sent.map((s) => JSON.parse(decrypt(b, s.body)));
+    };
+
+    const fresh = browser('https://fcm.googleapis.com/fcm/send/fresh');
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...fresh.json, volumes: false, episodes: false })).status, 200);
+    let got = await runAt(add(release, -1), fresh);
+    assert.equal(got.length, 1, 'the first reminder names what is overdue already');
+    assert.equal(got[0].title, 'Ausleihe überfällig');
+    assert.equal(got[0].body, 'Leihreihe Band 1, 2 – seit 119 Tagen bei Tante', 'the longest time away, not the newest lending');
+    assert.equal(got[0].tag, `loan-day-${add(release, -1)}`);
+
+    db.exec('DELETE FROM push_subscriptions');
+    const both = browser('https://fcm.googleapis.com/fcm/send/both');
+    assert.equal((await admin('PUT', '/push/subscriptions', both.json)).status, 200);
+    db.prepare('UPDATE push_subscriptions SET last_day = ?').run(add(release, -1));
+    got = await runAt(release, both);
+    assert.deepEqual(got.map((m) => m.title), ['Heute neu erschienen', 'Ausleihe überfällig'], 'two notifications, each under its own title');
+    assert.equal(got[0].body, 'Leihreihe – Band 4');
+    assert.equal(got[1].body, 'Leihreihe Band 1, 2, 3 – seit 120 Tagen bei Tante', 'band 3 newly overdue brings the group again');
+    assert.notEqual(got[0].tag, got[1].tag);
+
+    got = await runAt(add(release, 1), both);
+    assert.deepEqual(got, [], 'nothing new the day after');
+
+    // a failed second message keeps the day open; the retry sends both again under the same tags
+    db.prepare('UPDATE push_subscriptions SET last_day = ?').run(add(release, -1));
+    let calls = 0;
+    sent = [];
+    db.prepare('DELETE FROM app_settings WHERE key = ?').run(push.DAY_KEY);
+    const flaky = async (url, init) => { calls++; sent.push({ url, body: init.body }); return new Response(null, { status: calls === 2 ? 500 : 201 }); };
+    assert.deepEqual(await push.runPushRemindersIfDue({ db, createCtx, now: atDay(release, 10), timeZone: tz, fetchImpl: flaky }), { sent: 0, gone: 0, skipped: 0 });
+    assert.equal(db.prepare('SELECT last_day FROM push_subscriptions').get().last_day, add(release, -1), 'still due');
+    got = await runAt(release, both);
+    assert.equal(got.length, 2);
+});

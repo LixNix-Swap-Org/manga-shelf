@@ -749,18 +749,19 @@ test('migrations 34 and 35 add animes.tags and anime_airings to existing rows an
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const conn = dbm.openRawDb(file);
     try {
-        schema.applySchema(conn);
+        // before migration 61, which drops animes.tags again
+        applySchemaBefore(conn, 61);
         conn.exec(`
             DROP TABLE anime_airings;
             ALTER TABLE animes DROP COLUMN tags;
-            DELETE FROM schema_migrations WHERE version >= 34;
+            DELETE FROM schema_migrations WHERE version >= 34 AND version < 61;
             INSERT INTO animes (id, title) VALUES (41, 'Alt');
         `);
-        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(34));
+        assert.deepEqual(schema.runSequentialMigrations(conn).map(r => r.version), UP_TO_LATEST(34).filter(v => v < 61));
         assert.equal(conn.prepare('SELECT tags FROM animes WHERE id = 41').get().tags, null);
         conn.prepare('INSERT INTO anime_airings (anime_id, episode, at) VALUES (41, 1, 1000)').run();
         assert.throws(() => conn.prepare('INSERT INTO anime_airings (anime_id, episode, at) VALUES (41, 1, 2000)').run(), 'one row per episode');
-        conn.exec('DELETE FROM schema_migrations WHERE version >= 34');
+        conn.exec('DELETE FROM schema_migrations WHERE version >= 34 AND version < 61');
         schema.runSequentialMigrations(conn);
         assert.equal(conn.prepare('SELECT count(*) AS n FROM anime_airings').get().n, 1);
         conn.exec('PRAGMA foreign_keys = ON; DELETE FROM animes WHERE id = 41');
@@ -1056,7 +1057,8 @@ test('migrations 49 to 52: personal anime tags and notes, the feed table, editio
     const schema = require('../core/schema');
     const conn = new DatabaseSync(':memory:');
     conn.exec('PRAGMA foreign_keys = ON;');
-    schema.applySchema(conn);
+    // before migration 61, which drops animes.tags and mangas.manga_passion_edition_data
+    applySchemaBefore(conn, 61);
     // the state before migration 49: no anime_tags, tags and the note on the entry; feeds in app_settings; the edition on the row
     conn.exec(`
         DROP TABLE anime_tags; DROP TABLE calendar_feeds;
@@ -1147,4 +1149,43 @@ test('migration 58: the feed table also takes the wishlist link, every feed and 
     assert.ok(conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_calendar_feeds_user'").get());
     conn.prepare('DELETE FROM users WHERE id = ?').run(anna);
     assert.equal(conn.prepare('SELECT count(*) AS n FROM calendar_feeds').get().n, 0, 'the links go with the account');
+});
+
+test('migration 61 drops mangas.manga_passion_edition_data and animes.tags, keeping rows, ids, indexes, triggers and links', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 61);
+    conn.exec('DELETE FROM schema_migrations WHERE version = 61');
+    const cols = (table) => conn.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+    assert.ok(cols('mangas').includes('manga_passion_edition_data'));
+    assert.ok(cols('animes').includes('tags'));
+    const objects = (table) => conn.prepare("SELECT type, name FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') ORDER BY type, name").all(table).map(r => `${r.type}:${r.name}`);
+    const before = { mangas: objects('mangas'), animes: objects('animes') };
+    const series = Number(conn.prepare("INSERT INTO mangas (title, tags, manga_passion_id) VALUES ('Alt', 'Action', 5)").run().lastInsertRowid);
+    conn.prepare("INSERT INTO volumes (manga_id, volume_number, status) VALUES (?, '1', 'Vorhanden')").run(series);
+    const anime = Number(conn.prepare("INSERT INTO animes (title, tags) VALUES ('Alt', NULL)").run().lastInsertRowid);
+    conn.prepare("INSERT INTO anime_tags (anime_id, user_id, tag) VALUES (?, NULL, 'Herbst')").run(anime);
+    // a deleted row's id must not come back after the rebuild (AUTOINCREMENT)
+    const gone = Number(conn.prepare("INSERT INTO mangas (title) VALUES ('Weg')").run().lastInsertRowid);
+    conn.prepare('DELETE FROM mangas WHERE id = ?').run(gone);
+
+    const quiet = { log: { debug() {}, info() {}, warn() {}, error() {} } };
+    assert.deepEqual(schema.runSequentialMigrations(conn, quiet).map(r => r.version), [61]);
+    assert.equal(cols('mangas').includes('manga_passion_edition_data'), false);
+    assert.equal(cols('animes').includes('tags'), false);
+    assert.ok(cols('mangas').includes('tags'), 'the series tags stay');
+    assert.deepEqual({ mangas: objects('mangas'), animes: objects('animes') }, before);
+    assert.equal(conn.prepare('SELECT title, tags, manga_passion_id, owned_volumes FROM mangas WHERE id = ?').get(series).owned_volumes, 1);
+    assert.equal(conn.prepare('SELECT count(*) AS n FROM volumes WHERE manga_id = ?').get(series).n, 1, 'volumes stay with their series');
+    assert.equal(conn.prepare('SELECT count(*) AS n FROM anime_tags WHERE anime_id = ?').get(anime).n, 1);
+    assert.ok(Number(conn.prepare("INSERT INTO mangas (title) VALUES ('Neu')").run().lastInsertRowid) > gone);
+    assert.deepEqual(conn.prepare('PRAGMA foreign_key_check').all(), []);
+    conn.prepare('DELETE FROM mangas WHERE id = ?').run(series);
+    assert.equal(conn.prepare('SELECT count(*) AS n FROM volumes').get().n, 0, 'the cascade still works');
+
+    // replayed: nothing to do
+    conn.exec('DELETE FROM schema_migrations WHERE version = 61');
+    assert.deepEqual(schema.runSequentialMigrations(conn, quiet).map(r => r.version), [61]);
 });

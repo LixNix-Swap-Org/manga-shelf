@@ -1328,7 +1328,10 @@ function migrationList(log = silentLog) {
                     ${dataVersionTriggersSql('anime_tags', 'anime')}
                 `);
                 const insertTag = d.prepare('INSERT OR IGNORE INTO anime_tags (anime_id, user_id, tag) VALUES (?, NULL, ?)');
-                for (const row of d.prepare("SELECT id, tags FROM animes WHERE tags IS NOT NULL AND tags <> ''").all()) {
+                // replayed after migration 61 dropped animes.tags: no shared tags left to move
+                const hasSharedTags = d.prepare('PRAGMA table_info(animes)').all().some(c => c.name === 'tags');
+                const sharedTags = hasSharedTags ? d.prepare("SELECT id, tags FROM animes WHERE tags IS NOT NULL AND tags <> ''").all() : [];
+                for (const row of sharedTags) {
                     let list;
                     try { list = JSON.parse(row.tags); } catch (e) { list = []; }
                     if (!Array.isArray(list)) list = [];
@@ -1336,7 +1339,7 @@ function migrationList(log = silentLog) {
                         if (typeof tag === 'string' && tag.trim()) insertTag.run(row.id, tag.trim().replace(/\s+/g, ' ').slice(0, 30));
                     }
                 }
-                d.exec('UPDATE animes SET tags = NULL WHERE tags IS NOT NULL;');
+                if (hasSharedTags) d.exec('UPDATE animes SET tags = NULL WHERE tags IS NOT NULL;');
                 // Notes: the note of an entry (anyone could overwrite it) goes into the own note of everybody who has the
                 // entry on their list, in front of what they wrote (as the CSV export merged them). An entry nobody has keeps it.
                 d.exec(`
@@ -1393,6 +1396,8 @@ function migrationList(log = silentLog) {
                 // stays as an empty column for one version, so the way back to the version before keeps a valid table.
                 const cols = new Set(d.prepare('PRAGMA table_info(catalog_series)').all().map(c => c.name));
                 if (!cols.has('mp_edition_data')) d.exec('ALTER TABLE catalog_series ADD COLUMN mp_edition_data TEXT;');
+                // replayed after migration 61 dropped the column: nothing left to move
+                if (!d.prepare('PRAGMA table_info(mangas)').all().some(c => c.name === 'manga_passion_edition_data')) return;
                 d.exec(`
                     UPDATE catalog_series SET mp_edition_data = (
                         SELECT m.manga_passion_edition_data FROM mangas m
@@ -1541,6 +1546,22 @@ function migrationList(log = silentLog) {
                     );
                     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id);
                 `);
+            }
+        },
+        {
+            version: 61,
+            name: 'drop_legacy_columns',
+            foreignKeys: false,
+            up: (d) => {
+                // two columns nothing reads or writes since 4.0 (AGENTS.md, rule 3): the series' copy of the Manga Passion
+                // edition (on catalog_series.mp_edition_data since migration 51) and the shared tags of an anime entry
+                // (one row per person in anime_tags since migration 49); both were cleared then
+                const drop = (table, column, pattern) => {
+                    if (!d.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column)) return;
+                    rebuildTable(d, table, (sql) => replaceOnce(sql, pattern, '', `${table}.${column}`), { dropColumns: [column] });
+                };
+                drop('mangas', 'manga_passion_edition_data', /,\s*["`]?manga_passion_edition_data["`]?\s+TEXT(?:\s+DEFAULT\s+NULL)?(?=\s*[,)])/i);
+                drop('animes', 'tags', /,\s*["`]?tags["`]?\s+TEXT(?=\s*[,)])/i);
             }
         }
     ];

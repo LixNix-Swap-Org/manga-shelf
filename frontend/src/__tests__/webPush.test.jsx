@@ -75,9 +75,11 @@ describe('web push helpers', () => {
     const calls = stubServer();
     const nav = fakeNav();
     const notification = { permission: 'default', requestPermission: vi.fn(async () => 'granted') };
-    expect(await enableWebPush({ nav, notification })).toEqual({ enabled: true });
+    // the choices come back from the server (a browser subscribed before keeps its stored ones)
+    expect(await enableWebPush({ nav, notification })).toEqual({ enabled: true, prefs: { hour: 7, mode: 'day', volumes: true, episodes: false, loans: true } });
     expect(nav.pushManager.subscribe).toHaveBeenCalledWith({ userVisibleOnly: true, applicationServerKey: keyBytes(SERVER_KEY) });
-    const [method, url, body] = calls.at(-1);
+    expect(calls.at(-1).slice(0, 2)).toEqual(['POST', '/api/push/subscriptions/status']);
+    const [method, url, body] = calls.at(-2);
     expect([method, url]).toEqual(['PUT', '/api/push/subscriptions']);
     expect(body.endpoint).toBe('https://fcm.googleapis.com/fcm/send/abc');
     expect(body.texts.title).toBe('Heute neu erschienen');
@@ -88,6 +90,8 @@ describe('web push helpers', () => {
     stubServer();
     const nav = fakeNav();
     expect(await enableWebPush({ nav, notification: { permission: 'default', requestPermission: async () => 'denied' } })).toEqual({ enabled: false, denied: true });
+    // the prompt closed without an answer: nothing is blocked
+    expect(await enableWebPush({ nav, notification: { permission: 'default', requestPermission: async () => 'default' } })).toEqual({ enabled: false, dismissed: true });
     expect(nav.pushManager.subscribe).not.toHaveBeenCalled();
 
     const old = fakeSubscription('https://fcm.googleapis.com/fcm/send/old', new Uint8Array(65).fill(1));
@@ -150,6 +154,47 @@ describe('settings switch', () => {
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Neue Bände' }).disabled).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Test senden' }));
     await waitFor(() => expect(calls.some(([m, u]) => m === 'POST' && u === '/api/push/test')).toBe(true));
+  });
+});
+
+describe('settings switch: answers of the browser and the push service', () => {
+  const env = { navigator: { serviceWorker: {} }, isSecureContext: true, PushManager: {}, Notification: {} };
+
+  it('switching on shows the choices the server keeps; a closed prompt shows no "blocked" hint', async () => {
+    stubServer();
+    vi.stubGlobal('navigator', { ...globalThis.navigator, ...fakeNav() });
+    const answers = ['default', 'granted'];
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => answers.shift()) });
+    // nothing subscribed yet: the switch starts off
+    render(<WebPushSwitch env={env} />);
+    const box = screen.getByRole('checkbox', { name: 'Erinnerungen am Erscheinungstag' });
+    await waitFor(() => expect(box.disabled).toBe(false));
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    await waitFor(() => expect(Notification.requestPermission).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(box.disabled).toBe(false));
+    expect(box.checked).toBe(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(box);
+    await waitFor(() => expect(box.checked).toBe(true));
+    expect(screen.getByRole('combobox', { name: 'Uhrzeit' }).value).toBe('7');
+    expect(screen.getByRole('checkbox', { name: 'Neue Anime-Folgen' }).checked).toBe(false);
+  });
+
+  it('a test push to a subscription the push service forgot switches it off', async () => {
+    const calls = stubServer();
+    const sub = fakeSubscription();
+    vi.stubGlobal('navigator', { ...globalThis.navigator, ...fakeNav(sub) });
+    const fetchStub = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => (String(url) === '/api/push/test' ? fakeResponse(200, { success: false, gone: true }) : fetchStub(url, init))));
+    render(<WebPushSwitch env={env} />);
+    const box = screen.getByRole('checkbox', { name: 'Erinnerungen am Erscheinungstag' });
+    await waitFor(() => expect(box.checked).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Test senden' }));
+    await waitFor(() => expect(box.checked).toBe(false));
+    expect(sub.unsubscribe).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Test senden' })).toBeNull();
+    expect(calls.some(([m, u]) => m === 'POST' && u === '/api/push/subscriptions/status')).toBe(true);
   });
 });
 

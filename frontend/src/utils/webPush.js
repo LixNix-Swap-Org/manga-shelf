@@ -107,10 +107,13 @@ export async function setWebPushPrefs(patch, nav = navigator) {
 
 /**
  * Switches the reminders on: asks for the permission, subscribes with the server's key (a subscription made with
- * another key is replaced) and stores it on the server. Resolves { enabled, denied, unsupported }.
+ * another key is replaced) and stores it on the server. Resolves { enabled, prefs } (the choices the server keeps for
+ * this browser), { enabled: false, denied } (blocked), { enabled: false, dismissed } (the prompt was closed without an
+ * answer: nothing is blocked, it can be asked again) or { enabled: false, unsupported }.
  */
 export async function enableWebPush({ nav = navigator, notification = globalThis.Notification } = {}) {
   const permission = notification.permission === 'granted' ? 'granted' : await notification.requestPermission();
+  if (permission === 'default') return { enabled: false, dismissed: true };
   if (permission !== 'granted') return { enabled: false, denied: true };
   const reg = await registration(nav);
   if (!reg?.pushManager) return { enabled: false, unsupported: true };
@@ -129,7 +132,9 @@ export async function enableWebPush({ nav = navigator, notification = globalThis
   }
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
   await api.put('/api/push/subscriptions', { ...sub.toJSON(), texts: pushTexts() });
-  return { enabled: true };
+  // a browser that was subscribed already keeps its stored choices (the PUT above sends none)
+  const answer = await api.post('/api/push/subscriptions/status', { endpoint: sub.endpoint }).catch(() => null);
+  return { enabled: true, prefs: readPrefs(answer) };
 }
 
 /** Switches them off for this browser: the server forgets the subscription, the browser drops it. */
@@ -141,12 +146,16 @@ export async function disableWebPush({ nav = navigator } = {}) {
   return { enabled: false };
 }
 
-/** Sends a test message to this browser. Resolves true when the push service took it. */
+/**
+ * Sends a test message to this browser. Resolves { ok } (the push service took it) and `gone` when the push service no
+ * longer knows this browser's subscription: the server forgot it, so the browser drops it too and the switch is off.
+ */
 export async function testWebPush(nav = navigator) {
   const sub = await currentSubscription(nav);
-  if (!sub) return false;
+  if (!sub) return { ok: false, gone: true };
   const res = await api.post('/api/push/test', { endpoint: sub.endpoint });
-  return Boolean(res?.success);
+  if (res?.gone) await sub.unsubscribe().catch(() => {});
+  return { ok: Boolean(res?.success), gone: Boolean(res?.gone) };
 }
 
 /**
