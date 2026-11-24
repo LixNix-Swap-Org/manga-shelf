@@ -87,6 +87,44 @@ function dbFromConnection(conn, { log, generation = () => 1 } = {}) {
     };
 }
 
+// the calls of a statement that bind parameters
+const BINDING = new Set(['run', 'get', 'all', 'iterate']);
+
+/** Throws when a bound parameter (positional, or a value of a named-parameter object) is undefined. */
+function assertBound(params, sql) {
+    params.forEach((p, i) => {
+        if (p === undefined) throw new Error(`SQL-Parameter ${i + 1} ist undefined: ${String(sql).trim().slice(0, 80)}`);
+        if (p && typeof p === 'object' && Object.getPrototypeOf(p) === Object.prototype) {
+            for (const [name, value] of Object.entries(p)) {
+                if (value === undefined) throw new Error(`SQL-Parameter ${name} ist undefined: ${String(sql).trim().slice(0, 80)}`);
+            }
+        }
+    });
+}
+
+/**
+ * ctx.db whose statements refuse an undefined parameter on every host alike: node:sqlite of Node 22 throws, that of
+ * Node 26 and sql.js (the apps) store NULL. A slip in core/ then fails the same way everywhere, in the tests too.
+ */
+function strictParams(db) {
+    if (db.strictParams) return db;
+    return {
+        ...db,
+        strictParams: true,
+        prepare(sql) {
+            const stmt = db.prepare(sql);
+            return new Proxy(stmt, {
+                get(target, prop) {
+                    const value = target[prop];
+                    if (typeof value !== 'function') return value;
+                    if (BINDING.has(prop)) return (...params) => { assertBound(params, sql); return value.apply(target, params); };
+                    return value.bind(target);
+                }
+            });
+        }
+    };
+}
+
 const undoStores = new WeakMap();
 function undoStoreFor(db) {
     let store = undoStores.get(db);
@@ -114,7 +152,7 @@ function createCtx(parts) {
         yield: () => new Promise(resolve => setTimeout(resolve, 0)),
         undo: undoStoreFor(parts.db),
         ...parts,
-        db: { generation: () => 1, ...parts.db },
+        db: strictParams({ generation: () => 1, ...parts.db }),
         files,
         http
     };
@@ -123,4 +161,4 @@ function createCtx(parts) {
 /** The same host parts for one caller (and request-scoped extras such as signal and limit). */
 const withUser = (ctx, user, extra = {}) => ({ ...ctx, user: user || null, ...extra });
 
-module.exports = { createCtx, withUser, dbFromConnection, transactionFor, runInTransaction, withStatementCache, silentLog, ANSWERED };
+module.exports = { createCtx, withUser, dbFromConnection, transactionFor, runInTransaction, withStatementCache, strictParams, silentLog, ANSWERED };
