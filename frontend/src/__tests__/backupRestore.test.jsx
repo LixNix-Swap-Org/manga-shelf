@@ -791,6 +791,41 @@ describe('BackupRestoreModal large chunked uploads', () => {
       '/api/backup/uploads/up-r?offset=15'
     ]);
   });
+  it('a 429 on a chunk waits for Retry-After and tries again', async () => {
+    vi.useFakeTimers();
+    try {
+      const putUrls = [];
+      let attempt = 0;
+      const pending = uploadAndInspectBackup({
+        file: new Uint8Array(8),
+        filename: 'limit.zip',
+        threshold: 5,
+        chunkSize: 10,
+        request: {
+          postForm: vi.fn(),
+          postJson: async (url) => (url === '/api/backup/uploads'
+            ? { ok: true, status: 201, data: { upload_id: 'up-l', chunk_size: 10 }, res: null }
+            : { ok: true, status: 200, data: { staging_id: STAGING }, res: null }),
+          putChunk: async (url) => {
+            putUrls.push(url);
+            attempt++;
+            if (attempt === 1) return { ok: false, status: 429, data: {}, res: new Response(null, { status: 429, headers: { 'Retry-After': '5' } }) };
+            return { ok: true, status: 200, data: { received: 8 }, res: null };
+          },
+          deleteUpload: vi.fn()
+        }
+      });
+      await vi.advanceTimersByTimeAsync(4900);
+      expect(putUrls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(200);
+      const res = await pending;
+      expect(res.ok).toBe(true);
+      expect(putUrls).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('falls back to one multipart upload when an older server has no chunked upload route', async () => {
     const bytes = new Uint8Array(25);
     const postForm = vi.fn(async () => ({ ok: true, status: 200, data: { staging_id: STAGING }, res: null }));

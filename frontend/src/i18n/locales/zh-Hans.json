@@ -30,7 +30,7 @@
   "(öffnet in neuem Tab)": "（在新标签页中打开）",
   "+ Band {volume} gelesen": "+ 第 {volume} 卷已读",
   "+ Foto": "+ 照片",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "other": "+ {n} 个附赠"
   },
   "+ {n} angekündigt|+ {n} angekündigt": {
@@ -3438,7 +3438,7 @@
   "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
     "other": "{n} 件附加品，如书盒或特别卷"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "other": "{n} 个附赠"
   },
   "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {

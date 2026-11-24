@@ -100,6 +100,8 @@ function swapInStagedDb() {
 
         initDb();
         require('../middleware/auth').persistJwtSecret();
+        // the cover cache's counters, failure list and column list belonged to the old database
+        require('./coverCache').reset();
         const row = db.prepare('SELECT count(*) AS count FROM mangas').get();
         if (bakWritten) unlinkQuietly(bakPath);
         return row ? row.count : 0;

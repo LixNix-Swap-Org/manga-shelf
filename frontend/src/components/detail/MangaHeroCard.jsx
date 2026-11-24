@@ -321,7 +321,7 @@ export default function MangaHeroCard({
                     {tr('Sammlungs-Fortschritt')}
                   </span>
                   <span className="text-slate-400 font-mono">
-                    <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : tr('im Besitz')}{extrasCount > 0 ? ` ${tn('+ {n} Extras', '+ {n} Extras', extrasCount)}` : ''} 
+                    <strong className="text-emerald-400">{ownedCount}</strong> {totalTarget > 0 ? `/ ${totalTarget}` : tr('im Besitz')}{extrasCount > 0 ? ` ${tn('+ {n} Extra', '+ {n} Extras', extrasCount)}` : ''} 
                     {completionPct !== null && ` (${completionPct}%)`}
                   </span>
                 </div>

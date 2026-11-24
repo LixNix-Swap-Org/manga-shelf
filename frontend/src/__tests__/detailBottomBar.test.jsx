@@ -89,7 +89,7 @@ describe('detail context bar at 375 px', () => {
     expect(bar.querySelector('#btn-detail-scan')).toBeTruthy();
     const page = container.firstElementChild;
     expect(page.className).toContain('max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))]');
-    expect(page.className).toContain('max-sm:[&_#bulk-action-bar]:bottom-[calc(4.25rem+env(safe-area-inset-bottom))]');
+    expect(page.className).toContain('max-sm:[&_#bulk-action-bar]:bottom-[calc(5.25rem+env(safe-area-inset-bottom))]');
   });
 
   it('"Band hinzufügen" focuses the number field of the add form', async () => {

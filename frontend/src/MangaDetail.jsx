@@ -45,7 +45,7 @@ export { DETAIL_SCROLL_KEY, findDuplicateEntries, backLinkTarget } from './compo
 
 
 // phones: room for the context bar (3.5rem + inset) and, offline, the banner; a selection's bar sits above it
-const PAGE_CLASS = 'min-h-screen pb-20 overflow-x-clip max-sm:[&_#bulk-action-bar]:bottom-[calc(4.25rem+env(safe-area-inset-bottom))]';
+const PAGE_CLASS = 'min-h-screen pb-20 overflow-x-clip max-sm:[&_#bulk-action-bar]:bottom-[calc(5.25rem+env(safe-area-inset-bottom))]';
 const PHONE_PADDING = 'max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))]';
 const PHONE_PADDING_OFFLINE = 'max-sm:pb-[calc(8rem+env(safe-area-inset-bottom))]';
 

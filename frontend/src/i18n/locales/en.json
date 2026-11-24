@@ -31,7 +31,7 @@
   "(öffnet in neuem Tab)": "(opens in a new tab)",
   "+ Band {volume} gelesen": "+ Volume {volume} read",
   "+ Foto": "+ Photo",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "one": "+ {n} extra",
     "other": "+ {n} extras"
   },
@@ -3512,7 +3512,7 @@
     "one": "{n} extra such as a slipcase or special volume",
     "other": "{n} extras such as slipcases or special volumes"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "one": "{n} extra",
     "other": "{n} extras"
   },

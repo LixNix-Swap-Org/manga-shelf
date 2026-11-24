@@ -32,7 +32,7 @@
   "(öffnet in neuem Tab)": "(abre em nova aba)",
   "+ Band {volume} gelesen": "+ Volume {volume} lido",
   "+ Foto": "+ Foto",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "one": "+ {n} extra",
     "many": "+ {n} extras",
     "other": "+ {n} extras"
@@ -3586,7 +3586,7 @@
     "many": "{n} extras como caixas ou volumes especiais",
     "other": "{n} extras como caixas ou volumes especiais"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "one": "{n} extra",
     "many": "{n} extras",
     "other": "{n} extras"

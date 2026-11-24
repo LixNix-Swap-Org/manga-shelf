@@ -179,7 +179,7 @@ manga-shelf/
 │   ├── lifecycle.js              # trackJob, shutdown, exitAfterShutdown, healthReport (for /api/health)
 │   ├── restore.js                # restoreFromZip: staging, validation and migration on a copy, safety snapshot, swap (backup page, offline restore)
 │   ├── restoreOffline.js         # restore into a stopped server and db-check of a database copy (server binary, scripts/admin.js)
-│   ├── coverCache.js             # cover cache in DATA_DIR/cache/covers: fetches a foreign cover URL a row names once (safeFetch), 2 GB cap, failures remembered 10 min, daily pruneUnused
+│   ├── coverCache.js             # cover cache in DATA_DIR/cache/covers: fetches a foreign cover URL a row names once (safeFetch), 2 GB cap, failures remembered 10 min, daily pruneUnused, reset() after a restore (services/restore.js)
 │   ├── uploadCleanup.js          # cleanOrphanUploads (orphans older than 7 days, REFERENCE_COLUMNS incl. trash.payload), referencedUploadNames
 │   ├── snapshot.js               # binding of core/snapshot.js
 │   ├── radar.js                  # binding of core/radar.js (APP_TIMEZONE as the default)
@@ -415,7 +415,7 @@ manga-shelf/
 │       │   └── useVolumeEditForm.js # volume editor: form, photos, autofill, buildSaveBody/rebaseForm, save, delete
 │       ├── utils/                # logic without React
 │       │   ├── api.js            # API client: apiFetch/get/post/put/del/upload, transport web/remote/local, TIMEOUTS, assetUrl/assetImgProps, downloadFile
-│       │   ├── backupUpload.js   # shared uploadAndInspectBackup: multipart <= 16 MB, 16 MB chunked upload + retry/abort above, used by BackupRestoreModal and app/takeover.js
+│       │   ├── backupUpload.js   # shared uploadAndInspectBackup: multipart <= 16 MB, 16 MB chunked upload + retry (408/429/502/503/504; 429 waits for Retry-After, 2–30 s)/abort above, used by BackupRestoreModal and app/takeover.js
 │       │   ├── webPush.js        # browser side of the Web Push reminders: support check, subscribe/unsubscribe, texts, logout hook
 │       │   ├── fieldMessages.js  # installFieldMessages (main.jsx): one capture listener per document replaces the own form field messages of the browser (required, min/max, step, url …) with texts in the UI language; the next input clears them
 │       │   ├── notify.js         # toasts: notify.error/success/info/update/dismiss/subscribe, notifyResponseError

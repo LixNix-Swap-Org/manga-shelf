@@ -239,7 +239,8 @@ test('a backup that passes validation but cannot be migrated is rejected with 40
     });
 });
 
-test('an older-schema backup is migrated to the latest version on restore', async () => {
+test('an older-schema backup is migrated to the latest version on restore', async (t) => {
+    const coverReset = t.mock.method(require('../services/coverCache'), 'reset');
     const data = await snapshotDbBuffer((d) => {
         d.exec(`
             DROP VIEW volume_owners;
@@ -260,6 +261,7 @@ test('an older-schema backup is migrated to the latest version on restore', asyn
     const cols = dbm.db.prepare('PRAGMA table_info(volumes)').all().map(c => c.name);
     assert.ok(cols.includes('priority') && cols.includes('target_price'));
     assert.equal((await admin('GET', '/mangas')).status, 200);
+    assert.equal(coverReset.mock.callCount(), 1, 'the cover cache forgets what it knew of the old database');
 });
 
 test('restoring a backup with legacy Gelesen volumes converts them on the staged copy (migration v13)', async () => {

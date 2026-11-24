@@ -30,7 +30,7 @@
   "(öffnet in neuem Tab)": "(새 탭에서 열림)",
   "+ Band {volume} gelesen": "+ {volume}권 읽음",
   "+ Foto": "+ 사진",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "other": "+ 부록 {n}개"
   },
   "+ {n} angekündigt|+ {n} angekündigt": {
@@ -3438,7 +3438,7 @@
   "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
     "other": "케이스나 특별판 같은 엑스트라 {n}개"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "other": "+ 부록 {n}개"
   },
   "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {

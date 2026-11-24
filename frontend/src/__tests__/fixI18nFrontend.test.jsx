@@ -94,11 +94,11 @@ describe('stored values are shown through enumLabels', () => {
 });
 
 describe('counted nouns use tn()', () => {
-  it('German stays byte-identical (also for one); English follows the plural rules', () => {
+  it('German says "1 Extra" and "3 Extras"; English follows the plural rules', () => {
     expect(seriesSummary({ status: 'Laufend' }, { owned: 2, total: 0, extras: 3 }, { read: 0 })).toContain('3 Extras');
-    expect(seriesSummary({ status: 'Laufend' }, { owned: 2, total: 0, extras: 1 }, { read: 0 })).toContain('1 Extras');
+    expect(seriesSummary({ status: 'Laufend' }, { owned: 2, total: 0, extras: 1 }, { read: 0 })).toMatch(/1 Extra(?!s)/);
     expect(aboveTotalText(14, 1)).toBe('Folge 14 liegt über den 1 Folgen dieses Eintrags.');
-    __setCatalogForTests('en', { '{n} Extras|{n} Extras': { one: '{n} extra', other: '{n} extras' } }, { languages: ['en-GB'] });
+    __setCatalogForTests('en', { '{n} Extra|{n} Extras': { one: '{n} extra', other: '{n} extras' } }, { languages: ['en-GB'] });
     const summary = seriesSummary({ status: 'Laufend' }, { owned: 2, total: 0, extras: 1 }, { read: 0 });
     expect(summary).toContain('1 extra');
     expect(summary).not.toContain('extras');

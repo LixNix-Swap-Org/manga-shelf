@@ -31,7 +31,7 @@
   "(öffnet in neuem Tab)": "(opent in een nieuw tabblad)",
   "+ Band {volume} gelesen": "+ Deel {volume} gelezen",
   "+ Foto": "+ Foto",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "one": "+ {n} extra",
     "other": "+ {n} extra's"
   },
@@ -3512,7 +3512,7 @@
     "one": "{n} extra zoals een verzamelbox of speciaal deel",
     "other": "{n} extra’s zoals verzamelboxen of speciale delen"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "one": "{n} extra",
     "other": "{n} extra's"
   },

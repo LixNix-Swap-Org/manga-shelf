@@ -33,7 +33,7 @@
   "(öffnet in neuem Tab)": "(otwiera się w nowej karcie)",
   "+ Band {volume} gelesen": "+ Tom {volume} przeczytany",
   "+ Foto": "+ Zdjęcie",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "one": "+ {n} dodatek",
     "few": "+ {n} dodatki",
     "many": "+ {n} dodatków",
@@ -3660,7 +3660,7 @@
     "many": "{n} dodatków, np. etui lub tomy specjalne",
     "other": "{n} dodatków, np. etui lub tomy specjalne"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "one": "{n} dodatek",
     "few": "{n} dodatki",
     "many": "{n} dodatków",

@@ -30,7 +30,7 @@
   "(öffnet in neuem Tab)": "(新しいタブで開きます)",
   "+ Band {volume} gelesen": "+ {volume}巻を既読",
   "+ Foto": "+ 写真",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "other": "+ 他{n}件の特典"
   },
   "+ {n} angekündigt|+ {n} angekündigt": {
@@ -3438,7 +3438,7 @@
   "{n} Extra wie Schuber oder Sonderband|{n} Extras wie Schuber oder Sonderbände": {
     "other": "収納ボックスや特別巻などのおまけ{n}点"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "other": "特典{n}件"
   },
   "{n} Feld hat in diesem Regal einen eigenen Wert.|{n} Felder haben in diesem Regal einen eigenen Wert.": {

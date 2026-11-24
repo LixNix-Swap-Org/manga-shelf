@@ -31,7 +31,7 @@
   "(öffnet in neuem Tab)": "(yeni sekmede açılır)",
   "+ Band {volume} gelesen": "+ Cilt {volume} okundu",
   "+ Foto": "+ Fotoğraf",
-  "+ {n} Extras|+ {n} Extras": {
+  "+ {n} Extra|+ {n} Extras": {
     "one": "+ {n} ekstra",
     "other": "+ {n} ekstra"
   },
@@ -3512,7 +3512,7 @@
     "one": "kutu ya da özel cilt gibi {n} ekstra",
     "other": "kutu ya da özel cilt gibi {n} ekstra"
   },
-  "{n} Extras|{n} Extras": {
+  "{n} Extra|{n} Extras": {
     "one": "{n} ekstra",
     "other": "{n} ekstra"
   },
