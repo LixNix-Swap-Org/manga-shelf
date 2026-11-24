@@ -486,6 +486,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         isOfflineMode={isOfflineMode}
         isVisitor={isVisitor}
         mangas={mangas}
+        matchCount={filtered.length}
         todoCount={todoCount}
         onOpenSeries={(id) => navigate(`/manga/${id}`)}
         mobileMenuOpen={mobileMenuOpen}

@@ -52,6 +52,9 @@ export default function SnapshotList({ snapshots, disabled, onRestore, onDelete 
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${CATEGORY_STYLES[b.category]}`}>{t(label)}</span>
                   )}
                   <VerifiedBadge verified={b.verified} error={b.verify_error} />
+                  {b.copied === true && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-500/20 text-emerald-300" title={t('Liegt auch im zweiten Speicherort')}>{t('kopiert')}</span>
+                  )}
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   {formatDateTime(b.created_at)} • <strong className="font-mono text-slate-300">{formatMegabytes(b.size)}</strong>

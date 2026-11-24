@@ -347,13 +347,13 @@ describe('StatsPage', () => {
     expect(kpi.textContent).toMatch(/2 Reihen · 21,00\s€ bekannt/);
   });
 
-  it('keeps one live region mounted for the loading text and scrolls the tab bar instead of wrapping', async () => {
+  it('keeps one live region mounted for the loading text; the tab bar scrolls on phones and wraps from 640 px', async () => {
     const slow = deferred();
     fetchMock.mockReturnValueOnce(slow.promise);
     render(ui());
     const status = screen.getByRole('status');
     expect(status.textContent).toBe('Berechne Statistiken & Finanzdaten...');
-    expect(screen.getByRole('group', { name: 'Bereiche' }).className).toMatch(/overflow-x-auto no-scrollbar/);
+    expect(screen.getByRole('group', { name: 'Bereiche' }).className).toMatch(/flex-nowrap sm:flex-wrap .*overflow-x-auto sm:overflow-visible no-scrollbar/);
     await act(async () => { slow.resolve(response(statsBody())); });
     await screen.findByText('1.234,50 €');
     expect(screen.getByRole('status')).toBe(status);

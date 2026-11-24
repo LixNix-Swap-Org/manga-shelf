@@ -314,6 +314,7 @@ function MangaCollectionGrid({
       getStatusBadge={getStatusBadge}
       onDelete={handleDeleteManga}
       onAuthorClick={onAuthorClick}
+      publisherFirst={sortBy === 'publisher_asc'}
     />
   );
 
@@ -347,11 +348,11 @@ function MangaCollectionGrid({
                 <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                   <th scope="col" className="py-3 px-4 w-16">{t('Cover')}</th>
                   <th scope="col" className="py-3 px-4">{t('Titel & Autor')}</th>
-                  <th scope="col" className="py-3 px-4 hidden sm:table-cell">{t('Verlag')}</th>
+                  <th scope="col" className="py-3 px-4 hidden lg:table-cell">{t('Verlag')}</th>
                   <th scope="col" className="py-3 px-4">{t('Status')}</th>
                   <th scope="col" className="py-3 px-4 whitespace-nowrap">{t('Bände / Fortschritt')}</th>
-                  <th scope="col" className="py-3 px-4 text-right hidden md:table-cell">{t('Wert')}</th>
-                  <th scope="col" className="py-3 px-4 text-right w-24">{t('Aktion')}</th>
+                  <th scope="col" className="py-3 px-4 text-right hidden lg:table-cell">{t('Wert')}</th>
+                  <th scope="col" className="py-3 px-4 text-right w-24 sm:w-auto lg:w-24"><span className="sm:sr-only lg:not-sr-only">{t('Aktion')}</span></th>
                 </tr>
               </thead>
               {sections.length === 0 ? (

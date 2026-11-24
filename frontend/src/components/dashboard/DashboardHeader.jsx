@@ -166,6 +166,7 @@ export default function DashboardHeader({
   isOfflineMode,
   isVisitor,
   mangas = [],
+  matchCount = 0,
   todoCount = 0,
   mobileMenuOpen,
   onLogout,
@@ -475,6 +476,7 @@ export default function DashboardHeader({
             onBlur={() => setQuickOpen(false)}
             onChange={e => {
               searchTypedRef.current = true;
+              if (!quickOpen) setQuickOpen(true);
               // the header search always searches the collection: typing on another view shows the shelf
               if (activeMainView !== 'shelf') setView('shelf');
               setSearch(e.target.value);
@@ -482,6 +484,12 @@ export default function DashboardHeader({
             }} 
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
+              // Escape in two steps: first the list closes (text and filter stay), then the global handler clears
+              if (e.key === 'Escape' && quickOpen && search) {
+                e.preventDefault();
+                setQuickOpen(false);
+                return;
+              }
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                 e.preventDefault();
                 if (!quickOpen) { setQuickOpen(true); return; }
@@ -546,6 +554,7 @@ export default function DashboardHeader({
                 onHover={setQuickIndex}
                 onClose={() => searchInputRef.current?.blur()}
                 narrow={narrow}
+                showAll={String(search || '').trim() ? { count: matchCount } : null}
               />
             );
             // phones: full screen below the header, outside it (its backdrop filter would anchor a fixed panel)

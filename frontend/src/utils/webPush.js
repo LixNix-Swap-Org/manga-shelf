@@ -35,7 +35,15 @@ export function pushTexts() {
     loanTitle: t('Ausleihe überfällig'),
     loan: t('{title} {volumes} – seit {days} Tagen bei {name}'),
     // short weekday names Monday … Sunday for the weekly list
-    weekdays: t('Mo,Di,Mi,Do,Fr,Sa,So')
+    weekdays: t('Mo,Di,Mi,Do,Fr,Sa,So'),
+    announcedTitle: t('Neu angekündigt'),
+    preorderTitle: t('Vorbestellung überfällig'),
+    preorder: t('{title} {volumes} – Termin war {date}'),
+    yesterday: t('gestern'),
+    arrived: t('Angekommen?'),
+    // a date in the notification ("12. März"); {d} the day, {month} a name of the list below
+    date: t('{d}. {month}'),
+    months: t('Januar,Februar,März,April,Mai,Juni,Juli,August,September,Oktober,November,Dezember')
   };
 }
 
@@ -73,15 +81,18 @@ export async function currentSubscription(nav = navigator) {
  * The choices of a subscription and their defaults (services/push.js): `hour` 0–23 in the server's time zone, `mode`
  * 'day' (release day), 'eve' (the day before) or 'week' (Mondays, for the week), and what it reports.
  */
-export const WEB_PUSH_DEFAULTS = Object.freeze({ hour: 9, mode: 'day', volumes: true, episodes: true, loans: true });
+export const WEB_PUSH_KINDS = ['volumes', 'episodes', 'loans', 'announced', 'preorders'];
+export const WEB_PUSH_DEFAULTS = Object.freeze({ hour: 9, mode: 'day', weekend: 'same', volumes: true, episodes: true, loans: true, announced: true, preorders: true });
 export const WEB_PUSH_MODES = ['day', 'eve', 'week'];
+export const WEB_PUSH_WEEKEND = ['same', 'late', 'off'];
 
 /** The server's choices with the defaults for anything missing or invalid. */
 function readPrefs(raw) {
   const prefs = { ...WEB_PUSH_DEFAULTS };
   if (Number.isInteger(raw?.hour) && raw.hour >= 0 && raw.hour <= 23) prefs.hour = raw.hour;
   if (WEB_PUSH_MODES.includes(raw?.mode)) prefs.mode = raw.mode;
-  for (const kind of ['volumes', 'episodes', 'loans']) if (typeof raw?.[kind] === 'boolean') prefs[kind] = raw[kind];
+  if (WEB_PUSH_WEEKEND.includes(raw?.weekend)) prefs.weekend = raw.weekend;
+  for (const kind of WEB_PUSH_KINDS) if (typeof raw?.[kind] === 'boolean') prefs[kind] = raw[kind];
   return prefs;
 }
 
@@ -97,7 +108,7 @@ export async function readWebPushState(nav = navigator) {
   return { subscribed: Boolean(answer?.subscribed), prefs: readPrefs(answer) };
 }
 
-/** Stores changed choices ({ hour?, mode?, volumes?, episodes?, loans? }) of this browser. Resolves false without a subscription. */
+/** Stores changed choices ({ hour?, mode?, weekend?, volumes?, episodes?, loans?, announced?, preorders? }) of this browser. Resolves false without a subscription. */
 export async function setWebPushPrefs(patch, nav = navigator) {
   const sub = await currentSubscription(nav);
   if (!sub) return false;

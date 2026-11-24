@@ -54,7 +54,7 @@ export default function ScanCandidatesDialog({ candidates, bookTitle, canEdit, o
                     src={c.cover_image}
                     alt=""
                     className="w-full h-full object-cover"
-                    fallback={<BookOpen className="w-4 h-4 text-slate-500" aria-hidden="true" />}
+                    fallback={<BookOpen className="w-4 h-4 text-slate-400" aria-hidden="true" />}
                   />
                 </span>
                 <span className="min-w-0">

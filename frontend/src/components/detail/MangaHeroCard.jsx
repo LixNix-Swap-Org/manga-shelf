@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
-import { BookOpen, BuildingComplex, CircleCheck, Coins, PenLine, Trash, Tv, Upload, X } from 'lucide-react';
+import { BookOpen, BuildingComplex, CircleCheck, PenLine, Trash, Tv, Upload, X } from 'lucide-react';
 import { assetImgProps } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
 import { getChapterProgress } from '../../utils/volumeHelpers';
@@ -285,18 +285,7 @@ export default function MangaHeroCard({
                 <WebtoonPill format={manga.format} size="md" />
                 <CollectingControl manga={manga} canEdit={canEdit} isOffline={isOffline} onSaved={onCollectingSaved} />
                 <WishControl manga={manga} canWish={canWish} onSaved={onWishSaved} />
-                <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-xl font-semibold">
-                  {webtoon
-                    ? tr('Gesamt: {total}', { total: manga.total_chapters > 0 ? tn('{n} Kapitel', '{n} Kapitel', manga.total_chapters) : tr('Unbekannt') })
-                    : tr('Gesamt: {total}', { total: totalTarget > 0 ? formatCount(totalTarget, 'Band', 'Bände') : tr('Unbekannt') })}
-                </span>
-                {/* a webtoon without bought volumes has no collection value */}
-                {(!webtoon || totalOwnedValue > 0) && (
-                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-semibold flex items-center gap-1.5">
-                    <Coins className="w-3.5 h-3.5 text-emerald-400" />
-                    {rich('Sammlungswert: {price}', { price: <strong className="text-white font-mono">{formatMoney(totalOwnedValue, currency)}</strong> })}
-                  </span>
-                )}
+                {/* count and value stay in the box under the cover and in the progress bar, not as pills a third time */}
               </div>
 
               {/* a short excerpt; the whole description, genres and tags are in the tab "Infos" */}

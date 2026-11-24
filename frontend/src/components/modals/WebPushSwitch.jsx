@@ -15,6 +15,7 @@ export const WEB_PUSH_TEXTS = {
   service: 'Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.',
   when: 'Wann',
   hour: 'Uhrzeit',
+  weekend: 'Wochenende',
   what: 'Melden',
   prefsFailed: 'Auswahl konnte nicht gespeichert werden',
   gone: 'Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.'
@@ -29,7 +30,15 @@ const MODE_LABELS = {
 const KIND_LABELS = {
   volumes: 'Neue Bände',
   episodes: 'Neue Anime-Folgen',
-  loans: 'Überfällige Ausleihen'
+  loans: 'Überfällige Ausleihen',
+  announced: 'Neu angekündigte Bände',
+  preorders: 'Vorbestellung überfällig'
+};
+// i18n
+const WEEKEND_LABELS = {
+  same: 'wie unter der Woche',
+  late: 'erst ab 11:00',
+  off: 'keine Erinnerungen'
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -37,7 +46,8 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 /**
  * Settings → Allgemein in a browser: the Web Push switch of the reminders (off by default, per browser). Greyed out with
  * the reason where the browser cannot do it. While on: "Wann" (release day, the day before, Mondays for the week),
- * "Uhrzeit" (server time zone), what it reports (new volumes, new episodes, overdue lendings; at least one) and
+ * "Uhrzeit" (server time zone), "Wochenende" (like weekdays, not before 11:00, none), what it reports (new volumes, new
+ * episodes, overdue lendings, newly announced volumes, overdue pre-orders; at least one) and
  * "Test senden" to check the way to this browser.
  */
 export default function WebPushSwitch({ env = globalThis }) {
@@ -163,6 +173,19 @@ export default function WebPushSwitch({ env = globalThis }) {
                 onChange={(e) => change({ hour: Number(e.target.value) })}
               >
                 {HOURS.map((h) => <option key={h} value={h}>{`${h}:00`}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-300">
+            <label className="flex items-center gap-2">
+              <span>{t(WEB_PUSH_TEXTS.weekend)}</span>
+              <select
+                className="input-field bg-slate-950 !w-auto !px-3 !py-1.5"
+                value={prefs.weekend}
+                disabled={busy}
+                onChange={(e) => change({ weekend: e.target.value })}
+              >
+                {Object.entries(WEEKEND_LABELS).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
               </select>
             </label>
           </div>

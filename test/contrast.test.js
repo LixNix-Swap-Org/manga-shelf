@@ -156,11 +156,9 @@ test('no component uses the low-contrast text colours', () => {
     for (const m of text.matchAll(/(?<![\w:/-])(text-slate-600|placeholder-slate-[56]00)(?![\w/])/g)) {
       offenders.push(`${file}: ${m[1]}`);
     }
+    // icons and aria-hidden marks too: slate-500 reaches only 3.75:1 on the cards, slate-400 6.96:1
     for (const m of text.matchAll(/(?<![\w:/-])text-slate-500(?![\w/])/g)) {
-      const tag = openingTag(text, m.index);
-      // icons (components) and aria-hidden marks are decorative; text needs slate-400 or lighter
-      if (/^<[A-Z]/.test(tag) || /aria-hidden="true"/.test(tag)) continue;
-      offenders.push(`${file}: text-slate-500 on ${tag.slice(0, 60)}`);
+      offenders.push(`${file}: text-slate-500 on ${openingTag(text, m.index).slice(0, 60)}`);
     }
   }
   assert.deepEqual(offenders, []);

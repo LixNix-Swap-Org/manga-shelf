@@ -6,7 +6,7 @@ import { fmtNumber, fmtPct, countLabel, cssPct, fmtDateTime, sortReadVolumes } f
 import { t } from '../../../i18n/index.js';
 
 const READER_COVER_FALLBACK = (
-  <div aria-hidden="true" className="w-full h-full flex items-center justify-center text-slate-500">
+  <div aria-hidden="true" className="w-full h-full flex items-center justify-center text-slate-400">
     <BookOpen className="w-5 h-5" />
   </div>
 );
@@ -97,7 +97,7 @@ function ReaderDetails({ details, visibleSeries, onShowMore, onBack, onNavigate 
         )}
         {readMangas.length === 0 && (
           <div className="text-center py-8 bg-slate-900/50 rounded-xl border border-slate-800/50">
-            <BookOpen className="w-8 h-8 mx-auto text-slate-500 mb-2" aria-hidden="true" />
+            <BookOpen className="w-8 h-8 mx-auto text-slate-400 mb-2" aria-hidden="true" />
             <p className="text-xs text-slate-400">{t('Noch keine Bände als gelesen markiert.')}</p>
           </div>
         )}

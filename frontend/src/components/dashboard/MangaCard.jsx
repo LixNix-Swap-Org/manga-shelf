@@ -39,7 +39,7 @@ export function seriesSummary(manga, { owned, total, extras }, readState, defaul
 function CoverFallback() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-4 text-center">
-      <BookOpen className="w-10 h-10 mb-2 opacity-50 text-slate-500" />
+      <BookOpen className="w-10 h-10 mb-2 opacity-50 text-slate-400" />
       <span className="text-xs text-slate-400">{t('Kein Cover')}</span>
     </div>
   );

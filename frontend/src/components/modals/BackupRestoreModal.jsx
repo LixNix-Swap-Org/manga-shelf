@@ -11,6 +11,7 @@ import {
   clearRestoreUndo, httpErrorMessage, passwordRefusalText, readJson, readRestoreUndo, saveRestoreUndo
 } from './backup/backupHelpers';
 import SnapshotList from './backup/SnapshotList';
+import SecondLocation from './backup/SecondLocation';
 import RestoreConfirm from './backup/RestoreConfirm';
 import CsvImportPanel from './backup/CsvImportPanel';
 import DownloadLink from './backup/DownloadLink';
@@ -91,6 +92,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const [undo, setUndo] = useState(null);
   const [snapshotToDelete, setSnapshotToDelete] = useState(null);
   const [serverBackups, setServerBackups] = useState([]);
+  const [copyStatus, setCopyStatus] = useState(null);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [backupsLoadError, setBackupsLoadError] = useState('');
   const [backupModalTab, setBackupModalTab] = useState('snapshots');
@@ -126,6 +128,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         const list = Array.isArray(data.backups) ? data.backups : [];
         const entry = readRestoreUndo();
         setServerBackups(list);
+        setCopyStatus(data.copy && typeof data.copy === 'object' ? data.copy : null);
         setUndo(entry && list.some(b => b.filename === entry.filename) ? entry : null);
       } else {
         setBackupsLoadError(httpErrorMessage(res.status, data, tr('Snapshots konnten nicht geladen werden')));
@@ -604,6 +607,15 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                     <span>{tr('Neuen Snapshot erstellen')}</span>
                   </button>
                 </div>
+
+                <SecondLocation
+                  copy={copyStatus}
+                  disabled={locked}
+                  onSaved={(data) => {
+                    if (Array.isArray(data.backups)) setServerBackups(data.backups);
+                    if (data.copy) setCopyStatus(data.copy);
+                  }}
+                />
 
                 {inspecting && (
                   <p className="text-xs text-slate-400 flex items-center gap-2">

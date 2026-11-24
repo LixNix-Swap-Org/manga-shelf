@@ -321,7 +321,7 @@ export default function AnimeDetailModal({
             <>
               <div className="flex gap-4 items-end">
                 <div className="w-24 sm:w-32 aspect-[2/3] rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shrink-0 shadow-xl">
-                  <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={<Tv className="w-8 h-8 m-auto mt-10 text-slate-500" aria-hidden="true" />} />
+                  <CoverImage src={anime.cover_image} className="w-full h-full object-cover" fallback={<Tv className="w-8 h-8 m-auto mt-10 text-slate-400" aria-hidden="true" />} />
                 </div>
                 <div className="min-w-0 pb-1">
                   <h2 id={titleId} lang={langFor(displayTitle(anime)) || 'de'} className="text-xl sm:text-2xl font-extrabold text-white leading-tight break-words hyphens-auto [overflow-wrap:anywhere]">{displayTitle(anime)}</h2>
