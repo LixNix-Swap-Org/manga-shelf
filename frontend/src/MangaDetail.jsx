@@ -547,6 +547,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
           setEditing={setEditing}
           startEditing={startEditing}
           cancelEditing={cancelEditing}
+          isEditDirty={isEditDirty}
           setFormData={setFormData}
           totalOwnedValue={totalOwnedValue}
           totalTarget={totalTarget}

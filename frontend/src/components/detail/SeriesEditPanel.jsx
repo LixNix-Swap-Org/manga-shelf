@@ -150,7 +150,7 @@ function Section({ id, ids, title, children }) {
  */
 export default function SeriesEditPanel({
   applyEditLookupResult, coverUrl, editLookingUp, editLookupError, editLookupResults, formData, handleCoverUpload,
-  handleEditLookup, handleUpdate, isOffline, manga, movableShelves = [], onCancel, onEditionsChanged, saving,
+  handleEditLookup, handleUpdate, isOffline, manga, movableShelves = [], onCancel, onClose, onEditionsChanged, saving,
   setEditLookupResults, setFormData, tagSuggestions = null, uploadingCover
 }) {
   const ids = useId();
@@ -234,7 +234,7 @@ export default function SeriesEditPanel({
             <PenLine className="w-4 h-4 text-brand-400 shrink-0" aria-hidden="true" />
             <span className="min-w-0 truncate">{tr('Reihe bearbeiten')}</span>
           </h2>
-          <button type="button" id="btn-series-edit-close" onClick={onCancel} className="hit-44 shrink-0 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800" aria-label={tr('Schließen')} title={tr('Schließen')}>
+          <button type="button" id="btn-series-edit-close" onClick={onClose || onCancel} className="hit-44 shrink-0 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800" aria-label={tr('Schließen')} title={tr('Schließen')}>
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>

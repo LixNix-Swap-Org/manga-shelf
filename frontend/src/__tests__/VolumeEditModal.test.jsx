@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import VolumeEditModal from '../components/detail/VolumeEditModal';
 import { ownersUndoBody } from '../components/detail/volumeEdit/OwnersField';
 import { recordToasts } from './toastLog';
+import ConfirmHost from '../components/modals/askConfirm';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -551,5 +552,74 @@ describe('VolumePhotoManager: upload cancel', () => {
     rerender(<VolumePhotoManager {...base} uploadingVolImage onCancelUpload={onCancelUpload} />);
     fireEvent.click(screen.getByRole('button', { name: /Upload abbrechen/ }));
     expect(onCancelUpload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('VolumeEditModal: unsaved input is not dropped silently', () => {
+  const notes = () => screen.getByLabelText(/Notizen & Besonderheiten/);
+  const asked = () => screen.queryByText('Ungespeicherte Änderungen verwerfen?');
+  const answer = async (action) => {
+    await screen.findByText('Ungespeicherte Änderungen verwerfen?');
+    fireEvent.click(document.querySelector(`[data-confirm] [data-confirm-action="${action}"]`));
+    await waitFor(() => expect(asked()).toBeNull());
+  };
+
+  it('untouched: X, "Abbrechen", the backdrop and Escape close at once', async () => {
+    render(<ConfirmHost />);
+    routeFetch({});
+    const { onClose, unmount } = setup(volume());
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
+    fireEvent.click(screen.getByRole('dialog', { name: 'Band bearbeiten' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(3);
+    expect(asked()).toBeNull();
+    unmount();
+  });
+
+  it('with typed input every way out asks; "Abbrechen" keeps the input, "Verwerfen" closes', async () => {
+    render(<ConfirmHost />);
+    routeFetch({});
+    const { onClose } = setup(volume());
+    fireEvent.change(notes(), { target: { value: 'Erstauflage' } });
+
+    fireEvent.click(screen.getByRole('dialog', { name: 'Band bearbeiten' }));
+    await answer('cancel');
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    await answer('cancel');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Abbrechen' })[0]);
+    await answer('cancel');
+    act(() => { notes().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); });
+    await answer('cancel');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(notes().value).toBe('Erstauflage');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    await answer('confirm');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('an open copy form with changes: closing and the outer save ask first', async () => {
+    render(<ConfirmHost />);
+    const fetchMock = routeFetch({
+      'GET /api/users/directory': () => json(200, { users: [] }),
+      'PUT /api/volumes/7': () => json(200, { success: true })
+    });
+    const copy = { id: 70, owner_user_id: 1, owner: 'ed', price: 7.5, purchase_date: null, condition: null, lent_to: null };
+    const { onClose } = setup(volume({ copies: [copy] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten – Exemplar von ed' }));
+    fireEvent.change(await screen.findByLabelText('Ausgeliehen an'), { target: { value: 'name' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Tom' } });
+
+    save();
+    await answer('cancel');
+    expect(callsTo(fetchMock, 'PUT /api/volumes/7')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Schließen' }));
+    await answer('cancel');
+    expect(onClose).not.toHaveBeenCalled();
+
+    save();
+    await answer('confirm');
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });

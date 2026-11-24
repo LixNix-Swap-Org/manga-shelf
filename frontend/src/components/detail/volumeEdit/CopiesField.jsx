@@ -71,7 +71,7 @@ export function followsVolume(copies, volume) {
  * changes after an owners toggle: the copies are then read again from the series. `volume` (its saved price, purchase_date
  * and condition) lets the form of a copy that follows the volume fields leave them out (followsVolume).
  */
-export default function CopiesField({ volumeId, mangaId, copies: initialCopies, currentUser, canEdit, currency = 'EUR', ownersVersion = 0, onChanged, volume = null }) {
+export default function CopiesField({ volumeId, mangaId, copies: initialCopies, currentUser, canEdit, currency = 'EUR', ownersVersion = 0, onChanged, volume = null, onDraftChange }) {
   const [copies, setCopies] = useState(initialCopies || []);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(null);
@@ -116,6 +116,12 @@ export default function CopiesField({ volumeId, mangaId, copies: initialCopies, 
       returnTo.current = null;
     }
   }, [editing]);
+
+  // an open copy form with input of its own: the editor asks before that input would go (closing, the outer save)
+  const editedCopy = editing !== null ? copies.find(c => c.id === editing) : null;
+  const draftChanged = Boolean(editedCopy && form && JSON.stringify(form) !== JSON.stringify(formOf(editedCopy)));
+  useEffect(() => { onDraftChange?.(draftChanged); }, [draftChanged, onDraftChange]);
+  useEffect(() => () => onDraftChange?.(false), [onDraftChange]);
 
   if (!volumeId || copies.length === 0) return null;
 
