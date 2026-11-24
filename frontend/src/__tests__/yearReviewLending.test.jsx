@@ -57,6 +57,23 @@ describe('year review card', () => {
     expect(before.textContent).not.toMatch('€');
   });
 
+  it('another reader starts at the current year again instead of keeping an old pick', async () => {
+    const urls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      urls.push(String(url));
+      if (String(url).includes('year=2025')) return fakeResponse(200, review({ year: 2025 }));
+      return fakeResponse(200, String(url).includes('user_id=2') ? review({ user: { id: 2, username: 'lena' }, years: [2026] }) : review());
+    }));
+    const { rerender } = render(<MemoryRouter><YearReviewCard userId={1} /></MemoryRouter>);
+    const card = await screen.findByRole('region', { name: 'Mein Manga-Jahr 2026' });
+    fireEvent.change(within(card).getByLabelText('Jahr'), { target: { value: '2025' } });
+    await screen.findByRole('region', { name: 'Mein Manga-Jahr 2025' });
+    rerender(<MemoryRouter><YearReviewCard userId={2} /></MemoryRouter>);
+    await screen.findByRole('region', { name: 'Mein Manga-Jahr 2026' });
+    expect(urls.at(-1)).toBe('/api/stats/year?user_id=2');
+    expect(urls).not.toContain('/api/stats/year?user_id=2&year=2025');
+  });
+
   it('says so when the year cannot be loaded', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => fakeResponse(500, { error: 'kaputt' })));
     render(<MemoryRouter><YearReviewCard /></MemoryRouter>);

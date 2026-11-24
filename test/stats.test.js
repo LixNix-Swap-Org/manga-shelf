@@ -523,6 +523,7 @@ test('year review: reads and pages against the year before, series started, best
     assert.deepEqual(empty.read, { volumes: 0, pages: 0, previous_year: 0, started: 0 });
     assert.equal(empty.best_month, null);
     assert.equal(empty.top_series, null);
+    assert.deepEqual(empty.years, [year, year - 1, 2001], 'the asked year stays pickable');
 
     for (const bad of ['abc', '1800', String(year + 5), '2020.5']) {
         assert.equal((await admin('GET', `/stats/year?year=${bad}`)).status, 400, bad);
