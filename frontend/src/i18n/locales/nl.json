@@ -779,6 +779,7 @@
   "Der Name ist zu lang": "De naam is te lang",
   "Der Papierkorb ist leer.": "De prullenbak is leeg.",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "De pushdienst van de browser is nu niet bereikbaar. Probeer het later opnieuw.",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "De pushdienst kent deze browser niet meer. Zet de herinneringen opnieuw aan.",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "De sleutel blijft geldig tot hij bij TMDB opnieuw wordt aangemaakt of verwijderd.",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "De sleutel blijft geldig tot hij in de Cloud Console wordt verwijderd.",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "De sleutel moet {min} tot {max} tekens lang zijn",

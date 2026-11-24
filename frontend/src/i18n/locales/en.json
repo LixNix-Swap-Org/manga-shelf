@@ -779,6 +779,7 @@
   "Der Name ist zu lang": "The name is too long",
   "Der Papierkorb ist leer.": "The trash is empty.",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "The browser's push service cannot be reached right now. Please try again later.",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "The push service no longer knows this browser. Please switch the reminders on again.",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "The key is valid until it is regenerated or deleted at TMDB.",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "The key is valid until it is deleted in the Cloud Console.",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "The key must be {min} to {max} characters long",

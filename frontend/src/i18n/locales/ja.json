@@ -758,6 +758,7 @@
   "Der Name ist zu lang": "名前が長すぎます",
   "Der Papierkorb ist leer.": "ごみ箱は空です。",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "ブラウザのプッシュサービスに現在接続できません。後でもう一度お試しください。",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "プッシュサービスがこのブラウザーを認識しなくなりました。リマインダーをもう一度オンにしてください。",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "キーは、TMDBで再生成または削除するまで有効です。",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "キーは、Cloud Consoleで削除するまで有効です。",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "キーは{min}～{max}文字にしてください",

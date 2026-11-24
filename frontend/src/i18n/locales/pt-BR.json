@@ -800,6 +800,7 @@
   "Der Name ist zu lang": "O nome é muito longo",
   "Der Papierkorb ist leer.": "A lixeira está vazia.",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "O serviço push do navegador não está acessível agora. Tente novamente mais tarde.",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "O serviço de push não reconhece mais este navegador. Ative os lembretes novamente.",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "A chave vale até ser gerada de novo ou excluída no TMDB.",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "A chave vale até ser excluída no Cloud Console.",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "A chave deve ter de {min} a {max} caracteres",

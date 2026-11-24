@@ -821,6 +821,7 @@
   "Der Name ist zu lang": "Nazwa jest za długa",
   "Der Papierkorb ist leer.": "Kosz jest pusty.",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "Usługa push przeglądarki jest teraz niedostępna. Spróbuj później.",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "Usługa push nie rozpoznaje już tej przeglądarki. Włącz przypomnienia ponownie.",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "Klucz obowiązuje, dopóki nie zostanie wygenerowany ponownie lub usunięty w TMDB.",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "Klucz obowiązuje, dopóki nie zostanie usunięty w Cloud Console.",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "Klucz musi mieć od {min} do {max} znaków",

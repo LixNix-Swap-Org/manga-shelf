@@ -16,7 +16,8 @@ export const WEB_PUSH_TEXTS = {
   when: 'Wann',
   hour: 'Uhrzeit',
   what: 'Melden',
-  prefsFailed: 'Auswahl konnte nicht gespeichert werden'
+  prefsFailed: 'Auswahl konnte nicht gespeichert werden',
+  gone: 'Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.'
 };
 // i18n
 const MODE_LABELS = {
@@ -66,7 +67,7 @@ export default function WebPushSwitch({ env = globalThis }) {
     try {
       const result = on ? await enableWebPush() : await disableWebPush();
       setEnabled(Boolean(result.enabled));
-      if (result.enabled) setPrefs({ ...WEB_PUSH_DEFAULTS });
+      if (result.enabled) setPrefs(result.prefs || { ...WEB_PUSH_DEFAULTS });
       if (result.denied) setDenied(true);
       if (result.unsupported) notify.error(t(WEB_PUSH_TEXTS.unsupported));
     } catch (e) {
@@ -95,7 +96,11 @@ export default function WebPushSwitch({ env = globalThis }) {
   const sendTest = async () => {
     setBusy(true);
     try {
-      if (await testWebPush()) notify.success(t('Test-Mitteilung gesendet'));
+      const result = await testWebPush();
+      if (result.gone) {
+        setEnabled(false);
+        notify.error(t(WEB_PUSH_TEXTS.gone));
+      } else if (result.ok) notify.success(t('Test-Mitteilung gesendet'));
       else notify.error(t('Test-Mitteilung konnte nicht gesendet werden'));
     } catch (e) {
       notify.error(e, { fallback: t('Test-Mitteilung konnte nicht gesendet werden') });

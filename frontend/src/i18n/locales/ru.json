@@ -821,6 +821,7 @@
   "Der Name ist zu lang": "Название слишком длинное",
   "Der Papierkorb ist leer.": "Корзина пуста.",
   "Der Push-Dienst des Browsers ist gerade nicht erreichbar. Bitte später erneut versuchen.": "Push-сервис браузера сейчас недоступен. Попробуй позже.",
+  "Der Push-Dienst kennt diesen Browser nicht mehr. Schalte die Erinnerungen bitte neu ein.": "Push-сервис больше не узнаёт этот браузер. Включи напоминания снова.",
   "Der Schlüssel gilt, bis er bei TMDB neu erzeugt oder gelöscht wird.": "Ключ действует, пока его не создадут заново или не удалят на TMDB.",
   "Der Schlüssel gilt, bis er in der Cloud Console gelöscht wird.": "Ключ действует, пока не будет удалён в Cloud Console.",
   "Der Schlüssel muss {min} bis {max} Zeichen lang sein": "Ключ должен содержать от {min} до {max} символов",
