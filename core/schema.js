@@ -1563,6 +1563,30 @@ function migrationList(log = silentLog) {
                 drop('mangas', 'manga_passion_edition_data', /,\s*["`]?manga_passion_edition_data["`]?\s+TEXT(?:\s+DEFAULT\s+NULL)?(?=\s*[,)])/i);
                 drop('animes', 'tags', /,\s*["`]?tags["`]?\s+TEXT(?=\s*[,)])/i);
             }
+        },
+        {
+            version: 62,
+            name: 'push_more_kinds',
+            up: (d) => {
+                // two more things a browser reminder reports (services/push.js): `announced` volumes of the account's series
+                // that newly have a date in the radar, `preorders` pre-orders still open the day after their date; and
+                // `weekend` (same: like weekdays, late: not before 11:00, off: none on Saturday and Sunday).
+                // `announced_from` is the day the subscription took its first look at the radar: what was there then counts
+                // as known. push_announced holds the volumes already announced to a subscription.
+                const cols = new Set(d.prepare('PRAGMA table_info(push_subscriptions)').all().map(c => c.name));
+                if (!cols.has('announced')) d.exec("ALTER TABLE push_subscriptions ADD COLUMN announced INTEGER NOT NULL DEFAULT 1 CHECK (announced IN (0, 1))");
+                if (!cols.has('preorders')) d.exec("ALTER TABLE push_subscriptions ADD COLUMN preorders INTEGER NOT NULL DEFAULT 1 CHECK (preorders IN (0, 1))");
+                if (!cols.has('weekend')) d.exec("ALTER TABLE push_subscriptions ADD COLUMN weekend TEXT NOT NULL DEFAULT 'same' CHECK (weekend IN ('same', 'late', 'off'))");
+                if (!cols.has('announced_from')) d.exec('ALTER TABLE push_subscriptions ADD COLUMN announced_from TEXT');
+                d.exec(`
+                    CREATE TABLE IF NOT EXISTS push_announced (
+                        subscription_id INTEGER NOT NULL REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+                        volume_id INTEGER NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
+                        PRIMARY KEY (subscription_id, volume_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_push_announced_volume ON push_announced (volume_id);
+                `);
+            }
         }
     ];
 }

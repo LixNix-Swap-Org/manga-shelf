@@ -2,7 +2,11 @@ import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Star, RefreshCw, Cale
 import { buildYearOptions, isCurrentMonth, shiftMonth } from '../../../utils/radarHelpers';
 import { t } from '../../../i18n/index.js';
 
-/** Month / year navigation of the Manga-Passion calendar. `mpCurrent`: mpData is the selected month. */
+/**
+ * Month / year navigation of the Manga-Passion calendar. `mpCurrent`: mpData is the selected month. Below 1280 px it
+ * takes two rows (month picker over the full width with icon-only arrows, then the counts); from 1280 px one row with
+ * labelled arrows.
+ */
 export default function MpMonthNav({
   mpData,
   mpCurrent,
@@ -25,22 +29,22 @@ export default function MpMonthNav({
   const countOrPlaceholder = (value) => (loadingMp ? '...' : shown ? (value ?? 0) : '–');
 
   return (
-    <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-800/80 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-sky-950/30">
-      <div className="flex flex-wrap items-center gap-2">
-        <div id="mp-month-nav" className="flex flex-nowrap items-center gap-2 w-full sm:w-auto">
+    <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-800/80 flex flex-col xl:flex-row justify-between items-stretch xl:items-center gap-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-sky-950/30">
+      <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+        <div id="mp-month-nav" className="flex flex-nowrap items-center gap-2 w-full xl:w-auto">
           <button
             type="button"
             onClick={handlePrevMonth}
             disabled={loadingMp || !shiftMonth(mpYear, mpMonth, -1)}
-            className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1 shrink-0"
+            className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center justify-center gap-1 shrink-0 sm:w-11 sm:h-11 sm:p-0 xl:w-auto xl:h-auto xl:p-2.5"
             title={t('Vorheriger Monat')}
             aria-label={t('Vorheriger Monat')}
           >
             <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t('Vorheriger Monat')}</span>
+            <span className="hidden xl:inline">{t('Vorheriger Monat')}</span>
           </button>
 
-          <div className="flex flex-1 sm:flex-initial min-w-0 justify-center items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-xl shadow-inner">
+          <div className="flex flex-1 xl:flex-initial min-w-0 justify-center items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-xl shadow-inner">
             <Calendar className="w-4 h-4 text-sky-400 shrink-0 hidden min-[400px]:block" aria-hidden="true" />
 
             <label className="relative inline-flex items-center cursor-pointer group">
@@ -90,11 +94,11 @@ export default function MpMonthNav({
             type="button"
             onClick={handleNextMonth}
             disabled={loadingMp || !shiftMonth(mpYear, mpMonth, 1)}
-            className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center gap-1 shrink-0"
+            className="btn-secondary text-xs p-2.5 text-slate-300 flex items-center justify-center gap-1 shrink-0 sm:w-11 sm:h-11 sm:p-0 xl:w-auto xl:h-auto xl:p-2.5"
             title={t('Nächster Monat')}
             aria-label={t('Nächster Monat')}
           >
-            <span className="hidden sm:inline">{t('Nächster Monat')}</span>
+            <span className="hidden xl:inline">{t('Nächster Monat')}</span>
             <ChevronRight className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>

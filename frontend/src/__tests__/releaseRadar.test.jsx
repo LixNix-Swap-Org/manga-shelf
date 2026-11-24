@@ -260,7 +260,7 @@ describe('MpMonthNav', () => {
     expect(props.handleCurrentMonth).toHaveBeenCalled();
   });
 
-  it('keeps previous, month picker and next on one row; the arrows are icon buttons with names on phones', () => {
+  it('keeps previous, month picker and next on one row; the arrows are icon buttons with names below 1280 px', () => {
     render(<MpMonthNav {...monthNavProps({ mpYear: 2023, mpMonth: 12, mpData: null, mpCurrent: false })} />);
     const row = document.getElementById('mp-month-nav');
     expect(row.className).toContain('flex-nowrap');
@@ -268,8 +268,12 @@ describe('MpMonthNav', () => {
     const next = screen.getByRole('button', { name: 'Nächster Monat' });
     expect(row.contains(prev) && row.contains(next) && row.contains(screen.getByLabelText('Monat'))).toBe(true);
     expect(row.contains(screen.getByText('Aktueller Monat'))).toBe(false);
-    expect(prev.querySelector('span').className).toContain('hidden sm:inline');
+    expect(prev.querySelector('span').className).toContain('hidden xl:inline');
+    expect(prev.className).toMatch(/sm:w-11 sm:h-11/);
     expect(prev.textContent).toBe('Vorheriger Monat');
+    // two rows below 1280 px: the month picker over the full width, the counts under it
+    expect(row.className).toContain('w-full xl:w-auto');
+    expect(row.parentElement.parentElement.className).toMatch(/flex-col xl:flex-row/);
     expect(screen.getByLabelText('Monat').closest('div').className).toMatch(/flex-1 .*min-w-0/);
   });
 

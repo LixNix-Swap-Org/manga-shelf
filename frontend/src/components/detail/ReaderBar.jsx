@@ -200,7 +200,7 @@ export default function ReaderBar({
       <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
         <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="whitespace-nowrap">{rich('Gelesen: {read} von {owned}', { read: <strong className="font-mono text-emerald-400">{readOfOwned}</strong>, owned: <span className="font-mono">{ownedCount}</span> })}</span>
-          <span className="text-slate-500" aria-hidden="true">|</span>
+          <span className="text-slate-400" aria-hidden="true">|</span>
           <span className="whitespace-nowrap">{rich('SuB: {unread}', { unread: <strong className="font-mono text-amber-400">{unread}</strong> })}</span>
         </div>
         <div

@@ -1,6 +1,6 @@
 import { BookOpen, ChevronRight } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
-import { t } from '../../i18n/index.js';
+import { t, tn } from '../../i18n/index.js';
 
 export const QUICK_SERIES_LIMIT = 6;
 export const QUICK_LISTBOX_ID = 'quick-access-list';
@@ -47,8 +47,9 @@ export function quickAccessEntries({ query = '', mangas = [], recentIds = [], ac
  * The panel of the quick access below the header search: a listbox the search field controls (combobox). On phones
  * it covers the screen below the header and has a "Schließen" button. Entries are chosen with a click or, from the
  * search field, with the arrow keys and Enter; a pointer press does not move the focus out of the search field.
+ * `showAll` ({ count }) adds a button on phones that closes the panel and shows the filtered collection below it.
  */
-export default function QuickAccessPanel({ sections, activeIndex, onChoose, onHover, onClose, narrow }) {
+export default function QuickAccessPanel({ sections, activeIndex, onChoose, onHover, onClose, narrow, showAll = null }) {
   let index = -1;
   const frame = narrow
     ? 'fixed inset-x-0 bottom-0 top-[var(--sticky-header-h,64px)] z-50 bg-slate-950 overflow-y-auto overscroll-contain'
@@ -59,6 +60,19 @@ export default function QuickAccessPanel({ sections, activeIndex, onChoose, onHo
         <div className="flex justify-end px-4 pt-2">
           <button type="button" id="btn-quick-access-close" onClick={onClose} className="min-h-[44px] px-2 text-sm font-semibold text-sky-400">
             {t('Schließen')}
+          </button>
+        </div>
+      )}
+      {/* phones: right under "Schließen", so the way to the full list never needs scrolling */}
+      {narrow && showAll && showAll.count > 0 && (
+        <div className="px-4 pt-1 pb-2">
+          <button
+            type="button"
+            id="btn-quick-access-show-all"
+            onClick={onClose}
+            className="w-full min-h-[48px] rounded-xl border border-sky-700/60 bg-sky-950/60 text-sky-300 text-sm font-semibold hover:bg-sky-900/60"
+          >
+            {tn('Den Treffer in der Sammlung zeigen', 'Alle {n} Treffer in der Sammlung zeigen', showAll.count)}
           </button>
         </div>
       )}

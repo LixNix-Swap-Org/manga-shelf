@@ -7,7 +7,7 @@ import { t } from '../../../i18n/index.js';
 // a function, not a module-level element: t() runs at render time in the current language
 const coverFallback = () => (
   <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-2">
-    <BookOpen className="w-6 h-6 opacity-40 mb-1 text-slate-500" aria-hidden="true" />
+    <BookOpen className="w-6 h-6 opacity-40 mb-1 text-slate-400" aria-hidden="true" />
     <span className="text-[10px] text-slate-400 line-clamp-1">{t('Kein Cover')}</span>
   </div>
 );

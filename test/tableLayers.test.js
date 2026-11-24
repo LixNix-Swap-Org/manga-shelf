@@ -12,7 +12,7 @@ const TABLE_LAYERS = {
         'anime_airings', 'anime_work_links'],
     shelf: ['shelves', 'shelf_members', 'mangas', 'volumes', 'trash'],
     person: ['users', 'volume_copies', 'volume_reads', 'chapter_progress', 'anime_progress', 'anime_tags', 'anime_sync',
-        'user_api_credentials', 'calendar_feeds', 'saved_filters', 'series_wishes', 'push_subscriptions'],
+        'user_api_credentials', 'calendar_feeds', 'saved_filters', 'series_wishes', 'push_subscriptions', 'push_announced'],
     technical: ['app_settings', 'schema_migrations', 'data_versions', 'api_cache', 'manga_passion_cache', 'sqlite_sequence',
         'sqlite_stat1', 'sqlite_stat4']
 };
@@ -68,8 +68,12 @@ test('every reference to users is listed with what deleting the account does to 
         }
     }
     assert.deepEqual(found, ACCOUNT_REFERENCES);
-    // a table of the person layer other than users itself goes with the account
+    // a table of the person layer other than users itself goes with the account: directly, or through a CASCADE
+    // reference to a person table that does (push_announced -> push_subscriptions)
+    const direct = (name) => Object.entries(ACCOUNT_REFERENCES).some(([ref, action]) => ref.startsWith(`${name}.`) && action === 'CASCADE');
     for (const name of TABLE_LAYERS.person.filter(n => n !== 'users' && n !== 'volume_copies')) {
-        assert.ok(Object.entries(ACCOUNT_REFERENCES).some(([ref, action]) => ref.startsWith(`${name}.`) && action === 'CASCADE'), `${name} must go with its account`);
+        const viaParent = conn.prepare(`PRAGMA foreign_key_list(${name})`).all()
+            .some(fk => fk.on_delete === 'CASCADE' && fk.table !== 'users' && TABLE_LAYERS.person.includes(fk.table) && direct(fk.table));
+        assert.ok(direct(name) || viaParent, `${name} must go with its account`);
     }
 });

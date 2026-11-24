@@ -17,7 +17,7 @@ import { animeProgressLabel } from '../../utils/enumLabels.js';
 function CoverFallback() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 p-4 text-center">
-      <Tv className="w-10 h-10 mb-2 opacity-50 text-slate-500" aria-hidden="true" />
+      <Tv className="w-10 h-10 mb-2 opacity-50 text-slate-400" aria-hidden="true" />
       <span className="text-xs text-slate-400">{t('Kein Cover')}</span>
     </div>
   );

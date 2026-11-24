@@ -99,7 +99,9 @@ function backupStats() {
         last_verified: snapshotSummary(list.find(s => s.verified === true)),
         last_failed: snapshotSummary(list.find(s => s.verified === false)),
         daily_due: scheduler.needsDailyBackup(list),
-        schedule: { hour: schedule.hour, time_zone: schedule.timeZone }
+        schedule: { hour: schedule.hour, time_zone: schedule.timeZone },
+        // second backup location and the hint "all backups on the same disk" (services/backupCopy.js)
+        copy: require('../services/backupCopy').copyStatus()
     };
 }
 

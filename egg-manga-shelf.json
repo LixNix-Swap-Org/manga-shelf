@@ -91,6 +91,16 @@
       "field_type": "text"
     },
     {
+      "name": "Second Backup Folder",
+      "description": "Optional folder on another disk (a mount the panel admin added under Mounts, e.g. /mnt/backups). Every verified backup is copied there with the same retention. Empty = set it in the app under Backups, or none.",
+      "env_variable": "BACKUP_COPY_DIR",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:1024",
+      "field_type": "text"
+    },
+    {
       "name": "Log Level",
       "description": "How much the console shows: debug (everything, for troubleshooting), info, warn, error or silent.",
       "env_variable": "LOG_LEVEL",

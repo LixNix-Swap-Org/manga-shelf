@@ -497,7 +497,7 @@ export default function VolumeGridView({
                           aria-pressed={isReaderDone}
                           aria-label={t('Gelesen: {name} – {volume}', { name, volume: getVolumeDisplayTitle(vol) })}
                           onClick={(e) => handleToggleVolumeRead(vol, r.user_id, e)}
-                          className={`${look} cursor-pointer hover:scale-110`}
+                          className={`${look} hit-44-row cursor-pointer hover:scale-110`}
                           style={lookStyle}
                           title={t('{name}: {state} (Klicken zum Umschalten)', { name, state: isReaderDone ? t('Gelesen') : t('Noch ungelesen') })}
                         >

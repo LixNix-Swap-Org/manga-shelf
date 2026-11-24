@@ -11,6 +11,7 @@ import UpdateSection from '../system/UpdateSection';
 import { useApiKeys } from './AccountModal';
 import { t, tn } from '../../i18n/index.js';
 import { payloadText } from '../../i18n/serverText.js';
+import { SameDiskHint } from './backup/SecondLocation';
 
 const GB = 1024 * 1024 * 1024;
 const MB = 1024 * 1024;
@@ -335,8 +336,14 @@ export default function SystemModal({ isOpen, onClose }) {
                 [t('Letzter geprüfter Snapshot'), backups?.last_verified ? `${formatDateTime(backups.last_verified.created_at)} (${formatRelative(backups.last_verified.created_at)})` : t('keiner')],
                 backups?.last_failed && [t('Letzter Fehlschlag'), `${formatDateTime(backups.last_failed.created_at)}${backups.last_failed.verify_error ? ` – ${backups.last_failed.verify_error}` : ''}`],
                 backups?.schedule && [t('Automatisch'), `${t('täglich ab {hour} Uhr ({timeZone})', { hour: backups.schedule.hour, timeZone: backups.schedule.time_zone })}${backups.daily_due ? ` · ${t('heute noch offen')}` : ''}`],
+                backups?.copy && [t('Zweiter Speicherort'), !backups.copy.dir
+                  ? t('nicht eingerichtet')
+                  : backups.copy.error
+                    ? `${backups.copy.dir} – ${t('Kopie fehlgeschlagen')}`
+                    : `${backups.copy.dir}${backups.copy.ok_at ? ` · ${t('Letzte Kopie: {when}', { when: formatDateTime(backups.copy.ok_at) })}` : ''}`],
                 info.jobs?.running?.length > 0 && [t('Läuft gerade'), info.jobs.running.join(', ')]
               ]} />
+              {backups?.copy?.same_disk_hint && <SameDiskHint className="mt-3" />}
             </Section>
 
             <Section

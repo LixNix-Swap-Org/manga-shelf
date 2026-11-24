@@ -157,6 +157,7 @@ const ENTRIES = [
     { key: 'backupKeepManual', name: 'BACKUP_KEEP_MANUAL', parse: keepCount(10) },
     { key: 'backupKeepPreRestore', name: 'BACKUP_KEEP_PRE_RESTORE', parse: keepCount(3) },
     { key: 'backupKeepPreUpdate', name: 'BACKUP_KEEP_PRE_UPDATE', parse: keepCount(3) },
+    { key: 'backupCopyDir', name: 'BACKUP_COPY_DIR', parse: (raw) => ok(blank(raw) ? null : path.resolve(String(raw).trim())) },
     { key: 'migrateWithoutSnapshot', name: 'MIGRATE_WITHOUT_SNAPSHOT', parse: flag(false) },
     { key: 'adminConsole', name: 'ADMIN_CONSOLE', parse: flag(true) },
     { key: 'updateCheck', name: 'UPDATE_CHECK', parse: flag(true) },

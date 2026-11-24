@@ -105,7 +105,7 @@ test('routes: key, subscribe, status, test message, unsubscribe; guests and fore
     const rows = db.prepare('SELECT * FROM push_subscriptions WHERE endpoint = ?').all(b.json.endpoint);
     assert.equal(rows.length, 1);
     assert.deepEqual(JSON.parse(rows[0].texts), { title: 'New today', volume: 'Vol. {num}' });
-    const prefs = { hour: 9, mode: 'day', volumes: true, episodes: true, loans: true };
+    const prefs = { hour: 9, mode: 'day', weekend: 'same', volumes: true, episodes: true, loans: true, announced: true, preorders: true };
     assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, ...prefs });
     // the hour: set with the PUT, kept by a PUT without it, checked
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, hour: 24 })).status, 400);
@@ -220,10 +220,10 @@ test('modes: the day before, once a week, and overdue lendings', async () => {
     const week = browser('https://fcm.googleapis.com/fcm/send/week');
     const day = browser('https://fcm.googleapis.com/fcm/send/day');
     const loansOnly = browser('https://fcm.googleapis.com/fcm/send/loans');
-    assert.equal((await admin('PUT', '/push/subscriptions', { ...eve.json, mode: 'eve', loans: false })).status, 200);
-    assert.equal((await admin('PUT', '/push/subscriptions', { ...week.json, mode: 'week' })).status, 200);
-    assert.equal((await admin('PUT', '/push/subscriptions', { ...day.json, loans: false })).status, 200);
-    assert.equal((await admin('PUT', '/push/subscriptions', { ...loansOnly.json, volumes: false, episodes: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...eve.json, mode: 'eve', loans: false, announced: false, preorders: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...week.json, mode: 'week', announced: false, preorders: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...day.json, loans: false, announced: false, preorders: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...loansOnly.json, volumes: false, episodes: false, announced: false, preorders: false })).status, 200);
 
     let sent = [];
     const fetchImpl = async (url, init) => { sent.push({ url, body: init.body }); return new Response(null, { status: 201 }); };
@@ -376,7 +376,7 @@ test('lendings: a new browser hears of the ones overdue already, once; a release
     };
 
     const fresh = browser('https://fcm.googleapis.com/fcm/send/fresh');
-    assert.equal((await admin('PUT', '/push/subscriptions', { ...fresh.json, volumes: false, episodes: false })).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...fresh.json, volumes: false, episodes: false, announced: false, preorders: false })).status, 200);
     let got = await runAt(add(release, -1), fresh);
     assert.equal(got.length, 1, 'the first reminder names what is overdue already');
     assert.equal(got[0].title, 'Ausleihe überfällig');
@@ -385,7 +385,7 @@ test('lendings: a new browser hears of the ones overdue already, once; a release
 
     db.exec('DELETE FROM push_subscriptions');
     const both = browser('https://fcm.googleapis.com/fcm/send/both');
-    assert.equal((await admin('PUT', '/push/subscriptions', both.json)).status, 200);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...both.json, announced: false, preorders: false })).status, 200);
     db.prepare('UPDATE push_subscriptions SET last_day = ?').run(add(release, -1));
     got = await runAt(release, both);
     assert.deepEqual(got.map((m) => m.title), ['Heute neu erschienen', 'Ausleihe überfällig'], 'two notifications, each under its own title');
@@ -406,4 +406,84 @@ test('lendings: a new browser hears of the ones overdue already, once; a release
     assert.equal(db.prepare('SELECT last_day FROM push_subscriptions').get().last_day, add(release, -1), 'still due');
     got = await runAt(release, both);
     assert.equal(got.length, 2);
+});
+
+test('announced volumes: the first look only remembers, a new date in the radar comes once; overdue pre-orders the day after; weekend', async () => {
+    db.exec('DELETE FROM push_subscriptions');
+    const tz = 'Europe/Berlin';
+    const { createCtx } = require('../db');
+    const add = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    // a Wednesday in the coming weeks, so the weekend is ahead of it
+    let wednesday = add(today, 7);
+    while (new Date(`${wednesday}T12:00:00Z`).getUTCDay() !== 3) wednesday = add(wednesday, 1);
+    const atDay = (day, hour) => {
+        const probe = new Date(`${day}T${String(hour).padStart(2, '0')}:30:00Z`);
+        const offset = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).format(probe)) - hour;
+        return new Date(probe.getTime() - offset * 3600 * 1000);
+    };
+    const series = (await admin('POST', '/mangas', { title: 'Ankündigungsreihe' })).body.id;
+    const far = add(wednesday, 30);
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '1', status: 'Erscheint bald', release_date: far })).status, 200);
+
+    let sent = [];
+    const fetchImpl = async (url, init) => { sent.push({ url, body: init.body }); return new Response(null, { status: 201 }); };
+    const runAt = async (d, b, hour = 10) => {
+        sent = [];
+        db.prepare('DELETE FROM app_settings WHERE key = ?').run(push.DAY_KEY);
+        await push.runPushRemindersIfDue({ db, createCtx, now: atDay(d, hour), timeZone: tz, fetchImpl });
+        return sent.map((s) => JSON.parse(decrypt(b, s.body)));
+    };
+    const b = browser('https://fcm.googleapis.com/fcm/send/announce');
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, volumes: false, episodes: false, loans: false })).status, 200);
+    const status = (await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body;
+    assert.equal(status.announced, true);
+    assert.equal(status.preorders, true);
+    assert.equal(status.weekend, 'same');
+
+    assert.deepEqual(await runAt(wednesday, b), [], 'what the radar had at the first look is known already');
+    assert.equal(db.prepare('SELECT announced_from FROM push_subscriptions').get().announced_from, wednesday);
+
+    // a new volume with a date, and one whose date is only a month: only the dated one is announced
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '2', status: 'Erscheint bald', release_date: add(far, 31) })).status, 200);
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '3', status: 'Erscheint bald', release_date: far.slice(0, 7) })).status, 200);
+    let got = await runAt(add(wednesday, 1), b);
+    assert.equal(got.length, 1);
+    assert.equal(got[0].title, 'Neu angekündigt');
+    const [, m, d] = add(far, 31).split('-').map(Number);
+    assert.equal(got[0].body, `Ankündigungsreihe – Band 2 · ${d}. ${push.DEFAULT_TEXTS.months.split(',')[m - 1]}`);
+    assert.equal(got[0].tag, `announced-${add(wednesday, 1)}`);
+    assert.deepEqual(await runAt(add(wednesday, 2), b), [], 'announced once');
+
+    // weekend: "keine Erinnerungen" skips Saturday and Sunday, Monday catches up the pre-order overdue on Saturday
+    const friday = add(wednesday, 2);
+    const saturday = add(wednesday, 3);
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '4', status: 'Vorbestellt', release_date: friday })).status, 200);
+    db.prepare("UPDATE push_subscriptions SET weekend = 'off', last_day = ?").run(friday);
+    assert.deepEqual(await runAt(saturday, b), []);
+    assert.deepEqual(await runAt(add(saturday, 1), b), []);
+    assert.equal(db.prepare('SELECT last_day FROM push_subscriptions').get().last_day, friday, 'the weekend did not count as reminded');
+    got = await runAt(add(saturday, 2), b);
+    assert.equal(got.length, 1);
+    assert.equal(got[0].title, 'Vorbestellung überfällig');
+    const [, fm, fd] = friday.split('-').map(Number);
+    assert.equal(got[0].body, `Ankündigungsreihe Band 4 – Termin war ${fd}. ${push.DEFAULT_TEXTS.months.split(',')[fm - 1]}\nAngekommen?`);
+    assert.deepEqual(await runAt(add(saturday, 3), b), [], 'once');
+
+    // "erst ab 11:00": Saturday 10:00 nothing, 11:00 the reminder ("Termin war gestern")
+    db.prepare("UPDATE push_subscriptions SET weekend = 'late', last_day = ?").run(friday);
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, weekend: 'late' })).status, 200);
+    assert.deepEqual(await runAt(add(saturday, 7), b, 10), [], 'not before 11:00 on Saturday');
+    db.prepare('UPDATE push_subscriptions SET last_day = ?').run(add(friday, 7));
+    assert.equal((await admin('POST', '/volumes', { manga_id: series, volume_number: '5', status: 'Bestellt', release_date: add(friday, 7) })).status, 200);
+    got = await runAt(add(saturday, 7), b, 11);
+    assert.equal(got.length, 1);
+    assert.equal(got[0].body, 'Ankündigungsreihe Band 5 – Termin war gestern\nAngekommen?');
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, weekend: 'sometimes' })).status, 400);
+
+    // switching it off stops both; deleting the subscription removes what it was told
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, announced: false, preorders: false, loans: true })).status, 200);
+    assert.ok(db.prepare('SELECT count(*) AS c FROM push_announced').get().c > 0);
+    assert.equal((await admin('DELETE', '/push/subscriptions', { endpoint: b.json.endpoint })).status, 200);
+    assert.equal(db.prepare('SELECT count(*) AS c FROM push_announced').get().c, 0);
 });
