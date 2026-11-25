@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { fakeResponse } from './fakeResponse';
 import { recordToasts } from './toastLog';
+import { notify } from '../utils/notify';
 import { hitToForm } from '../utils/lookupPrefill';
 import { isMpEdition } from '../utils/editions';
 import { getChapterProgress, isWebtoon } from '../utils/volumeHelpers';
@@ -153,6 +154,35 @@ describe('ChapterProgress', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
     await waitFor(() => expect(toasts.messages('error')).toEqual(['Kapitel 180 gibt es bei dieser Reihe nicht (sie hat 160 Kapitel).']));
     expect(onSaved).toHaveBeenCalledTimes(2);
+  });
+
+  it('a second save soon after replaces the first undo toast; its undo goes back to the value before both', async () => {
+    let current = 150;
+    fetchMock.mockImplementation(async (url, init) => {
+      const body = JSON.parse(init.body);
+      const previous = current;
+      current = body.add ? current + body.add : body.chapters_read;
+      return fakeResponse(200, { success: true, manga_id: 9, chapters_read: current, previous, total_chapters: 200 });
+    });
+    const dismissed = [];
+    const stop = notify.subscribe((event) => { if (event.type === 'dismiss') dismissed.push(event.id); });
+    render(<ChapterProgress manga={manga} user={user} canChange isOffline={false} onSaved={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Gelesen bis Kapitel'), { target: { value: '160' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(toasts.last()?.message).toBe('Solo Leveling: bis Kapitel 160 gelesen'));
+    const first = toasts.last();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Speichern' }).disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText('Gelesen bis Kapitel'), { target: { value: '170' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(toasts.last()?.message).toBe('Solo Leveling: bis Kapitel 170 gelesen'));
+    expect(dismissed).toEqual([first.id]);
+    toasts.last().action.onClick();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ chapters_read: 150 });
+    // the undo itself offers no new undo
+    await waitFor(() => expect(current).toBe(150));
+    expect(toasts.list.filter((t) => t.action)).toHaveLength(2);
+    stop();
   });
 
   it('offline or without the right it only shows; +1 stops at the end', () => {
