@@ -554,6 +554,7 @@ export default function DashboardHeader({
                 onHover={setQuickIndex}
                 onClose={() => searchInputRef.current?.blur()}
                 narrow={narrow}
+                anchorRef={searchInputRef}
                 showAll={String(search || '').trim() ? { count: matchCount } : null}
               />
             );

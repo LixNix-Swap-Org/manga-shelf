@@ -39,7 +39,7 @@ export default function ToolDialog({ id, title, subtitle, Icon, onClose, busy = 
             )}
             <div className="min-w-0">
               <h2 id={titleId} className="text-lg font-extrabold text-white tracking-tight">{title}</h2>
-              {subtitle && <p className="text-xs text-slate-400 mt-0.5 short:hidden">{subtitle}</p>}
+              {subtitle && <p className="text-xs text-slate-400 mt-0.5 short:hidden break-words [overflow-wrap:anywhere]">{subtitle}</p>}
             </div>
           </div>
           <button type="button" onClick={close} disabled={busy} className="hit-44 shrink-0 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800" aria-label={t('Schließen')} title={t('Schließen')}>

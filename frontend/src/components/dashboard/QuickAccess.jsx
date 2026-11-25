@@ -1,3 +1,4 @@
+import { useLayoutEffect, useState } from 'react';
 import { BookOpen, ChevronRight } from 'lucide-react';
 import CoverImage from '../common/CoverImage';
 import { t, tn } from '../../i18n/index.js';
@@ -44,18 +45,45 @@ export function quickAccessEntries({ query = '', mangas = [], recentIds = [], ac
 }
 
 /**
+ * Top of the phone panel when the header scrolls with the page (short: screens, e.g. the phone app with the keyboard
+ * open): right below the search field, so the panel never covers what is typed. null while the header is sticky, then
+ * the panel starts below it (--sticky-header-h).
+ */
+function useTopBelowField(narrow, anchorRef) {
+  const [top, setTop] = useState(null);
+  useLayoutEffect(() => {
+    if (!narrow) return undefined;
+    const update = () => {
+      const headerHeight = parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue('--sticky-header-h'));
+      const field = anchorRef?.current?.parentElement;
+      setTop(headerHeight > 0 || !field ? null : Math.max(0, Math.ceil(field.getBoundingClientRect().bottom) + 4));
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, { passive: true });
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update);
+    };
+  }, [narrow, anchorRef]);
+  return top;
+}
+
+/**
  * The panel of the quick access below the header search: a listbox the search field controls (combobox). On phones
  * it covers the screen below the header and has a "Schließen" button. Entries are chosen with a click or, from the
  * search field, with the arrow keys and Enter; a pointer press does not move the focus out of the search field.
  * `showAll` ({ count }) adds a button on phones that closes the panel and shows the filtered collection below it.
+ * `anchorRef` is the search field; on short screens the phone panel starts below it.
  */
-export default function QuickAccessPanel({ sections, activeIndex, onChoose, onHover, onClose, narrow, showAll = null }) {
+export default function QuickAccessPanel({ sections, activeIndex, onChoose, onHover, onClose, narrow, showAll = null, anchorRef = null }) {
   let index = -1;
+  const top = useTopBelowField(narrow, anchorRef);
   const frame = narrow
     ? 'fixed inset-x-0 bottom-0 top-[var(--sticky-header-h,64px)] z-50 bg-slate-950 overflow-y-auto overscroll-contain'
     : 'absolute left-0 right-0 top-full mt-2 z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl';
   return (
-    <div id="quick-access" className={frame} onMouseDown={(e) => e.preventDefault()}>
+    <div id="quick-access" className={frame} style={top === null ? undefined : { top }} onMouseDown={(e) => e.preventDefault()}>
       {narrow && (
         <div className="flex justify-end px-4 pt-2">
           <button type="button" id="btn-quick-access-close" onClick={onClose} className="min-h-[44px] px-2 text-sm font-semibold text-sky-400">

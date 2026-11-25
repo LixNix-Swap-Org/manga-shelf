@@ -51,7 +51,7 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
       </td>
       <td className="py-2.5 px-4">
         <div className="flex items-center gap-1.5 min-w-0">
-          <Link to={`/manga/${manga.id}`} className="font-bold text-white hover:text-brand-400 transition-colors text-sm line-clamp-1 min-w-0">
+          <Link to={`/manga/${manga.id}`} className="font-bold text-white hover:text-brand-400 transition-colors text-sm line-clamp-1 min-w-0 break-words [overflow-wrap:anywhere]">
             {manga.title}
           </Link>
           <LanguagePill language={editionLanguage(manga)} region={editionRegion(manga)} />
