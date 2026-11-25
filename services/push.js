@@ -118,6 +118,20 @@ function encryptPayload(subscription, payload, { salt = crypto.randomBytes(16), 
     return Buffer.concat([salt, rs, Buffer.from([asPublic.length]), asPublic, body]);
 }
 
+/** True when `p256dh` (base64url) is an uncompressed point on P-256, the only key a browser sends. */
+function isValidPushKey(p256dh) {
+    const key = Buffer.from(String(p256dh || ''), 'base64url');
+    if (key.length !== 65 || key[0] !== 4) return false;
+    try {
+        const probe = crypto.createECDH('prime256v1');
+        probe.generateKeys();
+        probe.computeSecret(key);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Sends one message. Resolves { ok, gone } where `gone` means the push service forgot the subscription (404/410):
  * the caller deletes it. Network errors resolve { ok: false, gone: false }.
@@ -125,7 +139,14 @@ function encryptPayload(subscription, payload, { salt = crypto.randomBytes(16), 
 async function sendPush(subscription, message, { db, fetchImpl = globalThis.fetch, now = Date.now() } = {}) {
     if (!isPushEndpoint(subscription.endpoint)) return { ok: false, gone: true };
     const keys = vapidKeys(db);
-    const body = encryptPayload(subscription, JSON.stringify(message));
+    let body;
+    try {
+        body = encryptPayload(subscription, JSON.stringify(message));
+    } catch (e) {
+        // keys that are no point on the curve (a broken or forged subscription) never work: the caller deletes it
+        log.warn(`[Push] Abo mit ungültigen Schlüsseln: ${e?.message || e}`);
+        return { ok: false, gone: true };
+    }
     try {
         const res = await fetchImpl(subscription.endpoint, {
             method: 'POST',
@@ -377,7 +398,8 @@ function buildMessage(found, texts, day, mode = 'day') {
     const episodes = found.episodes || [];
     const loans = found.loans || [];
     const weekdays = String(texts.weekdays || DEFAULT_TEXTS.weekdays).split(',');
-    const dated = (line, d) => (mode === 'week' && d ? `${weekdays[weekdayIndex(d)] || d} ${line}` : line);
+    // the week, and a window over several days (the weekend caught up, see findFor), name each line's weekday
+    const dated = (line, d) => ((mode === 'week' || found.multiDay) && d ? `${weekdays[weekdayIndex(d)] || d} ${line}` : line);
     const lines = [];
     const add = (line) => { if (!lines.includes(line)) lines.push(line); };
     for (const v of volumes) {
@@ -405,7 +427,7 @@ function buildMessages(found, texts, day, mode = 'day') {
     const releases = (found.volumes || []).length + (found.episodes || []).length;
     const main = mode === 'week' || !releases || !(found.loans || []).length
         ? [buildMessage(found, texts, day, mode)]
-        : [buildMessage({ volumes: found.volumes, episodes: found.episodes }, texts, day, mode), buildMessage({ loans: found.loans }, texts, day, mode)];
+        : [buildMessage({ volumes: found.volumes, episodes: found.episodes, multiDay: found.multiDay }, texts, day, mode), buildMessage({ loans: found.loans }, texts, day, mode)];
     // announced volumes and overdue pre-orders always come as notifications of their own
     return [...main, announcedMessage(found.announced || [], texts, day), preorderMessage(found.preorders || [], texts, day, mode)].filter(Boolean);
 }
@@ -417,8 +439,15 @@ function buildMessages(found, texts, day, mode = 'day') {
  */
 function findFor(ctx, sub, day) {
     const mode = MODES.includes(sub.mode) ? sub.mode : 'day';
-    const { from, to } = windowOf(mode, day);
-    const found = { volumes: [], episodes: [], loans: [], announced: [], preorders: [] };
+    let { from, to } = windowOf(mode, day);
+    // "Wochenende: keine Erinnerungen" skips Saturday and Sunday, so their releases come with the reminder around them:
+    // on the release day the Monday one also names Saturday and Sunday (when the weekend was skipped), the evening
+    // before the Friday one also Sunday and Monday (Saturday's and Sunday's evening reminders are skipped)
+    if (sub.weekend === 'off' && mode === 'day' && weekdayIndex(day) === 0 && sub.last_day && sub.last_day < addDays(day, -2)) {
+        from = addDays(day, -2);
+    }
+    if (sub.weekend === 'off' && mode === 'eve' && weekdayIndex(day) === 4) to = addDays(day, 3);
+    const found = { volumes: [], episodes: [], loans: [], announced: [], preorders: [], multiDay: from !== to };
     let announce = [];
     const radar = sub.volumes || sub.episodes || sub.announced ? datedRadarItems(ctx) : [];
     if (sub.volumes || sub.episodes) {
@@ -481,7 +510,7 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
     // each browser from its own hour on (the hourly check sends within that hour; a missed hour is caught up later that day)
     const subs = db.prepare(`
         SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, s.mode, s.volumes, s.episodes, s.loans, s.announced,
-               s.preorders, s.announced_from, s.last_day, u.username, u.role
+               s.preorders, s.weekend, s.announced_from, s.last_day, u.username, u.role
         FROM push_subscriptions s JOIN users u ON u.id = s.user_id
         WHERE ${due} AND (CASE WHEN ${weekend} = 1 AND s.weekend = 'late' THEN MAX(s.hour, ${WEEKEND_LATE_HOUR}) ELSE s.hour END) <= ?
           AND u.role IN ('admin', 'editor')
@@ -501,13 +530,22 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
                 announce = result.announce;
                 messages = buildMessages(result.found, textsOf(sub.texts), day, result.mode);
             } catch (e) {
+                // not read is not reminded: the day and the first look of "Neu angekündigt" stay open for the next check
                 log.warn(`[Push] Erinnerung nicht lesbar: ${e?.message || e}`);
+                continue;
             }
             if (messages.length) {
                 let gone = false;
                 let failed = false;
                 for (const message of messages) {
-                    const result = await sendPush(sub, message, { db, fetchImpl });
+                    let result;
+                    try {
+                        result = await sendPush(sub, message, { db, fetchImpl });
+                    } catch (e) {
+                        // one subscription never stops the run for the others
+                        log.warn(`[Push] Senden fehlgeschlagen: ${e?.message || e}`);
+                        result = { ok: false, gone: false };
+                    }
                     if (result.gone) { gone = true; break; }
                     if (!result.ok) { failed = true; break; }
                 }
@@ -555,6 +593,7 @@ module.exports = {
     vapidKeys,
     vapidAuthorization,
     encryptPayload,
+    isValidPushKey,
     sendPush,
     textsOf,
     cleanTexts,

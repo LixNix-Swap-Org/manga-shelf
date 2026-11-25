@@ -28,7 +28,7 @@ function readSubscription(body) {
     const auth = typeof body?.keys?.auth === 'string' ? body.keys.auth.trim() : '';
     const key = Buffer.from(p256dh, 'base64url');
     const secret = Buffer.from(auth, 'base64url');
-    if (key.length !== 65 || key[0] !== 4 || secret.length !== 16) throw badRequest('Ungültiges Push-Abo', 'PUSH_KEYS');
+    if (key.length !== 65 || key[0] !== 4 || secret.length !== 16 || !push.isValidPushKey(p256dh)) throw badRequest('Ungültiges Push-Abo', 'PUSH_KEYS');
     return { endpoint, p256dh, auth };
 }
 
