@@ -110,6 +110,14 @@ test('routes: key, subscribe, status, test message, unsubscribe; guests and fore
     // the hour: set with the PUT, kept by a PUT without it, checked
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, hour: 24 })).status, 400);
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, hour: 7.5 })).status, 400);
+    // only a number or a string of digits: Number() would read these as 0, 1, 16 and 10 o'clock
+    for (const hour of ['', '  ', true, [], '0x10', '1e1', '-1', '8.0']) {
+        const res = await admin('PUT', '/push/subscriptions', { ...b.json, hour });
+        assert.equal(res.status, 400, `hour ${JSON.stringify(hour)}`);
+        assert.equal(res.body.code, 'PUSH_HOUR');
+    }
+    assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts, hour: ' 8 ' })).status, 200);
+    assert.equal((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body.hour, 8);
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts, hour: 20 })).status, 200);
     assert.equal((await admin('PUT', '/push/subscriptions', { ...b.json, texts })).status, 200);
     assert.deepEqual((await admin('POST', '/push/subscriptions/status', { endpoint: b.json.endpoint })).body, { subscribed: true, ...prefs, hour: 20 });

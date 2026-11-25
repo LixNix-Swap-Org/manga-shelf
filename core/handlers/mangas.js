@@ -6,7 +6,7 @@ const {
     DEFAULT_LANGUAGE, DEFAULT_CURRENCY
 } = require('../lib/language');
 const { readProfile } = require('../lib/locales');
-const { MANGA_STATUSES, parseOptionalId, parsePositiveInt, parseWishPriority, parseSeriesFormat, parseTotalChapters, MAX_CHAPTERS } = require('../lib/validate');
+const { MANGA_STATUSES, parseOptionalId, parsePositiveInt, parseWishPriority, parseSeriesFormat, parseTotalChapters, MAX_CHAPTERS, isImageRef } = require('../lib/validate');
 const snapshot = require('../snapshot');
 const access = require('../lib/access');
 const catalogWrite = require('../lib/catalogWrite');
@@ -46,6 +46,8 @@ const TEXT_LENGTH_ERRORS = {
     cover_image: 'Cover ist zu lang (maximal {max} Zeichen)',
     banner_image: 'Banner ist zu lang (maximal {max} Zeichen)'
 };
+
+const IMAGE_FIELDS = new Set(['cover_image', 'banner_image']);
 
 const TOTAL_VOLUMES_ERROR = 'Gesamtbände muss eine ganze Zahl zwischen 1 und 5000 sein';
 const FORMAT_ERROR = msg('Ungültiges Format (erlaubt: print, webtoon)');
@@ -109,6 +111,8 @@ function cleanText(field, value) {
         if (spec.strict) return { error: msg(TEXT_LENGTH_ERRORS[field], { max: spec.max }) };
         return { value: text.slice(0, spec.max) };
     }
+    // a cover or banner names an image (/uploads/…, http(s), data:image/…), never javascript:, data:text/html or file:
+    if (IMAGE_FIELDS.has(field) && !isImageRef(text)) return { error: 'Ungültige Bild-URL' };
     return { value: text };
 }
 

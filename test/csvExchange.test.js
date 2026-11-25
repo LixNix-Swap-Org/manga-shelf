@@ -917,3 +917,16 @@ test('Import-/Export-Route: Rundläufe, Unicode, Besitzer, Probelauf', async (t)
         await ctx.close();
     }
 });
+
+test('Band-Cover, Bilder, Reihen-Cover und -Banner: Adressen ohne Bild (javascript:, data:text/html) werden mit Hinweis ignoriert', () => {
+    const header = 'Reihe;Bandnummer;Band-Cover;Bilder;Reihen-Cover;Reihen-Banner';
+    const csv = `${header}\nA;1;javascript:alert(1);"data:text/html,x | /uploads/b.jpg | https://img.example.org/c.jpg";file:///c/x.jpg;https://img.example.org/banner.jpg\n`;
+    const { records, errors, warnings } = mapCsvRows(parseCsv(csv));
+    assert.deepEqual(errors, []);
+    assert.equal(records[0].cover_image, null);
+    assert.equal(records[0].images, JSON.stringify(['/uploads/b.jpg', 'https://img.example.org/c.jpg']));
+    assert.equal(records[0].series_meta.cover_image, undefined);
+    assert.equal(records[0].series_meta.banner_image, 'https://img.example.org/banner.jpg');
+    const labels = warnings.map(w => (w.message.match(/in „([^“]+)“/) || [])[1]).sort();
+    assert.deepEqual(labels, ['Band-Cover', 'Bilder', 'Reihen-Cover']);
+});

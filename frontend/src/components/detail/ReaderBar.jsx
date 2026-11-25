@@ -80,26 +80,33 @@ export default function ReaderBar({
   }
   const dateLabel = readDate ? t('gelesen am {date}', { date: shortDate(readDate) }) : null;
   const chipText = [readerLabel, ownerLabel, dateLabel].filter(Boolean).join(' · ');
+  // below 390 px (iPhone mini/SE, small Android phones) reader and owner part take a line each instead of both being cut
+  // short; wider screens keep the one line with the divider. A name too long for its line still ends in "…".
   const chipBody = (
-    <>
-      <BookOpen className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-      <span className="truncate">{readerLabel}</span>
+    <span className="flex flex-1 min-w-0 items-center gap-2 max-[389px]:flex-wrap max-[389px]:gap-y-0.5 max-[389px]:py-1.5">
+      <span className="flex min-w-0 items-center gap-2 max-[389px]:basis-full">
+        <BookOpen className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+        <span className="truncate">{readerLabel}</span>
+      </span>
       {ownerLabel && (
         <>
-          <span aria-hidden="true" className="w-px h-4 bg-slate-700 shrink-0" />
-          <Users className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-          <span className="truncate">{ownerLabel}</span>
+          <span aria-hidden="true" className="w-px h-4 bg-slate-700 shrink-0 max-[389px]:hidden" />
+          <span className="flex min-w-0 items-center gap-2">
+            <Users className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+            <span className="truncate">{ownerLabel}</span>
+          </span>
         </>
       )}
       {dateLabel && <span className="truncate text-brand-200 font-medium">· {dateLabel}</span>}
-    </>
+    </span>
   );
   const row = (on) => `w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-sm ${on ? 'bg-brand-700/30 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800/70'}`;
 
   return (
     <div className="mb-4 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-inner">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <div ref={rootRef} className="relative">
+      {/* min-w-0/max-w-full: the chip never gets wider than the card (a 100vw cap ignores the card's padding on phones) */}
+      <div className="flex flex-wrap items-center gap-2.5 min-w-0 max-w-full">
+        <div ref={rootRef} className="relative min-w-0 max-w-full">
           {hasChoices ? (
             <button
               ref={buttonRef}
@@ -109,7 +116,7 @@ export default function ReaderBar({
               aria-controls={panelId}
               aria-label={t('Leser und Besitz: {label}', { label: chipText })}
               onClick={() => setOpen((v) => !v)}
-              className={`flex items-center gap-2 rounded-xl border px-3.5 min-h-[40px] text-sm font-semibold max-w-[min(30rem,calc(100vw-4rem))] ${open ? 'border-sky-400 ring-2 ring-sky-400/35' : ''} ${narrowed ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
+              className={`flex items-center gap-2 rounded-xl border px-3.5 min-h-[40px] text-sm font-semibold max-w-[min(30rem,100%)] ${open ? 'border-sky-400 ring-2 ring-sky-400/35' : ''} ${narrowed ? 'border-brand-500/50 bg-brand-500/15 text-brand-100' : 'border-slate-700 bg-slate-900/90 text-slate-200 hover:border-slate-600'}`}
             >
               {chipBody}
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />

@@ -556,6 +556,7 @@
   "Bild-URL oder Manga-Passion-Link (z. B. https://www.manga-passion.de/volumes/9736/...)": "Görsel URL'si veya Manga Passion bağlantısı (örn. https://www.manga-passion.de/volumes/9736/...)",
   "Bilder": "Görseller",
   "Bilder (Uploads)": "Görseller (yüklemeler)",
+  "Bilder, die das Backup nennt, aber weder im Backup noch auf diesem Server liegen: {count}. Diese Cover und Fotos fehlen nach dem Einspielen.": "Yedeğin başvurduğu ama ne yedekte ne de bu sunucuda bulunan görseller: {count}. Bu kapaklar ve fotoğraflar geri yüklemeden sonra eksik olacak.",
   "Bildergalerie": "Görsel galerisi",
   "Bild|Bilder": {
     "one": "görsel",

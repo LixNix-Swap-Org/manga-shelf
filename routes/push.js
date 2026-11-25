@@ -40,7 +40,9 @@ function readSubscription(body) {
 function readPrefs(body) {
     const prefs = {};
     if (body?.hour !== undefined && body?.hour !== null) {
-        const hour = Number(body.hour);
+        // a number or a string of digits only: Number('') / Number(true) / Number([]) / Number('0x10') would pass as hours
+        const raw = body.hour;
+        const hour = typeof raw === 'number' ? raw : (typeof raw === 'string' && /^\d{1,2}$/.test(raw.trim()) ? Number(raw.trim()) : NaN);
         if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw badRequest('Ungültige Uhrzeit', 'PUSH_HOUR');
         prefs.hour = hour;
     }
