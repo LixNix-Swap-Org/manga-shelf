@@ -992,6 +992,8 @@ test('inspect counts the images the backup names that neither the archive nor th
         add.run('Cover im Backup', '/uploads/im-zip.png', null);
         add.run('Cover nirgends', '/uploads/fehlt-1.jpg', '/uploads/fehlt-2.webp');
         add.run('Fremdes Cover', 'https://img.example.org/x.jpg', null);
+        // another host's /uploads/ folder is no image of this server
+        add.run('Fremdes Upload-Cover', 'https://cdn.example.com/uploads/fremd.jpg', null);
     });
     const res = await uploadZip(zipOf({ 'manga.db': data, 'uploads/im-zip.png': 'png' }).toBuffer(), '/backup/inspect');
     assert.equal(res.status, 200, JSON.stringify(res.body));

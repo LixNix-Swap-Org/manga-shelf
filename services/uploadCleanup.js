@@ -108,7 +108,9 @@ function referencedUploadNames(conn = db) {
     return uploadFileNames().filter(name => index.isReferenced(name)).sort();
 }
 
-const UPLOAD_PATH = /\/uploads\/([A-Za-z0-9._-]+)/g;
+// a local path only: /uploads/<name> at the start of a value or after a quote, bracket or space (JSON lists, markdown,
+// HTML), never inside another address such as https://cdn.example.com/uploads/cover.jpg or /images/uploads/x.png
+const UPLOAD_PATH = /(?<![\w.:/%-])\/uploads\/([A-Za-z0-9._-]+)/g;
 
 /**
  * Names of the uploads the database behind `conn` points at by path (/uploads/<name> in a cover, banner, photo list or

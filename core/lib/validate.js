@@ -197,11 +197,14 @@ const parseBulkSet = (set) => {
 };
 
 // What a stored cover, banner or volume photo may name: a server path (/uploads/…, not the protocol-relative //host or
-// /\host), an http(s) address or an inline image (data:image/…, old covers). Anything else (javascript:, data:text/html,
-// file:, vbscript: …) is refused, so a link that opens the image ("Original" in the gallery) can never run a script.
-const IMAGE_REF = /^(?:\/(?![/\\])|https?:\/\/|data:image\/)/i;
+// /\host), an http(s) address or an inline raster image (data:image/png|jpeg|gif|webp|avif|bmp, old covers). Anything
+// else (javascript:, data:text/html, an SVG with its own scripts, file:, vbscript: …) is refused, so a link that opens
+// the image ("Original" in the gallery) can never run a script. Control characters are refused too: browsers drop tabs
+// and line breaks from a URL, so "/\t/host" would become the protocol-relative "//host".
+const IMAGE_REF = /^(?:\/(?![/\\])|https?:\/\/|data:image\/(?:png|jpe?g|gif|webp|avif|bmp)[;,])/i;
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 /** True for an allowed image reference (see IMAGE_REF); blank values are the callers' business. */
-const isImageRef = (value) => typeof value === 'string' && IMAGE_REF.test(value.trim());
+const isImageRef = (value) => typeof value === 'string' && !CONTROL_CHARS.test(value.trim()) && IMAGE_REF.test(value.trim());
 
 module.exports = {
     isImageRef,

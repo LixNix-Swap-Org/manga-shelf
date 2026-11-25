@@ -113,8 +113,11 @@ export async function uploadAndInspectBackup({
 
   const deleteUrl = `/api/backup/uploads/${encodeURIComponent(uploadId)}`;
   let uploadConsumed = false;
+  // once: an error path runs catch and finally, and one DELETE is enough
   const cleanup = () => {
-    if (!uploadConsumed) request.deleteUpload?.(deleteUrl);
+    if (uploadConsumed) return;
+    uploadConsumed = true;
+    request.deleteUpload?.(deleteUrl);
   };
 
   try {
@@ -186,8 +189,9 @@ export async function uploadAndInspectBackup({
     uploadConsumed = true;
     return await request.postJson('/api/backup/inspect', { upload_id: uploadId }, 'inspect');
   } catch (err) {
-    if (isAbort(err, signal)) request.deleteUpload?.(deleteUrl);
-    else cleanup();
+    // an abort also drops an upload the inspect step had taken over
+    if (isAbort(err, signal)) uploadConsumed = false;
+    cleanup();
     throw err;
   } finally {
     cleanup();

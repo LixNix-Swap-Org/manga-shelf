@@ -938,6 +938,7 @@ describe('BackupRestoreModal large chunked uploads', () => {
       expect(res.data.code).toBe('UPLOAD_BUSY');
       expect(putChunk).toHaveBeenCalledTimes(7);
       expect(deleteUpload).toHaveBeenCalledWith('/api/backup/uploads/up-c');
+      expect(deleteUpload).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
