@@ -94,7 +94,8 @@ function OwnerMenu({ vol, anchorRef, onClose, label, members, owners, canToggle,
   const [pos, setPos] = useState({ left: EDGE, top: EDGE });
   const [inset, setInset] = useState(0);
   const touchRef = useRef(null);
-  const popoverRef = useDialogA11y(true, { history: sheet, onClose });
+  // focus goes back to the pill also where a tap does not focus it (iOS Safari)
+  const popoverRef = useDialogA11y(true, { history: sheet, onClose, returnFocusRef: anchorRef });
 
   const place = useCallback(() => {
     const node = popoverRef.current;
@@ -277,21 +278,25 @@ function OwnerMenu({ vol, anchorRef, onClose, label, members, owners, canToggle,
     };
     return createPortal(
       <>
+        {/* z-[66]/[67]: above the tool dialogs (z-[60]) and the status bar scrim (65), below the confirm dialog (z-[68])
+            and the toasts (z-[70]), so the undo toast of a change made here stays visible and tappable */}
         <div
           aria-hidden="true"
           data-owner-sheet-backdrop
-          className="fixed inset-0 z-[90] bg-slate-950/50"
+          className="fixed inset-0 z-[66] bg-slate-950/50"
           onClick={(e) => { e.stopPropagation(); onClose(); }}
         />
         <div
           ref={popoverRef}
           role="dialog"
+          aria-modal="true"
           aria-label={label}
+          tabIndex={-1}
           data-owner-popover
           data-owner-sheet
           onClick={(e) => e.stopPropagation()}
           style={{ bottom: inset, maxHeight: `calc(100dvh - ${inset}px - 3rem)` }}
-          className="fixed inset-x-0 z-[91] flex flex-col rounded-t-2xl border border-b-0 border-slate-700 bg-slate-900 shadow-2xl text-slate-100"
+          className="fixed inset-x-0 z-[67] flex flex-col outline-none rounded-t-2xl border border-b-0 border-slate-700 bg-slate-900 shadow-2xl text-slate-100"
         >
           <div className="shrink-0 px-3 pt-2 pb-1" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
             <div aria-hidden="true" className="mx-auto mb-2 h-1 w-10 rounded-full bg-slate-700" />
@@ -316,10 +321,11 @@ function OwnerMenu({ vol, anchorRef, onClose, label, members, owners, canToggle,
       ref={popoverRef}
       role="dialog"
       aria-label={label}
+      tabIndex={-1}
       data-owner-popover
       onClick={(e) => e.stopPropagation()}
       style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight, width: MENU_WIDTH }}
-      className={`z-[90] rounded-xl border border-slate-700 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md text-xs text-slate-100 ${pos.maxHeight ? 'overflow-y-auto overscroll-contain custom-scrollbar' : ''}`}
+      className={`z-[67] outline-none rounded-xl border border-slate-700 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md text-xs text-slate-100 ${pos.maxHeight ? 'overflow-y-auto overscroll-contain custom-scrollbar' : ''}`}
     >
       {body}
     </div>,

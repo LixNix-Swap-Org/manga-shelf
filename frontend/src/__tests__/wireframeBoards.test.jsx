@@ -69,6 +69,10 @@ describe('owner menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
     const sheet = screen.getByRole('dialog', { name: 'Besitzer' });
     expect(sheet.hasAttribute('data-owner-sheet')).toBe(true);
+    expect(sheet.getAttribute('aria-modal')).toBe('true');
+    // below the confirm dialog (z-[68]) and the toasts (z-[70]): the undo toast of a change made here stays visible
+    expect(sheet.className).toContain('z-[67]');
+    expect(document.querySelector('[data-owner-sheet-backdrop]').className).toContain('z-[66]');
     expect(within(sheet).getByText('Band 7')).toBeTruthy();
     expect(within(sheet).getByRole('button', { name: /lukas/ }).className).toContain('min-h-[44px]');
     fireEvent.click(within(sheet).getByRole('button', { name: 'Fertig' }));
@@ -77,6 +81,8 @@ describe('owner menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Besitzer' }));
     fireEvent.click(document.querySelector('[data-owner-sheet-backdrop]'));
     expect(screen.queryByRole('dialog')).toBeNull();
+    // a tap on iOS does not focus the pill: the focus still comes back to it
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Besitzer' }));
   });
 
   it('is a popover elsewhere: no sheet, Escape closes it and gives the focus back to the pill', () => {
