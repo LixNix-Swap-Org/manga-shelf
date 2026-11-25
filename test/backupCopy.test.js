@@ -65,9 +65,16 @@ test('the folder must be a full path outside the data folder', async () => {
 test('saving a folder copies every verified snapshot with its sidecar; new snapshots follow; the list marks them', async () => {
     clearBackups();
     const first = await scheduler.createBackupSnapshot('manual');
-    const res = await admin('PUT', '/backup/copy', { dir: outside });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.copy.dir, path.resolve(outside));
+    // left behind by a crash: removed by the next copy
+    fs.writeFileSync(path.join(outside, 'manual-alt.zip.part'), 'x');
+    const put = await admin('PUT', '/backup/copy', { dir: outside });
+    assert.equal(put.status, 200);
+    assert.equal(put.body.copy.dir, path.resolve(outside));
+    assert.equal(put.body.copy.running, true, 'the answer does not wait for the copies');
+    // the run started by the PUT (concurrent calls share it)
+    await backupCopy.syncCopies();
+    const res = await admin('GET', '/backups');
+    assert.equal(res.body.copy.running, false);
     assert.equal(res.body.copy.error, null);
     assert.ok(res.body.copy.ok_at);
     assert.equal(res.body.copy.copies, 1);
@@ -103,7 +110,10 @@ test('the copies keep the retention of their kind; hand-copied names are not cop
 
 test('an unreachable folder is reported, never created, and the snapshots on the server stay', async () => {
     const gone = path.join(outside, 'usb-stick');
-    assert.equal((await admin('PUT', '/backup/copy', { dir: gone })).status, 200);
+    const put = await admin('PUT', '/backup/copy', { dir: gone });
+    assert.equal(put.status, 200);
+    assert.match(put.body.copy.error, /nicht erreichbar/, 'an unusable folder is in the answer at once');
+    await backupCopy.syncCopies();
     const before = zips(scheduler.backupsDir);
     const snapshot = await scheduler.createBackupSnapshot('manual');
     assert.equal(snapshot.verified, true);

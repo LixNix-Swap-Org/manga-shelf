@@ -359,10 +359,15 @@ router.get('/backups', requireAdmin, (req, res) => {
     res.json(backupsBody());
 });
 
-// 2b. Second backup location: { dir } sets the folder ('' removes it); the copies are made right away
-router.put('/backup/copy', requireAdmin, refuseDuringUpdate, async (req, res) => {
+// 2b. Second backup location: { dir } sets the folder ('' removes it); the copies start right away in the background
+// (copy.running): copying every snapshot to a slow drive can take minutes, the answer does not wait for it. A folder
+// that cannot be used is checked before the copying starts, so its error is in this answer.
+router.put('/backup/copy', requireAdmin, refuseDuringUpdate, (req, res) => {
     const dir = backupCopy.setCopyDir(req.body?.dir);
-    if (dir) await backupCopy.syncCopies();
+    if (dir) {
+        trackJob('Backup-Kopie', backupCopy.syncCopies())
+            .catch((e) => log.warn('[Backup] Kopie in den zweiten Speicherort fehlgeschlagen:', e));
+    }
     log.info(`Zweiter Speicherort ${dir ? `gesetzt auf ${dir}` : 'entfernt'} durch ${req.user.username}`);
     res.json(backupsBody());
 });

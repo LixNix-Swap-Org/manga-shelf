@@ -187,6 +187,18 @@ describe('BackupRestoreModal snapshot list', () => {
       TIMEOUTS.long = saved;
     }
   });
+  it('second location: while a copy runs the dialog follows its status until it ends', async () => {
+    const copy = { dir: '/mnt/usb', from_env: false, ok_at: null, error: null, error_msg: null, error_at: null, copies: 0, bytes: 0, free_bytes: 1e9, same_disk_hint: false };
+    const lists = [
+      { backups: [snapshot()], copy: { ...copy, running: true } },
+      { backups: [snapshot()], copy: { ...copy, running: false, ok_at: '2026-11-25T10:00:00Z', copies: 1, bytes: 1024 } }
+    ];
+    const fetchMock = mockFetch({ 'GET /api/backups': () => json(200, lists.length > 1 ? lists.shift() : lists[0]) });
+    renderBackup();
+    expect(await screen.findByText(/Noch keine Kopie/)).toBeTruthy();
+    expect(await screen.findByText(/Letzte Kopie/, {}, { timeout: 4000 })).toBeTruthy();
+    expect(calls(fetchMock, 'GET', '/api/backups')).toHaveLength(2);
+  });
 });
 
 describe('BackupRestoreModal two-step restore', () => {

@@ -76,6 +76,8 @@ const discardStaging = (stagingId) => {
   apiFetch(`/api/backup/restore/${encodeURIComponent(stagingId)}`, { method: 'DELETE' }).catch(() => {});
 };
 
+const COPY_POLL_MS = 2000;
+
 export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuccess }) {
   const [restoreFile, setRestoreFile] = useState(null);
   const [inspecting, setInspecting] = useState(false);
@@ -139,6 +141,22 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       if (id === backupsRequestRef.current) setLoadingBackups(false);
     }
   };
+
+  // the copies into the second location run in the background (PUT /api/backup/copy answers at once, copy.running):
+  // the status and the "kopiert" marks follow until that run ends
+  useEffect(() => {
+    if (!isOpen || !copyStatus?.running) return undefined;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiFetch('/api/backups');
+        const data = await readJson(res);
+        if (!res.ok || !data?.copy) return;
+        if (Array.isArray(data.backups)) setServerBackups(data.backups);
+        setCopyStatus(data.copy);
+      } catch (_) { /* the next opening shows it */ }
+    }, COPY_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [isOpen, copyStatus]);
 
   const dropStaging = () => {
     if (stagingRef.current) discardStaging(stagingRef.current);

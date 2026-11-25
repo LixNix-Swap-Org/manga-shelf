@@ -113,14 +113,34 @@ function copiedNames(dir) {
     }
 }
 
-function copyFileAtomic(source, target) {
+// Asynchronous on purpose: a snapshot of several hundred MB on a USB drive or a NAS share takes seconds to minutes, and
+// the server keeps answering (requests, health check) meanwhile.
+async function copyFileAtomic(source, target) {
     const part = `${target}.part`;
     try {
-        fs.copyFileSync(source, part);
-        fs.renameSync(part, target);
+        await fs.promises.copyFile(source, part);
+        await fs.promises.rename(part, target);
     } catch (err) {
-        try { fs.unlinkSync(part); } catch (e) { /* never written */ }
+        await fs.promises.unlink(part).catch(() => { /* never written */ });
         throw err;
+    }
+}
+
+/** Removes `.part` files a crash or a pulled drive left behind (only one copy runs at a time, so none is in use). */
+function removeLeftoverParts(dir) {
+    let names;
+    try {
+        names = fs.readdirSync(dir);
+    } catch (e) {
+        return;
+    }
+    for (const name of names) {
+        if (!name.endsWith('.part')) continue;
+        try {
+            fs.unlinkSync(path.join(dir, name));
+        } catch (e) {
+            log.warn('Could not delete a leftover part', name, e.message);
+        }
     }
 }
 
@@ -153,8 +173,9 @@ function pruneCopies(dir, scheduler) {
 let running = null;
 
 /**
- * Copies every verified snapshot the copy folder lacks (with its sidecar), then prunes the copies. Resolves with the
- * status (see copyStatus); without a folder with null. Concurrent calls share one run.
+ * Removes leftover `.part` files and prunes the old copies, copies every verified snapshot the copy folder lacks (with
+ * its sidecar) and prunes again. Resolves with the status (see copyStatus); without a folder with null. Concurrent
+ * calls share one run. An unusable folder is found before the first await, so its status is stored when this returns.
  */
 function syncCopies({ now = new Date() } = {}) {
     if (running) return running;
@@ -165,6 +186,9 @@ function syncCopies({ now = new Date() } = {}) {
         const previous = readStatus();
         try {
             assertUsable(dir);
+            removeLeftoverParts(dir);
+            // old copies go first, so a nearly full drive has room for the new ones
+            pruneCopies(dir, scheduler);
             const have = copiedNames(dir) || new Set();
             let copied = 0;
             for (const snapshot of scheduler.listSnapshots()) {
@@ -179,8 +203,8 @@ function syncCopies({ now = new Date() } = {}) {
                 const source = path.join(scheduler.backupsDir, snapshot.filename);
                 // the sidecar first: a ZIP in the folder always has its check result next to it
                 const sidecar = source.replace(/\.zip$/, '.json');
-                if (fs.existsSync(sidecar)) copyFileAtomic(sidecar, path.join(dir, snapshot.filename.replace(/\.zip$/, '.json')));
-                copyFileAtomic(source, path.join(dir, snapshot.filename));
+                if (fs.existsSync(sidecar)) await copyFileAtomic(sidecar, path.join(dir, snapshot.filename.replace(/\.zip$/, '.json')));
+                await copyFileAtomic(source, path.join(dir, snapshot.filename));
                 copied++;
             }
             pruneCopies(dir, scheduler);
@@ -240,7 +264,9 @@ function copyStatus(now = Date.now()) {
         copies: names ? copies : null,
         bytes: names ? bytes : null,
         free_bytes: dir && names ? disk.freeBytes(dir) : null,
-        same_disk_hint: !dir && !recentDownload(now)
+        same_disk_hint: !dir && !recentDownload(now),
+        // a copy runs right now (the dialog follows it until it ends)
+        running: Boolean(running)
     };
 }
 
