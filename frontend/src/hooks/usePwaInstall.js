@@ -42,6 +42,7 @@ export function maybeShowIosInstallHint({ win = globalThis.window, storage = glo
 }
 
 let watcher = null;
+const pageWatched = new WeakSet();
 
 /** The languages a device needs offline: the active one and the device language ("follow the device" switches back to it). */
 export const warmLanguages = () => [...new Set([getLanguage(), deviceLanguage()])];
@@ -94,18 +95,22 @@ export function watchServiceWorkerUpdates({
 } = {}) {
   if (watcher) return watcher;
   if (!container || typeof container.getRegistration !== 'function') return Promise.resolve(null);
-  const hadController = Boolean(container.controller);
-  let reloading = false;
-  container.addEventListener('controllerchange', () => {
-    if (!hadController || reloading) return;
-    reloading = true;
-    reload();
-  });
-  win?.addEventListener?.('vite:preloadError', (event) => {
-    // offline a reload cannot fetch a newer release: the caller handles the failed import (e.g. an uncached catalog)
-    if (win.navigator?.onLine === false) return;
-    if (reloadForStaleChunk({ reload })) event.preventDefault();
-  });
+  if (!pageWatched.has(container)) {
+    // the page listeners attach once, even when the registration is looked up again below
+    pageWatched.add(container);
+    const hadController = Boolean(container.controller);
+    let reloading = false;
+    container.addEventListener('controllerchange', () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      reload();
+    });
+    win?.addEventListener?.('vite:preloadError', (event) => {
+      // offline a reload cannot fetch a newer release: the caller handles the failed import (e.g. an uncached catalog)
+      if (win.navigator?.onLine === false) return;
+      if (reloadForStaleChunk({ reload })) event.preventDefault();
+    });
+  }
 
   const offered = new WeakSet();
   const offer = (worker) => {
@@ -131,8 +136,11 @@ export function watchServiceWorkerUpdates({
     else worker.addEventListener('statechange', () => { if (worker.state === 'installed') offer(worker); });
   };
 
-  watcher = container.getRegistration().then((reg) => {
-    if (!reg) return null;
+  // usePwaInstall calls this before register('/sw.js') has finished on a first visit: without a registration yet the
+  // result is not kept, so the call after register() attaches to it (a cached null would watch nothing until a reload)
+  const forget = () => { if (watcher === attempt) watcher = null; return null; };
+  const attempt = container.getRegistration().then((reg) => {
+    if (!reg) return forget();
     warmLanguageCache(reg);
     subscribeLanguage((language) => warmLanguageCache(reg, language));
     if (reg.waiting) offer(reg.waiting);
@@ -146,8 +154,9 @@ export function watchServiceWorkerUpdates({
       Promise.resolve(reg.update()).catch(() => {});
     });
     return reg;
-  }).catch(() => null);
-  return watcher;
+  }).catch(forget);
+  watcher = attempt;
+  return attempt;
 }
 
 export function resetServiceWorkerWatcher() {
