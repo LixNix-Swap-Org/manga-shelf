@@ -300,7 +300,7 @@ export default function AnimeView({
 
       {loaded && !list.length && !loading && !error && (
         <div id="anime-empty" className="text-center py-16 px-6 border border-dashed border-slate-700 rounded-3xl">
-          <Tv className="w-10 h-10 mx-auto text-slate-500 mb-3" aria-hidden="true" />
+          <Tv className="w-10 h-10 mx-auto text-slate-400 mb-3" aria-hidden="true" />
           <p className="text-slate-200 font-semibold">{t('Noch keine Anime in der Liste')}</p>
           <p className="text-sm text-slate-400 mt-1">
             {canEdit && !offline ? t('Über „Anime hinzufügen“ bei AniList oder MyAnimeList suchen oder einen Eintrag von Hand anlegen.') : t('Ein Bearbeiter kann Anime hinzufügen.')}

@@ -7,6 +7,11 @@ export const BACKUP_CHUNK_THRESHOLD = 16 * 1024 * 1024;
 const RETRYABLE_HTTP = new Set([408, 429, 502, 503, 504]);
 const MAX_CHUNK_RETRIES = 2;
 const MAX_OFFSET_RESETS = 3;
+// 409 UPLOAD_BUSY: the server still holds the stream of an attempt the client already gave up on (a dropped connection
+// it has not noticed yet, a client timeout). It ends that stream soon and rolls back, or keeps the piece if it arrived
+// whole (then the next try answers OFFSET_MISMATCH and moves on), so wait a little longer each time: 0.5 s … 3 s.
+const MAX_BUSY_RETRIES = 6;
+const BUSY_WAIT_MS = 500;
 
 /** A 429 (a proxy's or the server's rate limit) waits as long as Retry-After says, 2 s at least and 30 s at most. */
 const rateLimitWait = (res) => {
@@ -108,8 +113,11 @@ export async function uploadAndInspectBackup({
 
   const deleteUrl = `/api/backup/uploads/${encodeURIComponent(uploadId)}`;
   let uploadConsumed = false;
+  // once: an error path runs catch and finally, and one DELETE is enough
   const cleanup = () => {
-    if (!uploadConsumed) request.deleteUpload?.(deleteUrl);
+    if (uploadConsumed) return;
+    uploadConsumed = true;
+    request.deleteUpload?.(deleteUrl);
   };
 
   try {
@@ -125,6 +133,7 @@ export async function uploadAndInspectBackup({
       const chunk = sliceChunk(file, offset, end);
 
       let chunkDone = false;
+      let busyRetries = 0;
       for (let attempt = 0; attempt <= MAX_CHUNK_RETRIES; attempt++) {
         if (signal?.aborted) throw abortError();
         let res;
@@ -156,6 +165,13 @@ export async function uploadAndInspectBackup({
           break;
         }
 
+        if (res.status === 409 && res.data?.code === 'UPLOAD_BUSY' && busyRetries < MAX_BUSY_RETRIES) {
+          busyRetries++;
+          await waitMs(BUSY_WAIT_MS * busyRetries, signal);
+          attempt--; // a busy answer does not use up one of the retries for failed requests
+          continue;
+        }
+
         if (RETRYABLE_HTTP.has(res.status) && attempt < MAX_CHUNK_RETRIES) {
           await waitMs(res.status === 429 ? rateLimitWait(res) : 400 * (attempt + 1), signal);
           continue;
@@ -173,8 +189,9 @@ export async function uploadAndInspectBackup({
     uploadConsumed = true;
     return await request.postJson('/api/backup/inspect', { upload_id: uploadId }, 'inspect');
   } catch (err) {
-    if (isAbort(err, signal)) request.deleteUpload?.(deleteUrl);
-    else cleanup();
+    // an abort also drops an upload the inspect step had taken over
+    if (isAbort(err, signal)) uploadConsumed = false;
+    cleanup();
     throw err;
   } finally {
     cleanup();

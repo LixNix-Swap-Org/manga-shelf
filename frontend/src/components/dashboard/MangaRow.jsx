@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { BookOpen, BuildingComplex, Trash } from 'lucide-react';
+import { BookOpen, BuildingComplex, ChevronRight, Trash } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CoverImage from '../common/CoverImage';
 import { getSeriesProgress, getChapterProgress, isWebtoon } from '../../utils/volumeHelpers';
@@ -20,12 +20,23 @@ const COVER_FALLBACK = (
   </div>
 );
 
-/** One row of the list view; `onDelete(event, id, title)` and `onAuthorClick(name)` must be stable for the memo to hold. */
-function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, className }) {
+const hasPublisher = (manga) => Boolean(manga.publisher) && manga.publisher !== 'Unbekannt'; // i18n-ignore: stored placeholder value
+
+/**
+ * One row of the list view; `onDelete(event, id, title)` and `onAuthorClick(name)` must be stable for the memo to hold.
+ * Between 640 and 1023 px the publisher sits in the second line (in front of the author while the list is sorted by
+ * publisher, `publisherFirst`) and "Details" is an arrow button, so the table fits without scrolling sideways.
+ */
+function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, className, publisherFirst = false }) {
   const { owned, total, extras, pct } = getSeriesProgress(manga);
   const readState = getReadState(manga);
   const authors = onAuthorClick ? splitAuthors(manga.author) : [];
   const chapters = isWebtoon(manga) ? getChapterProgress(manga) : null;
+  const publisherLine = hasPublisher(manga) ? (
+    <span className="hidden sm:inline lg:hidden" data-testid="row-publisher">
+      {publisherFirst ? <>{manga.publisher}<span aria-hidden="true"> · </span></> : <><span aria-hidden="true"> · </span>{manga.publisher}</>}
+    </span>
+  ) : null;
 
   return (
     <tr className={className}>
@@ -40,26 +51,28 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
       </td>
       <td className="py-2.5 px-4">
         <div className="flex items-center gap-1.5 min-w-0">
-          <Link to={`/manga/${manga.id}`} className="font-bold text-white hover:text-brand-400 transition-colors text-sm line-clamp-1 min-w-0">
+          <Link to={`/manga/${manga.id}`} className="font-bold text-white hover:text-brand-400 transition-colors text-sm line-clamp-1 min-w-0 break-words [overflow-wrap:anywhere]">
             {manga.title}
           </Link>
           <LanguagePill language={editionLanguage(manga)} region={editionRegion(manga)} />
           <WebtoonPill format={manga.format} />
         </div>
         <div className="text-slate-400 text-xs mt-0.5 [@media(pointer:coarse)]:mt-1.5 [@media(pointer:fine)]:line-clamp-1">
+          {publisherFirst && publisherLine}
           {authors.length ? <AuthorButtons names={authors} onAuthorClick={onAuthorClick} buttonClassName="hit-44" /> : (manga.author || t('Kein Autor'))}
           {manga.alt_title && <span className="text-slate-400 ml-1.5">(<span lang={langFor(manga.alt_title)}>{manga.alt_title}</span>)</span>}
+          {!publisherFirst && publisherLine}
         </div>
       </td>
-      <td className="py-2.5 px-4 hidden sm:table-cell text-slate-300">
-        {manga.publisher && manga.publisher !== 'Unbekannt' ? ( // i18n-ignore: stored placeholder value
+      <td className="py-2.5 px-4 hidden lg:table-cell text-slate-300">
+        {hasPublisher(manga) ? (
           <span className="flex items-center gap-1">
             <BuildingComplex className="w-3 h-3 text-brand-400 shrink-0" />
             <span>{manga.publisher}</span>
           </span>
         ) : (
           <>
-            <span className="text-slate-500" aria-hidden="true">—</span>
+            <span className="text-slate-400" aria-hidden="true">—</span>
             <span className="sr-only">{t('Kein Verlag')}</span>
           </>
         )}
@@ -119,13 +132,21 @@ function MangaRow({ manga, canEdit, getStatusBadge, onDelete, onAuthorClick, cla
           </>
         )}
       </td>
-      <td className="py-2.5 px-4 text-right hidden md:table-cell font-mono font-bold text-emerald-400">
+      <td className="py-2.5 px-4 text-right hidden lg:table-cell font-mono font-bold text-emerald-400">
         {manga.total_value > 0 ? formatMoney(manga.total_value, editionCurrency(manga)) : '—'}
       </td>
       <td className="py-2.5 px-4 text-right">
         <div className="flex items-center justify-end gap-1.5">
-          <Link to={`/manga/${manga.id}`} className="btn-secondary py-1 px-2.5 text-xs text-brand-400 hover:text-white">
+          <Link to={`/manga/${manga.id}`} className="btn-secondary py-1 px-2.5 text-xs text-brand-400 hover:text-white sm:hidden lg:inline-flex">
             {t('Details')}
+          </Link>
+          <Link
+            to={`/manga/${manga.id}`}
+            aria-label={t('Details zu {title}', { title: manga.title })}
+            title={t('Details')}
+            className="btn-secondary hidden sm:inline-flex lg:hidden items-center justify-center w-11 h-11 p-0 text-brand-400 hover:text-white"
+          >
+            <ChevronRight className="w-4 h-4" aria-hidden="true" />
           </Link>
           {canEdit && (
             <button

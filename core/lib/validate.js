@@ -196,7 +196,19 @@ const parseBulkSet = (set) => {
     return { value };
 };
 
+// What a stored cover, banner or volume photo may name: a server path (/uploads/…, not the protocol-relative //host or
+// /\host), an http(s) address or an inline raster image (data:image/png|jpeg|gif|webp|avif|bmp, old covers). Anything
+// else (javascript:, data:text/html, an SVG with its own scripts, file:, vbscript: …) is refused, so a link that opens
+// the image ("Original" in the gallery) can never run a script. Control characters are refused too: browsers drop tabs
+// and line breaks from a URL, so "/\t/host" would become the protocol-relative "//host".
+const IMAGE_REF = /^(?:\/(?![/\\])|https?:\/\/|data:image\/(?:png|jpe?g|gif|webp|avif|bmp)[;,])/i;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+/** True for an allowed image reference (see IMAGE_REF); blank values are the callers' business. */
+const isImageRef = (value) => typeof value === 'string' && !CONTROL_CHARS.test(value.trim()) && IMAGE_REF.test(value.trim());
+
 module.exports = {
+    isImageRef,
     VOLUME_STATUSES, VOLUME_TYPES, MANGA_STATUSES, SERIES_FORMATS, MAX_CHAPTERS, BULK_SET_FIELDS,
     isBlank, parsePrice, parseIntInRange, parsePages, parseSortAfter, parseChapter, parseYear, parseFlag, parseTrueFlag, parsePriority, parseWishPriority,
     isValidDate, isValidReadAt, parseDate, parseWholeNumber, parsePositiveInt, parseOptionalId, parseSeriesFormat, parseTotalChapters,

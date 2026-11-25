@@ -39,10 +39,10 @@ export default function VolumeShelfView({
             <kbd className={KBD}>K</kbd>
             {canEdit && (
               <>
-                <span className="text-slate-500" aria-hidden="true">•</span>
+                <span className="text-slate-400" aria-hidden="true">•</span>
                 <kbd className={KBD}>{t('Leertaste')}</kbd>
                 <span className="text-slate-400">{t('Gelesen')}</span>
-                <span className="text-slate-500" aria-hidden="true">•</span>
+                <span className="text-slate-400" aria-hidden="true">•</span>
                 <kbd className={KBD}>E</kbd>
                 <span className="text-slate-400">{t('Bearbeiten')}</span>
               </>
@@ -179,7 +179,7 @@ export default function VolumeShelfView({
             /* Auto-multi-row: too many books for single row → display as balanced rows */
             <div ref={shelfMeasureRef} className="space-y-5 pt-2 pb-2 px-1">
               <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1.5">
-                <Layers className="w-3 h-3 text-slate-500" />
+                <Layers className="w-3 h-3 text-slate-400" />
                 {tn('Auto-Fit: {n} Reihen für {items}', 'Auto-Fit: {n} Reihen für {items}', shelfRows.length, { items: tn('{n} Einträge', '{n} Einträge', spineShelfItems.length) })}
               </div>
               {shelfRows.map((row, rIdx) => (

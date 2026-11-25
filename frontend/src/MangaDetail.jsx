@@ -438,7 +438,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
     return (
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
         <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center" aria-hidden="true">
-          <Library className="w-10 h-10 text-slate-500" />
+          <Library className="w-10 h-10 text-slate-400" />
         </div>
         <div className="text-center">
           <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">{t('Manga nicht gefunden')}</h1>
@@ -460,7 +460,7 @@ export default function MangaDetail({ user, onUnauthorized }) {
     return (
       <main id={MAIN_ID} tabIndex={-1} className="focus:outline-none min-h-screen flex flex-col items-center justify-center text-slate-400 gap-6 px-4">
         <div className="w-20 h-20 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center" aria-hidden="true">
-          <Library className="w-10 h-10 text-slate-500" />
+          <Library className="w-10 h-10 text-slate-400" />
         </div>
         <div className="text-center" role="alert">
           <h1 ref={headingRef} tabIndex={-1} className="focus:outline-none text-2xl font-bold text-slate-200 mb-2">{t(info.title)}</h1>
@@ -556,7 +556,8 @@ export default function MangaDetail({ user, onUnauthorized }) {
           canWish={Boolean(user) && !isOffline && !['guest', 'visitor'].includes(user?.role)}
           onWishSaved={(wish) => patchManga((m) => ({ ...m, ...wish, wished: wish.wish_priority !== null && !(Number(m.owned_volumes) > 0) ? 1 : 0 }))}
           onEditionsChanged={fetchManga}
-          onShowInfo={() => {
+          // the link to "Infos" goes while that tab is open
+          onShowInfo={detailTab === 'infos' ? null : () => {
             setDetailTab('infos');
             setTimeout(() => {
               const tab = document.getElementById('detail-tab-infos');

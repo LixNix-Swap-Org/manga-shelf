@@ -5,7 +5,7 @@ import { t } from '../../i18n/index.js';
 export default function VolumesEmptyState({ hasVolumes, hasActiveFilters, onResetFilters }) {
   return (
     <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60 my-4">
-      <BookOpen className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+      <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
       <p className="text-sm text-slate-400">
         {!hasVolumes
           ? t('Noch keine Bände erfasst. Nutze untenstehendes Feld oder "Mehrere Bände", um loszulegen.') 

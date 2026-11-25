@@ -11,6 +11,7 @@ import {
   clearRestoreUndo, httpErrorMessage, passwordRefusalText, readJson, readRestoreUndo, saveRestoreUndo
 } from './backup/backupHelpers';
 import SnapshotList from './backup/SnapshotList';
+import SecondLocation from './backup/SecondLocation';
 import RestoreConfirm from './backup/RestoreConfirm';
 import CsvImportPanel from './backup/CsvImportPanel';
 import DownloadLink from './backup/DownloadLink';
@@ -75,6 +76,8 @@ const discardStaging = (stagingId) => {
   apiFetch(`/api/backup/restore/${encodeURIComponent(stagingId)}`, { method: 'DELETE' }).catch(() => {});
 };
 
+const COPY_POLL_MS = 2000;
+
 export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuccess }) {
   const [restoreFile, setRestoreFile] = useState(null);
   const [inspecting, setInspecting] = useState(false);
@@ -91,6 +94,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
   const [undo, setUndo] = useState(null);
   const [snapshotToDelete, setSnapshotToDelete] = useState(null);
   const [serverBackups, setServerBackups] = useState([]);
+  const [copyStatus, setCopyStatus] = useState(null);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [backupsLoadError, setBackupsLoadError] = useState('');
   const [backupModalTab, setBackupModalTab] = useState('snapshots');
@@ -126,6 +130,7 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
         const list = Array.isArray(data.backups) ? data.backups : [];
         const entry = readRestoreUndo();
         setServerBackups(list);
+        setCopyStatus(data.copy && typeof data.copy === 'object' ? data.copy : null);
         setUndo(entry && list.some(b => b.filename === entry.filename) ? entry : null);
       } else {
         setBackupsLoadError(httpErrorMessage(res.status, data, tr('Snapshots konnten nicht geladen werden')));
@@ -136,6 +141,22 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
       if (id === backupsRequestRef.current) setLoadingBackups(false);
     }
   };
+
+  // the copies into the second location run in the background (PUT /api/backup/copy answers at once, copy.running):
+  // the status and the "kopiert" marks follow until that run ends
+  useEffect(() => {
+    if (!isOpen || !copyStatus?.running) return undefined;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiFetch('/api/backups');
+        const data = await readJson(res);
+        if (!res.ok || !data?.copy) return;
+        if (Array.isArray(data.backups)) setServerBackups(data.backups);
+        setCopyStatus(data.copy);
+      } catch (_) { /* the next opening shows it */ }
+    }, COPY_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [isOpen, copyStatus]);
 
   const dropStaging = () => {
     if (stagingRef.current) discardStaging(stagingRef.current);
@@ -604,6 +625,15 @@ export default function BackupRestoreModal({ isOpen, onClose, user, onRestoreSuc
                     <span>{tr('Neuen Snapshot erstellen')}</span>
                   </button>
                 </div>
+
+                <SecondLocation
+                  copy={copyStatus}
+                  disabled={locked}
+                  onSaved={(data) => {
+                    if (Array.isArray(data.backups)) setServerBackups(data.backups);
+                    if (data.copy) setCopyStatus(data.copy);
+                  }}
+                />
 
                 {inspecting && (
                   <p className="text-xs text-slate-400 flex items-center gap-2">

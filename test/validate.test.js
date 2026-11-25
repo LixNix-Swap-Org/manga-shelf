@@ -89,3 +89,16 @@ test('bulk helpers: id lists, condition and the set object of a bulk edit', () =
     assert.deepEqual(v.parseBulkSet([]), { error: 'set' });
     assert.deepEqual(v.BULK_SET_FIELDS, ['status', 'price', 'purchase_date', 'condition', 'priority', 'target_price', 'release_date']);
 });
+
+test('isImageRef: server paths, http(s) and inline images; no scripts, other schemes or protocol-relative hosts', () => {
+    const { isImageRef } = require('../core/lib/validate');
+    for (const ok of ['/uploads/a.jpg', '  /uploads/a.jpg ', 'https://img.example.org/a.jpg', 'HTTP://img.example.org/a.jpg', 'data:image/png;base64,AAAA', 'data:image/jpeg;base64,AAAA', 'data:image/webp,x']) {
+        assert.equal(isImageRef(ok), true, ok);
+    }
+    for (const bad of ['javascript:alert(1)', ' JavaScript:alert(1)', 'java\tscript:alert(1)', 'data:text/html,<script>alert(1)</script>',
+        'vbscript:x', 'file:///etc/passwd', 'blob:https://x/1', '//evil.example/a.jpg', '/\\evil.example/a.jpg', 'uploads/a.jpg', '', null, 7,
+        'data:image/svg+xml,<svg onload="alert(1)">', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/,x',
+        '/\t/evil.example/a.jpg', '/\n/evil.example/a.jpg', '/\r/evil.example/a.jpg', 'https://img.example.org/a\u0000.jpg']) {
+        assert.equal(isImageRef(bad), false, String(bad));
+    }
+});

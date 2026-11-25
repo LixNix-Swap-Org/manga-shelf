@@ -268,6 +268,21 @@ describe('service worker updates in the page', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it('a call before the registration exists is not kept: the call after register() attaches, the page listeners only once', async () => {
+    const reg = fakeRegistration();
+    reg.waiting = fakeWorker();
+    const container = fakeContainer({ registration: undefined });
+    const added = vi.spyOn(container, 'addEventListener');
+    expect(await watchServiceWorkerUpdates({ container, win: window, doc: document, reload: vi.fn() })).toBeNull();
+    expect(toasts).toHaveLength(0);
+    container.getRegistration.mockImplementation(async () => reg);
+    expect(await watchServiceWorkerUpdates({ container, win: window, doc: document, reload: vi.fn() })).toBe(reg);
+    expect(toasts.map((t) => t.message)).toEqual([UPDATE_TEXT]);
+    expect(await watchServiceWorkerUpdates({ container, win: window, doc: document, reload: vi.fn() })).toBe(reg);
+    expect(container.getRegistration).toHaveBeenCalledTimes(2);
+    expect(added.mock.calls.filter(([type]) => type === 'controllerchange')).toHaveLength(1);
+  });
+
   it('offers a worker that was already installing when the watcher attached', async () => {
     const reg = fakeRegistration();
     const worker = fakeWorker();

@@ -377,6 +377,7 @@ async function createBackupSnapshot(prefix = 'manga-shelf-backup', { includeUplo
     if (!check.verified) log.error(`Snapshot ${filename} failed its restore test: ${check.error}`);
 
     pruneBackups(prefix);
+    if (check.verified) copyToSecondLocation();
 
     // Only the automatic daily run tidies up: the fresh snapshot just taken still holds every file
     if (prefix === DAILY_PREFIX && check.verified) {
@@ -392,6 +393,17 @@ async function createBackupSnapshot(prefix = 'manga-shelf-backup', { includeUplo
         verify_error: check.error,
         manifest
     };
+}
+
+/**
+ * Copies the verified snapshots into the second backup location (services/backupCopy.js) in the background: a shutdown
+ * waits for it, a failure is stored for the Backups dialog and never fails the snapshot.
+ */
+function copyToSecondLocation() {
+    const backupCopy = require('./backupCopy');
+    if (!backupCopy.copyTarget().dir) return null;
+    return lifecycle.trackJob('Backup-Kopie', backupCopy.syncCopies())
+        .catch((e) => log.warn('[Backup] Kopie in den zweiten Speicherort fehlgeschlagen:', e));
 }
 
 /** Daily window: BACKUP_HOUR (0-23, default 3) in BACKUP_TIMEZONE (default Europe/Berlin, UTC when unknown). */
@@ -631,6 +643,7 @@ function runPushRemindersIfDue({ now = new Date(), shouldStop = () => false } = 
 function initScheduler() {
     sweepTempArtefacts();
     let stopped = false;
+    let booted = false;
     stripExistingUploadsOnce({ shouldStop: () => stopped })
         .catch(e => log.warn('Stripping metadata from existing uploads failed:', e));
     const check = async () => {
@@ -639,6 +652,11 @@ function initScheduler() {
             await runDailyBackupIfDue();
         } catch (e) {
             log.error('[Auto-Backup] Daily backup failed:', e);
+        }
+        // once after the start: snapshots written while the server was off (vor-update-*) and copies that failed before
+        if (!booted) {
+            booted = true;
+            await copyToSecondLocation();
         }
         try {
             purgeTrashIfDue();
@@ -686,6 +704,7 @@ function initScheduler() {
 
 module.exports = {
     runPushRemindersIfDue,
+    copyToSecondLocation,
     backupsDir,
     DAILY_PREFIX,
     PRE_RESTORE_PREFIX,

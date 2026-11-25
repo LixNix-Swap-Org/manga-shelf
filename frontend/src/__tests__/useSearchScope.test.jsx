@@ -418,7 +418,8 @@ describe('Dashboard: online lookups only for typed input', () => {
     fireEvent.change(searchInput(), { target: { value: 'Naru' } });
     await settle();
     expect(lookups).toEqual([]);
-    expect(screen.getByText('Naruto')).toBeTruthy();
+    // typing opens the quick panel, so the title shows there and in the collection
+    expect(screen.getAllByText('Naruto').length).toBeGreaterThan(0);
     fireEvent.click(await screen.findByRole('button', { name: 'Online nach „Naru“ suchen' }));
     await waitFor(() => expect(lookups).toHaveLength(1));
     const heading = await screen.findByRole('heading', { name: 'Online-Treffer zu „Naru“' });

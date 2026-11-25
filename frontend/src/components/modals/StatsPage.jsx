@@ -239,7 +239,8 @@ export default function StatsPage({
           {!shelfPicker && shelfName && <span className="text-xs text-slate-400">{t('Regal: {name}', { name: shelfName })}</span>}
         </div>
 
-        <div role="group" aria-label={t('Bereiche')} className="flex flex-nowrap items-center gap-2 pt-4 pb-2 border-b border-slate-800/80 overflow-x-auto no-scrollbar">
+        {/* phones scroll the tabs sideways; from 640 px they wrap, so every tab is in view on tablets */}
+        <div role="group" aria-label={t('Bereiche')} className="flex flex-nowrap sm:flex-wrap items-center gap-2 pt-4 pb-2 border-b border-slate-800/80 overflow-x-auto sm:overflow-visible no-scrollbar">
           {STATS_TABS.map(({ id, label, Icon }) => (
             <button
               key={id}

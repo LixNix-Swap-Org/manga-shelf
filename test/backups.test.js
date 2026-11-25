@@ -983,6 +983,37 @@ test('inspect stages an uploaded backup, reports its content and restores it in 
     assert.equal(again.body.code, 'STAGING_NOT_FOUND');
 });
 
+test('inspect counts the images the backup names that neither the archive nor this server has, and warns about them', async () => {
+    const uploads = path.join(ctx.dataDir, 'uploads');
+    fs.writeFileSync(path.join(uploads, 'schon-da.jpg'), 'jpg');
+    const data = await snapshotDbBuffer((d) => {
+        const add = d.prepare('INSERT INTO mangas (title, cover_image, banner_image) VALUES (?, ?, ?)');
+        add.run('Cover auf dem Server', '/uploads/schon-da.jpg', null);
+        add.run('Cover im Backup', '/uploads/im-zip.png', null);
+        add.run('Cover nirgends', '/uploads/fehlt-1.jpg', '/uploads/fehlt-2.webp');
+        add.run('Fremdes Cover', 'https://img.example.org/x.jpg', null);
+        // another host's /uploads/ folder is no image of this server
+        add.run('Fremdes Upload-Cover', 'https://cdn.example.com/uploads/fremd.jpg', null);
+    });
+    const res = await uploadZip(zipOf({ 'manga.db': data, 'uploads/im-zip.png': 'png' }).toBuffer(), '/backup/inspect');
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.missing_uploads, 2, 'fehlt-1.jpg and fehlt-2.webp; the server file and the archive file count as there');
+    const line = 'Bilder, die das Backup nennt, aber weder im Backup noch auf diesem Server liegen: 2. Diese Cover und Fotos fehlen nach dem Einspielen.';
+    assert.ok(res.body.warnings.includes(line), JSON.stringify(res.body.warnings));
+    const index = res.body.warnings.indexOf(line);
+    assert.equal(res.body.warnings_msg[index].msg, 'Bilder, die das Backup nennt, aber weder im Backup noch auf diesem Server liegen: {count}. Diese Cover und Fotos fehlen nach dem Einspielen.');
+    assert.equal(res.body.current_counts.uploads, fs.readdirSync(uploads).filter(n => !n.startsWith('.')).length);
+    assert.equal((await admin('DELETE', `/backup/restore/${res.body.staging_id}`)).status, 200);
+
+    // the same database with every named image in the archive: nothing missing, no line
+    const full = await uploadZip(zipOf({ 'manga.db': data, 'uploads/im-zip.png': 'png', 'uploads/fehlt-1.jpg': 'jpg', 'uploads/fehlt-2.webp': 'webp' }).toBuffer(), '/backup/inspect');
+    assert.equal(full.status, 200, JSON.stringify(full.body));
+    assert.equal(full.body.missing_uploads, 0);
+    assert.ok(!full.body.warnings.some(w => /weder im Backup/.test(w)));
+    assert.equal((await admin('DELETE', `/backup/restore/${full.body.staging_id}`)).status, 200);
+    fs.unlinkSync(path.join(uploads, 'schon-da.jpg'));
+});
+
 test('inspect names the accounts without a password (app backup after a pull) in a field and a warning', async () => {
     const data = await snapshotDbBuffer((d) => {
         const add = d.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'editor')");

@@ -347,7 +347,7 @@ export default function AddAnimeModal({
                     return (
                       <li key={key} className="flex gap-3 items-center bg-slate-900/70 border border-slate-800 rounded-xl p-2">
                         <div className="w-12 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-950">
-                          <CoverImage src={hit.cover_url} className="w-full h-full object-cover" fallback={<Tv className="w-5 h-5 m-auto mt-5 text-slate-500" aria-hidden="true" />} />
+                          <CoverImage src={hit.cover_url} className="w-full h-full object-cover" fallback={<Tv className="w-5 h-5 m-auto mt-5 text-slate-400" aria-hidden="true" />} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-white truncate">{name}</p>

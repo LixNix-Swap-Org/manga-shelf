@@ -44,7 +44,7 @@ function stubServer() {
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push([init.method || 'GET', String(url), body]);
     if (String(url) === '/api/push/key') return fakeResponse(200, { publicKey: SERVER_KEY });
-    if (String(url) === '/api/push/subscriptions/status') return fakeResponse(200, { subscribed: true, hour: 7, mode: 'day', volumes: true, episodes: false, loans: true });
+    if (String(url) === '/api/push/subscriptions/status') return fakeResponse(200, { subscribed: true, hour: 7, mode: 'day', weekend: 'same', volumes: true, episodes: false, loans: true, announced: true, preorders: false });
     return fakeResponse(200, { success: true });
   }));
   return calls;
@@ -66,7 +66,8 @@ describe('web push helpers', () => {
 
   it('keyBytes decodes base64url; the texts carry every template', () => {
     expect(Array.from(keyBytes('AQID_-8'))).toEqual([1, 2, 3, 255, 239]);
-    expect(Object.keys(pushTexts()).sort()).toEqual(['box', 'episode', 'loan', 'loanTitle', 'more', 'test', 'title', 'tomorrow', 'volume', 'week', 'weekdays']);
+    expect(Object.keys(pushTexts()).sort()).toEqual(['announcedTitle', 'arrived', 'box', 'date', 'episode', 'loan', 'loanTitle', 'months', 'more', 'preorder', 'preorderTitle', 'test', 'title', 'tomorrow', 'volume', 'week', 'weekdays', 'yesterday']);
+    expect(pushTexts().months.split(',')).toHaveLength(12);
     expect(pushTexts().weekdays.split(',')).toHaveLength(7);
     expect(pushTexts().episode).toBe('{title} – Folge {episode}');
   });
@@ -76,7 +77,7 @@ describe('web push helpers', () => {
     const nav = fakeNav();
     const notification = { permission: 'default', requestPermission: vi.fn(async () => 'granted') };
     // the choices come back from the server (a browser subscribed before keeps its stored ones)
-    expect(await enableWebPush({ nav, notification })).toEqual({ enabled: true, prefs: { hour: 7, mode: 'day', volumes: true, episodes: false, loans: true } });
+    expect(await enableWebPush({ nav, notification })).toEqual({ enabled: true, prefs: { hour: 7, mode: 'day', weekend: 'same', volumes: true, episodes: false, loans: true, announced: true, preorders: false } });
     expect(nav.pushManager.subscribe).toHaveBeenCalledWith({ userVisibleOnly: true, applicationServerKey: keyBytes(SERVER_KEY) });
     expect(calls.at(-1).slice(0, 2)).toEqual(['POST', '/api/push/subscriptions/status']);
     const [method, url, body] = calls.at(-2);
@@ -150,6 +151,13 @@ describe('settings switch', () => {
     expect(episodes.checked).toBe(false);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Überfällige Ausleihen' }));
     await waitFor(() => expect(calls.some(([m, , b]) => m === 'PUT' && b?.loans === false)).toBe(true));
+    const weekend = screen.getByRole('combobox', { name: 'Wochenende' });
+    expect(weekend.value).toBe('same');
+    fireEvent.change(weekend, { target: { value: 'late' } });
+    await waitFor(() => expect(calls.some(([m, , b]) => m === 'PUT' && b?.weekend === 'late')).toBe(true));
+    expect(screen.getByRole('checkbox', { name: 'Vorbestellung überfällig' }).checked).toBe(false);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Neu angekündigte Bände' }));
+    await waitFor(() => expect(calls.some(([m, , b]) => m === 'PUT' && b?.announced === false)).toBe(true));
     // the last one left cannot be switched off
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Neue Bände' }).disabled).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Test senden' }));

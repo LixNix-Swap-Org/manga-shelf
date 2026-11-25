@@ -32,12 +32,22 @@ const DEFAULT_TEXTS = Object.freeze({
     week: 'Diese Woche',
     loanTitle: 'Ausleihe überfällig',
     loan: '{title} {volumes} – seit {days} Tagen bei {name}',
-    weekdays: 'Mo,Di,Mi,Do,Fr,Sa,So'
+    weekdays: 'Mo,Di,Mi,Do,Fr,Sa,So',
+    announcedTitle: 'Neu angekündigt',
+    preorderTitle: 'Vorbestellung überfällig',
+    preorder: '{title} {volumes} – Termin war {date}',
+    yesterday: 'gestern',
+    arrived: 'Angekommen?',
+    date: '{d}. {month}',
+    months: 'Januar,Februar,März,April,Mai,Juni,Juli,August,September,Oktober,November,Dezember'
 });
 // when a subscription gets its reminder: on the release day, the day before, or once a week (Monday) for the week
 const MODES = ['day', 'eve', 'week'];
-// what it reports; each a 0/1 column of push_subscriptions
-const KINDS = ['volumes', 'episodes', 'loans'];
+// what it reports; each a 0/1 column of push_subscriptions (announced, preorders: migration 62)
+const KINDS = ['volumes', 'episodes', 'loans', 'announced', 'preorders'];
+// Saturday and Sunday: like weekdays, not before 11:00, or no reminder at all
+const WEEKEND = ['same', 'late', 'off'];
+const WEEKEND_LATE_HOUR = 11;
 
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 const fromB64url = (text) => Buffer.from(String(text || ''), 'base64url');
@@ -108,6 +118,20 @@ function encryptPayload(subscription, payload, { salt = crypto.randomBytes(16), 
     return Buffer.concat([salt, rs, Buffer.from([asPublic.length]), asPublic, body]);
 }
 
+/** True when `p256dh` (base64url) is an uncompressed point on P-256, the only key a browser sends. */
+function isValidPushKey(p256dh) {
+    const key = Buffer.from(String(p256dh || ''), 'base64url');
+    if (key.length !== 65 || key[0] !== 4) return false;
+    try {
+        const probe = crypto.createECDH('prime256v1');
+        probe.generateKeys();
+        probe.computeSecret(key);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Sends one message. Resolves { ok, gone } where `gone` means the push service forgot the subscription (404/410):
  * the caller deletes it. Network errors resolve { ok: false, gone: false }.
@@ -115,7 +139,14 @@ function encryptPayload(subscription, payload, { salt = crypto.randomBytes(16), 
 async function sendPush(subscription, message, { db, fetchImpl = globalThis.fetch, now = Date.now() } = {}) {
     if (!isPushEndpoint(subscription.endpoint)) return { ok: false, gone: true };
     const keys = vapidKeys(db);
-    const body = encryptPayload(subscription, JSON.stringify(message));
+    let body;
+    try {
+        body = encryptPayload(subscription, JSON.stringify(message));
+    } catch (e) {
+        // keys that are no point on the curve (a broken or forged subscription) never work: the caller deletes it
+        log.warn(`[Push] Abo mit ungültigen Schlüsseln: ${e?.message || e}`);
+        return { ok: false, gone: true };
+    }
     try {
         const res = await fetchImpl(subscription.endpoint, {
             method: 'POST',
@@ -197,18 +228,22 @@ function windowOf(mode, day) {
  * (all of its shelves, as the release radar shows them) and confirmed next episodes of its "Schaue"/"Geplant" anime
  * airing in it. { volumes, episodes }, each with its `day`.
  */
-function releasesBetween(ctx, from, to) {
+/** The radar volumes of the account (all of its shelves) that have an exact date, each with its `day`. */
+function datedRadarItems(ctx) {
     const { releaseRadar } = require('../core/handlers/radar');
-    const volumes = [];
+    const items = [];
     for (const group of releaseRadar(ctx, { query: {} }).body?.groups || []) {
         for (const item of group?.items || []) {
             if (!item || item.date_precision === 'month') continue;
             const day = String(item.release_date ?? '').trim();
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < from || day > to) continue;
-            volumes.push({ ...item, day });
+            if (/^\d{4}-\d{2}-\d{2}$/.test(day)) items.push({ ...item, day });
         }
     }
-    volumes.sort((a, b) => a.day.localeCompare(b.day));
+    return items.sort((a, b) => a.day.localeCompare(b.day));
+}
+
+function releasesBetween(ctx, from, to, radar = datedRadarItems(ctx)) {
+    const volumes = radar.filter((item) => item.day >= from && item.day <= to);
     const episodes = [];
     const rows = ctx.db.prepare(`
         SELECT a.id AS anime_id, a.title AS title, a.title_de AS title_de, a.next_airing_episode AS episode, a.next_airing_at AS at
@@ -239,6 +274,45 @@ function releasesBetween(ctx, from, to) {
     }
     episodes.sort((a, b) => a.at - b.at);
     return { volumes, episodes };
+}
+
+/**
+ * Pre-orders (Vorbestellt, Bestellt) whose exact date has passed and that became overdue (the day after the date) in
+ * (`since`, `day`], like the point in "Zu erledigen": [{ title, numbers, release }] per series and date.
+ */
+function overduePreorders(ctx, day, since) {
+    const access = require('../core/lib/access');
+    const { volumeOrderSql } = require('../core/lib/volumeNumber');
+    const scope = access.inShelves('m.shelf_id', access.requestedShelfIds(ctx, null));
+    // overdue on date + 1: the date lies in [since, day - 1]
+    const rows = ctx.db.prepare(`
+        SELECT v.manga_id, m.title, v.volume_number, SUBSTR(TRIM(v.release_date), 1, 10) AS release
+        FROM volumes v JOIN mangas m ON m.id = v.manga_id
+        WHERE v.status IN ('Vorbestellt', 'Bestellt') AND TRIM(v.release_date) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'
+          AND SUBSTR(TRIM(v.release_date), 1, 10) >= ? AND SUBSTR(TRIM(v.release_date), 1, 10) < ? AND ${scope.sql}
+        ORDER BY m.title COLLATE NOCASE, m.id, release, ${volumeOrderSql('v')}
+    `).all(since, day, ...scope.params);
+    const groups = new Map();
+    for (const r of rows) {
+        const key = `${r.manga_id}\u0000${r.release}`;
+        const entry = groups.get(key) || { title: String(r.title || '').trim(), numbers: [], release: r.release };
+        entry.numbers.push(String(r.volume_number ?? '').trim());
+        groups.set(key, entry);
+    }
+    return [...groups.values()];
+}
+
+/** "12. März" in the subscription's language (texts.date with {d} and {month}). */
+function dateLabel(isoDay, texts) {
+    const months = String(texts.months || DEFAULT_TEXTS.months).split(',');
+    const [, m, d] = isoDay.split('-').map(Number);
+    return fill(texts.date || DEFAULT_TEXTS.date, { d, month: months[m - 1] || String(m) });
+}
+
+/** "Band 1, 2" for plain numbers, else the numbers as typed. */
+function numbersLabel(numbers, texts) {
+    const list = numbers.filter(Boolean);
+    return list.length && list.every(n => /^\d+(\.\d+)?$/.test(n)) ? fill(texts.volume, { num: list.join(', ') }) : list.join(', ');
 }
 
 /** The releases of `day` only (the release-day reminder). */
@@ -282,6 +356,39 @@ function overdueLoans(ctx, day) {
     return [...groups.values()];
 }
 
+/** At most 6 lines, the last one "+ N weitere". */
+function limitLines(lines, texts, tail = []) {
+    const room = MAX_LINES - tail.length;
+    const shown = lines.length > room ? lines.slice(0, room - 1) : lines;
+    const rest = lines.length - shown.length;
+    return [...shown, ...(rest ? [fill(texts.more, { n: rest })] : []), ...tail].join('\n');
+}
+
+/** "Neu angekündigt": volumes of the account's series that newly have a date in the radar. */
+function announcedMessage(items, texts, day) {
+    const lines = [];
+    for (const v of items) {
+        const title = String(v.manga_title ?? '').trim();
+        const label = volumeLabel(v, texts);
+        const line = `${title ? `${title} – ${label}` : label} · ${dateLabel(v.day, texts)}`;
+        if (!lines.includes(line)) lines.push(line);
+    }
+    if (!lines.length) return null;
+    return { title: texts.announcedTitle, body: limitLines(lines, texts), url: '/?view=radar', tag: `announced-${day}` };
+}
+
+/** "Vorbestellung überfällig": pre-orders still open the day after their date ("Termin war gestern"). */
+function preorderMessage(groups, texts, day, mode) {
+    const yesterday = addDays(day, -1);
+    const lines = groups.map((g) => fill(texts.preorder, {
+        title: g.title,
+        volumes: numbersLabel(g.numbers, texts),
+        date: g.release === yesterday ? texts.yesterday : dateLabel(g.release, texts)
+    }).replace(/\s+–/, ' –').trim());
+    if (!lines.length) return null;
+    return { title: texts.preorderTitle, body: limitLines(lines, texts, [texts.arrived]), url: '/', tag: `preorder-${mode}-${day}` };
+}
+
 /**
  * The notification for one subscription, or null when there is nothing to say: { title, body, url, tag }.
  * `found` = { volumes, episodes, loans }; `mode` picks the title (today, tomorrow, this week; the week lists the weekday).
@@ -291,7 +398,8 @@ function buildMessage(found, texts, day, mode = 'day') {
     const episodes = found.episodes || [];
     const loans = found.loans || [];
     const weekdays = String(texts.weekdays || DEFAULT_TEXTS.weekdays).split(',');
-    const dated = (line, d) => (mode === 'week' && d ? `${weekdays[weekdayIndex(d)] || d} ${line}` : line);
+    // the week, and a window over several days (the weekend caught up, see findFor), name each line's weekday
+    const dated = (line, d) => ((mode === 'week' || found.multiDay) && d ? `${weekdays[weekdayIndex(d)] || d} ${line}` : line);
     const lines = [];
     const add = (line) => { if (!lines.includes(line)) lines.push(line); };
     for (const v of volumes) {
@@ -301,14 +409,10 @@ function buildMessage(found, texts, day, mode = 'day') {
     }
     for (const e of episodes) add(dated(fill(texts.episode, { title: e.title, episode: e.episode }), e.day));
     for (const l of loans) {
-        const numbers = l.numbers.filter(Boolean);
-        const label = numbers.length && numbers.every(n => /^\d+(\.\d+)?$/.test(n)) ? fill(texts.volume, { num: numbers.join(', ') }) : numbers.join(', ');
-        add(fill(texts.loan, { title: l.title, volumes: label, days: l.days, name: l.name }).replace(/\s+–/, ' –').trim());
+        add(fill(texts.loan, { title: l.title, volumes: numbersLabel(l.numbers, texts), days: l.days, name: l.name }).replace(/\s+–/, ' –').trim());
     }
     if (!lines.length) return null;
-    const shown = lines.length > MAX_LINES ? lines.slice(0, MAX_LINES - 1) : lines;
-    const rest = lines.length - shown.length;
-    const body = [...shown, ...(rest ? [fill(texts.more, { n: rest })] : [])].join('\n');
+    const body = limitLines(lines, texts);
     const releases = volumes.length + episodes.length;
     const title = !releases ? texts.loanTitle : mode === 'eve' ? texts.tomorrow : mode === 'week' ? texts.week : texts.title;
     const url = volumes.length ? '/?view=radar' : episodes.length ? '/?view=anime' : '/';
@@ -321,31 +425,61 @@ function buildMessage(found, texts, day, mode = 'day') {
  */
 function buildMessages(found, texts, day, mode = 'day') {
     const releases = (found.volumes || []).length + (found.episodes || []).length;
-    if (mode === 'week' || !releases || !(found.loans || []).length) return [buildMessage(found, texts, day, mode)].filter(Boolean);
-    return [
-        buildMessage({ volumes: found.volumes, episodes: found.episodes }, texts, day, mode),
-        buildMessage({ loans: found.loans }, texts, day, mode)
-    ].filter(Boolean);
+    const main = mode === 'week' || !releases || !(found.loans || []).length
+        ? [buildMessage(found, texts, day, mode)]
+        : [buildMessage({ volumes: found.volumes, episodes: found.episodes, multiDay: found.multiDay }, texts, day, mode), buildMessage({ loans: found.loans }, texts, day, mode)];
+    // announced volumes and overdue pre-orders always come as notifications of their own
+    return [...main, announcedMessage(found.announced || [], texts, day), preorderMessage(found.preorders || [], texts, day, mode)].filter(Boolean);
 }
 
-/** What a subscription row reports on `day`, by its mode and kinds. */
+/**
+ * What a subscription row reports on `day`, by its mode and kinds: { mode, found, announce } where `announce` lists
+ * the radar volume ids to remember as announced once the messages got through (on the first look all current ones,
+ * without a message: they were there before).
+ */
 function findFor(ctx, sub, day) {
     const mode = MODES.includes(sub.mode) ? sub.mode : 'day';
-    const { from, to } = windowOf(mode, day);
-    const found = { volumes: [], episodes: [], loans: [] };
+    let { from, to } = windowOf(mode, day);
+    // "Wochenende: keine Erinnerungen" skips Saturday and Sunday, so their releases come with the reminder around them:
+    // on the release day the Monday one also names Saturday and Sunday (when the weekend was skipped), the evening
+    // before the Friday one also Sunday and Monday (Saturday's and Sunday's evening reminders are skipped)
+    if (sub.weekend === 'off' && mode === 'day' && weekdayIndex(day) === 0 && sub.last_day && sub.last_day < addDays(day, -2)) {
+        from = addDays(day, -2);
+    }
+    if (sub.weekend === 'off' && mode === 'eve' && weekdayIndex(day) === 4) to = addDays(day, 3);
+    const found = { volumes: [], episodes: [], loans: [], announced: [], preorders: [], multiDay: from !== to };
+    let announce = [];
+    const radar = sub.volumes || sub.episodes || sub.announced ? datedRadarItems(ctx) : [];
     if (sub.volumes || sub.episodes) {
-        const r = releasesBetween(ctx, from, to);
+        const r = releasesBetween(ctx, from, to, radar);
         if (sub.volumes) found.volumes = r.volumes;
         if (sub.episodes) found.episodes = r.episodes;
     }
+    if (sub.announced && sub.id) {
+        const coming = radar.filter((item) => item.day >= day && item.id);
+        const known = new Set(ctx.db.prepare('SELECT volume_id FROM push_announced WHERE subscription_id = ?').all(sub.id).map((r) => r.volume_id));
+        const fresh = coming.filter((item) => !known.has(item.id));
+        if (sub.announced_from) found.announced = fresh;
+        announce = fresh.map((item) => item.id);
+    }
+    // the day after the date, or the first reminder after it; a browser's first reminder only looks at yesterday
+    const since = sub.last_day && sub.last_day < day ? sub.last_day : addDays(day, -1);
+    if (sub.preorders) found.preorders = overduePreorders(ctx, day, since);
     if (sub.loans) {
         const loans = overdueLoans(ctx, day);
         // weekly: every overdue lending; daily: the ones that became overdue since the last reminder (or today). A
         // browser's first reminder (no last_day yet) names every lending that is overdue already, once.
-        const since = !sub.last_day ? null : sub.last_day < day ? sub.last_day : addDays(day, -1);
-        found.loans = mode === 'week' || !since ? loans : loans.filter(l => l.overdueOn <= day && l.overdueOn > since);
+        const loanSince = !sub.last_day ? null : since;
+        found.loans = mode === 'week' || !loanSince ? loans : loans.filter(l => l.overdueOn <= day && l.overdueOn > loanSince);
     }
-    return { mode, found };
+    return { mode, found, announce };
+}
+
+/** Remembers `ids` as announced to the subscription; the first look also sets `announced_from`. */
+function rememberAnnounced(db, sub, ids, day) {
+    const insert = db.prepare('INSERT OR IGNORE INTO push_announced (subscription_id, volume_id) VALUES (?, ?)');
+    for (const id of ids) insert.run(sub.id, id);
+    if (!sub.announced_from) db.prepare('UPDATE push_subscriptions SET announced_from = ? WHERE id = ?').run(day, sub.id);
 }
 
 let run = null;
@@ -369,12 +503,17 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
     const done = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(DAY_KEY);
     if (done && done.value === day) return Promise.resolve(null);
     const monday = mondayOf(day);
-    const due = `(s.last_day IS NULL OR s.last_day <> ?) AND (s.mode <> 'week' OR s.last_day IS NULL OR s.last_day < ?)`;
+    const weekend = weekdayIndex(day) >= 5 ? 1 : 0;
+    // on Saturday and Sunday a browser with "keine Erinnerungen" is not due at all (its next reminder covers the weekend)
+    const due = `(s.last_day IS NULL OR s.last_day <> ?) AND (s.mode <> 'week' OR s.last_day IS NULL OR s.last_day < ?)
+        AND (${weekend} = 0 OR s.weekend <> 'off')`;
     // each browser from its own hour on (the hourly check sends within that hour; a missed hour is caught up later that day)
     const subs = db.prepare(`
-        SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, s.mode, s.volumes, s.episodes, s.loans, s.last_day, u.username, u.role
+        SELECT s.id, s.user_id, s.endpoint, s.p256dh, s.auth, s.texts, s.mode, s.volumes, s.episodes, s.loans, s.announced,
+               s.preorders, s.weekend, s.announced_from, s.last_day, u.username, u.role
         FROM push_subscriptions s JOIN users u ON u.id = s.user_id
-        WHERE ${due} AND s.hour <= ? AND u.role IN ('admin', 'editor')
+        WHERE ${due} AND (CASE WHEN ${weekend} = 1 AND s.weekend = 'late' THEN MAX(s.hour, ${WEEKEND_LATE_HOUR}) ELSE s.hour END) <= ?
+          AND u.role IN ('admin', 'editor')
         ORDER BY s.user_id, s.id
     `).all(day, monday, hour);
     if (!subs.length) return Promise.resolve(null);
@@ -384,18 +523,29 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
         for (const sub of subs) {
             if (shouldStop()) return report;
             if (!ctxs.has(sub.user_id)) ctxs.set(sub.user_id, createCtx({ user: { id: sub.user_id, username: sub.username, role: sub.role } }));
-            let messages = [];
+            let messages;
+            let announce;
             try {
-                const { mode, found } = findFor(ctxs.get(sub.user_id), sub, day);
-                messages = buildMessages(found, textsOf(sub.texts), day, mode);
+                const result = findFor(ctxs.get(sub.user_id), sub, day);
+                announce = result.announce;
+                messages = buildMessages(result.found, textsOf(sub.texts), day, result.mode);
             } catch (e) {
+                // not read is not reminded: the day and the first look of "Neu angekündigt" stay open for the next check
                 log.warn(`[Push] Erinnerung nicht lesbar: ${e?.message || e}`);
+                continue;
             }
             if (messages.length) {
                 let gone = false;
                 let failed = false;
                 for (const message of messages) {
-                    const result = await sendPush(sub, message, { db, fetchImpl });
+                    let result;
+                    try {
+                        result = await sendPush(sub, message, { db, fetchImpl });
+                    } catch (e) {
+                        // one subscription never stops the run for the others
+                        log.warn(`[Push] Senden fehlgeschlagen: ${e?.message || e}`);
+                        result = { ok: false, gone: false };
+                    }
                     if (result.gone) { gone = true; break; }
                     if (!result.ok) { failed = true; break; }
                 }
@@ -412,6 +562,13 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
                 report.skipped++;
             }
             db.prepare('UPDATE push_subscriptions SET last_day = ? WHERE id = ?').run(day, sub.id);
+            if (sub.announced) {
+                try {
+                    rememberAnnounced(db, sub, announce, day);
+                } catch (e) {
+                    log.warn(`[Push] Angekündigte Bände nicht gespeichert: ${e?.message || e}`);
+                }
+            }
         }
         // a demoted account's browser (guest, visitor) waits silently and does not keep the day open
         const open = db.prepare(`SELECT count(*) AS c FROM push_subscriptions s JOIN users u ON u.id = s.user_id
@@ -429,11 +586,14 @@ module.exports = {
     REMINDER_HOUR,
     MODES,
     KINDS,
+    WEEKEND,
+    WEEKEND_LATE_HOUR,
     DEFAULT_TEXTS,
     isPushEndpoint,
     vapidKeys,
     vapidAuthorization,
     encryptPayload,
+    isValidPushKey,
     sendPush,
     textsOf,
     cleanTexts,
@@ -442,6 +602,7 @@ module.exports = {
     releasesToday,
     releasesBetween,
     overdueLoans,
+    overduePreorders,
     windowOf,
     runPushRemindersIfDue
 };

@@ -37,6 +37,17 @@ describe('i18n catalogs', () => {
     expect(new Set(LANGUAGES.map((l) => l.name)).size).toBe(LANGUAGES.length);
   });
 
+  it('the extractor keeps lower-case words and hyphen compounds of `// i18n` declarations, but not their ids', () => {
+    for (const text of ['ZIP-Datei hochladen', 'niedrig', 'mittel', 'hoch', 'installiert', 'vorbestellt', 'erscheint bald',
+      'Vormerken: erscheint bald', 'Crunchyroll-Verlauf abgleichen', 'verbunden', 'CSV-Text fehlt', 'ISBN erforderlich', 'Push-Abo fehlt']) {
+      expect(keys.has(text), text).toBe(true);
+    }
+    // tuple ids ([['editor', 'Editor']]) and id-like properties ({ key: 'upload' }) stay out
+    for (const id of ['editor', 'visitor', 'mangas', 'volumes', 'search', 'manual', 'tv', 'movie', 'upload', 'snapshots', 'print']) {
+      expect(keys.has(id), id).toBe(false);
+    }
+  });
+
   it('the extractor finds no computed keys and every stored value of enumLabels', () => {
     expect(problems).toEqual([]);
     for (const value of [...VOLUME_STATUS_VALUES, ...MANGA_STATUS_VALUES, ...CONDITION_VALUES, ...ANIME_PROGRESS_VALUES, ...GENRE_NAMES]) {

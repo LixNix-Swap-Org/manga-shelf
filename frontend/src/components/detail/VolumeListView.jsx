@@ -128,14 +128,14 @@ export default function VolumeListView({
                       </span>
                     )}
                   </td>
-                  <td className="py-2 px-3 text-xs text-center"><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">{t('keine Angabe')}</span></td>
+                  <td className="py-2 px-3 text-xs text-center"><span aria-hidden="true" className="text-slate-400">-</span><span className="sr-only">{t('keine Angabe')}</span></td>
                   <td className="py-2 px-3 text-slate-400 text-xs">
                     {gapMeta?.publisher || manga.publisher || '-'}
                   </td>
                   <td className="py-2 px-3 font-mono text-emerald-400 text-xs">
                     {gapMeta?.price ? formatEuro(gapMeta.price) : '-'}
                   </td>
-                  <td className="py-2 px-3 text-xs"><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">{t('keine Angabe')}</span></td>
+                  <td className="py-2 px-3 text-xs"><span aria-hidden="true" className="text-slate-400">-</span><span className="sr-only">{t('keine Angabe')}</span></td>
                   <td className="py-2 px-3 text-right">
                     {canEdit && (
                       <button
@@ -216,7 +216,7 @@ export default function VolumeListView({
                       )}
                     </button>
                   ) : (
-                    <div aria-hidden="true" className={`w-8 h-12 rounded bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500 ${isOwned ? '' : 'opacity-60'}`}>
+                    <div aria-hidden="true" className={`w-8 h-12 rounded bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-400 ${isOwned ? '' : 'opacity-60'}`}>
                       <BookOpen className="w-3.5 h-3.5" />
                     </div>
                   )}
@@ -307,7 +307,7 @@ export default function VolumeListView({
                       <span>{isRead ? t('Gelesen') : t('Ungelesen')}</span>
                     </button>
                   ) : (
-                    <span><span aria-hidden="true" className="text-slate-500">-</span><span className="sr-only">{t('keine Angabe')}</span></span>
+                    <span><span aria-hidden="true" className="text-slate-400">-</span><span className="sr-only">{t('keine Angabe')}</span></span>
                   )}
                 </td>
 

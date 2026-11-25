@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
-import { quickAccessEntries } from '../components/dashboard/QuickAccess';
+import QuickAccessPanel, { quickAccessEntries } from '../components/dashboard/QuickAccess';
 import { getRecentSeries, rememberRecentSeries, RECENT_LIMIT } from '../utils/recentSeries';
 
 const mangas = [
@@ -140,5 +140,32 @@ describe('quick access in the header', () => {
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     expect(document.activeElement).not.toBe(input);
     dialog.remove();
+  });
+});
+
+describe('phone panel position', () => {
+  const sections = [{ id: 'actions', title: 'Aktionen', items: [{ key: 'action-add', kind: 'action', label: 'Reihe hinzufügen', hint: '', run: () => {} }] }];
+  const anchor = () => {
+    const field = document.createElement('div');
+    const input = document.createElement('input');
+    field.appendChild(input);
+    field.getBoundingClientRect = () => ({ top: 70, bottom: 118.4, left: 0, right: 390, width: 390, height: 48.4 });
+    return { current: input };
+  };
+  const renderPanel = (anchorRef) => render(
+    <QuickAccessPanel sections={sections} activeIndex={-1} onChoose={() => {}} onHover={() => {}} onClose={() => {}} narrow anchorRef={anchorRef} />
+  );
+
+  it('starts below the sticky header, and right below the search field while the header scrolls with the page', () => {
+    const root = document.documentElement;
+    root.style.setProperty('--sticky-header-h', '127px');
+    const sticky = renderPanel(anchor());
+    expect(document.getElementById('quick-access').style.top).toBe('');
+    sticky.unmount();
+    // short: screens (e.g. the phone app with the keyboard open): the header is static, the panel must not cover the field
+    root.style.setProperty('--sticky-header-h', '0px');
+    renderPanel(anchor());
+    expect(document.getElementById('quick-access').style.top).toBe('123px');
+    root.style.removeProperty('--sticky-header-h');
   });
 });

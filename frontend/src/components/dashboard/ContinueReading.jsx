@@ -18,6 +18,7 @@ export function continueReadingItems(data, limit = CONTINUE_READING_LIMIT) {
  * "Weiterlesen" strip on the shelf: the last series the user read whose next owned volume is unread. Hidden while
  * offline, while loading, on an error and when there is nothing to continue. With `canMark`, each entry has a
  * "+1 gelesen" button that marks its next volume as read (undo from the toast); `onChanged` runs after each change.
+ * Between 640 and 1279 px (three narrow cards) the button sits under the text at full width, so the title keeps the card.
  */
 export default function ContinueReading({ userId, enabled = true, canMark = false, onChanged }) {
   const [items, setItems] = useState([]);
@@ -78,7 +79,7 @@ export default function ContinueReading({ userId, enabled = true, canMark = fals
             <li key={item.manga_id} className="relative">
               <Link
                 to={`/manga/${item.manga_id}`}
-                className={`continue-reading-entry glass-panel flex items-center gap-3 p-2.5 ${canMark ? 'pr-24' : ''} rounded-2xl border border-slate-800/80 hover:border-emerald-500/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
+                className={`continue-reading-entry glass-panel flex items-center gap-3 p-2.5 ${canMark ? 'pr-24 sm:pr-2.5 sm:pb-[3.875rem] xl:pr-24 xl:pb-2.5' : ''} rounded-2xl border border-slate-800/80 hover:border-emerald-500/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
               >
                 <CoverImage
                   src={[next.cover_image, item.cover_image]}
@@ -95,7 +96,7 @@ export default function ContinueReading({ userId, enabled = true, canMark = fals
               {canMark && (
                 <button
                   type="button"
-                  className="continue-reading-mark absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 min-h-[36px] px-2.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 disabled:opacity-50"
+                  className="continue-reading-mark absolute right-2.5 top-1/2 -translate-y-1/2 sm:top-auto sm:bottom-2.5 sm:left-2.5 sm:translate-y-0 sm:justify-center sm:min-h-[44px] xl:left-auto xl:bottom-auto xl:top-1/2 xl:-translate-y-1/2 xl:justify-start xl:min-h-[36px] inline-flex items-center gap-1 min-h-[36px] px-2.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 disabled:opacity-50"
                   aria-label={t('Band {volume} von „{title}“ als gelesen markieren', { volume: next.volume_number, title: item.title || t('Ohne Titel') })}
                   disabled={busy === item.manga_id}
                   onClick={() => markNext(item)}

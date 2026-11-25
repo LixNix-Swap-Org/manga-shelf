@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Plus, ScrollText } from 'lucide-react';
 import { put } from '../../utils/api';
-import { notify } from '../../utils/notify';
+import { notify, DURATIONS } from '../../utils/notify';
 import { getChapterProgress } from '../../utils/volumeHelpers';
 import { formatNumber } from '../../utils/format';
 import { t, tn } from '../../i18n/index.js';
@@ -57,6 +57,7 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
     ? tn('{read} von {n} Kapitel gelesen', '{read} von {n} Kapiteln gelesen', total, { read: chapterText(read) })
     : tn('{n} Kapitel gelesen', '{n} Kapitel gelesen', read);
 
+  const undoRef = useRef(null);
   const save = async (body, { undo = true } = {}) => {
     inFlight.current = true;
     setBusy(true);
@@ -64,10 +65,27 @@ export default function ChapterProgress({ manga, user, canChange, isOffline, onS
       const data = await put(`/api/mangas/${encodeURIComponent(manga.id)}/chapters`, body, { fallback: t('Kapitelstand konnte nicht gespeichert werden') });
       onSaved(data);
       if (undo && data.chapters_read !== data.previous) {
-        const text = data.chapters_read > 0
-          ? t('{title}: bis Kapitel {n} gelesen', { title: manga.title, n: chapterText(data.chapters_read) })
-          : t('{title}: Kapitelstand zurückgesetzt', { title: manga.title });
-        notify.success(text, { action: { label: t('Rückgängig'), onClick: () => save({ chapters_read: data.previous }, { undo: false }) } });
+        // one undo toast per series: a save shortly after another replaces its toast, and "Rückgängig" goes back to the
+        // value before the first of them (two toasts each undoing one step would jump back too far from the older one)
+        const last = undoRef.current;
+        if (last) notify.dismiss(last.id);
+        undoRef.current = null;
+        const previous = last && Date.now() < last.until ? last.previous : data.previous;
+        if (previous !== data.chapters_read) {
+          const text = data.chapters_read > 0
+            ? t('{title}: bis Kapitel {n} gelesen', { title: manga.title, n: chapterText(data.chapters_read) })
+            : t('{title}: Kapitelstand zurückgesetzt', { title: manga.title });
+          const id = notify.success(text, {
+            action: {
+              label: t('Rückgängig'),
+              onClick: () => {
+                undoRef.current = null;
+                save({ chapters_read: previous }, { undo: false });
+              }
+            }
+          });
+          undoRef.current = { id, previous, until: Date.now() + DURATIONS.success };
+        }
       }
     } catch (err) {
       notify.error(err);

@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  ROOT, SRC, parse, sourceFiles, rel, walk, isGerman, looksLikeCode, commentIndex, i18nImports, stringValue, readJson,
+  ROOT, SRC, parse, sourceFiles, rel, walk, isGerman, looksLikeCode, looksLikeMarkedText, commentIndex, i18nImports, stringValue, readJson,
   writeSortedJson
 } from './lib.mjs';
 
@@ -42,12 +42,22 @@ function createCollector() {
   return { keys, problems, add };
 }
 
+// properties of a marked declaration whose values are ids, never texts ({ key: 'upload', label: 'ZIP-Datei hochladen' })
+const ID_PROPS = new Set(['key', 'id', 'value', 'tone', 'type', 'kind', 'icon', 'color', 'variant', 'mode', 'code', 'href', 'url', 'path',
+  'className', 'testId', 'format', 'language', 'region', 'currency', 'dot']);
+const propName = (prop) => (prop?.key?.type === 'Identifier' ? prop.key.name : prop?.key?.type === 'StringLiteral' ? prop.key.value : null);
+
 /** German strings of a marked declaration: values only (object keys are ids). */
 function collectMarked(init, file, collect, component) {
-  walk(init, (node, parent, key) => {
+  walk(init, (node, parent, key, ancestors) => {
     if (parent?.type === 'ObjectProperty' && key === 'key') return;
     const text = node.type === 'StringLiteral' ? node.value : node.type === 'TemplateLiteral' && node.expressions.length === 0 ? node.quasis[0].value.cooked : null;
-    if (text !== null && !looksLikeCode(text) && /[A-Za-zÄÖÜäöüß]/.test(text)) collect.add(text, { file, line: node.loc.start.line, component });
+    if (text === null || !/[A-Za-zÄÖÜäöüß]/.test(text)) return;
+    // an id: the value of an id-like property, or the first entry of a tuple in a list of tuples ([['editor', 'Editor'], …])
+    const grandparent = ancestors[ancestors.length - 2];
+    const idValue = (parent?.type === 'ObjectProperty' && key === 'value' && ID_PROPS.has(propName(parent)))
+      || (parent?.type === 'ArrayExpression' && parent.elements.length >= 2 && parent.elements[0] === node && grandparent?.type === 'ArrayExpression');
+    if (!looksLikeCode(text) || (!idValue && looksLikeMarkedText(text))) collect.add(text, { file, line: node.loc.start.line, component });
   });
 }
 

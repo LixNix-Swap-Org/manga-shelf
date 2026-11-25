@@ -25,10 +25,14 @@ const REFERENCE_WHERE = {
     catalog_volumes: 'EXISTS (SELECT 1 FROM volumes v WHERE v.catalog_volume_id = catalog_volumes.id)'
 };
 
-/** Every column value that can name an upload (cover/banner URLs, JSON image lists, markdown/HTML in texts). */
-function referenceValues(conn = db) {
+/**
+ * Every column value that can name an upload (cover/banner URLs, JSON image lists, markdown/HTML in texts); without
+ * `withTrash` only the rows the app shows (no trash payloads).
+ */
+function referenceValues(conn = db, { withTrash = true } = {}) {
     const values = [];
     for (const [table, wanted] of Object.entries(REFERENCE_COLUMNS)) {
+        if (!withTrash && table === 'trash') continue;
         // older databases (snapshots taken before an update) may lack some columns
         const present = new Set(conn.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
         const columns = wanted.filter(c => present.has(c));
@@ -102,6 +106,23 @@ function uploadFileNames() {
 function referencedUploadNames(conn = db) {
     const index = buildReferenceIndex(conn);
     return uploadFileNames().filter(name => index.isReferenced(name)).sort();
+}
+
+// a local path only: /uploads/<name> at the start of a value or after a quote, bracket or space (JSON lists, markdown,
+// HTML), never inside another address such as https://cdn.example.com/uploads/cover.jpg or /images/uploads/x.png
+const UPLOAD_PATH = /(?<![\w.:/%-])\/uploads\/([A-Za-z0-9._-]+)/g;
+
+/**
+ * Names of the uploads the database behind `conn` points at by path (/uploads/<name> in a cover, banner, photo list or
+ * text), trash left out: what a restore of that database shows as covers and photos. Used by the backup check
+ * (routes/backups.js) to count images neither the archive nor this server has.
+ */
+function namedUploads(conn) {
+    const names = new Set();
+    for (const value of referenceValues(conn, { withTrash: false })) {
+        for (const m of value.matchAll(UPLOAD_PATH)) names.add(m[1]);
+    }
+    return names;
 }
 
 const sidecarFile = (zipName) => path.join(backupsDir, zipName.replace(/\.zip$/, '.json'));
@@ -199,4 +220,4 @@ function cleanOrphanUploads({ dryRun = false, minAgeMs = MIN_AGE_MS } = {}) {
     return result;
 }
 
-module.exports = { cleanOrphanUploads, referencedUploadNames, undoSnapshotReferences };
+module.exports = { cleanOrphanUploads, referencedUploadNames, undoSnapshotReferences, namedUploads, uploadFileNames };

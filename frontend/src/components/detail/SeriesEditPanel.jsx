@@ -80,7 +80,7 @@ export function TagEditor({ id, value, onChange, suggestions = null, offline = f
               <button
                 type="button"
                 onClick={() => onChange(joinTags(tags.filter((t) => t !== tag)))}
-                className="text-fuchsia-300 hover:text-white"
+                className="hit-44 text-fuchsia-300 hover:text-white"
                 aria-label={tr('Tag „{tag}“ entfernen', { tag })}
               >
                 <X className="w-3 h-3" aria-hidden="true" />
@@ -495,7 +495,7 @@ export default function SeriesEditPanel({
               <div className="w-20 aspect-[2/3] shrink-0 rounded-lg overflow-hidden border border-slate-700/80 bg-slate-950 flex items-center justify-center">
                 {coverUrl
                   ? <img key={coverUrl} {...assetImgProps(coverUrl)} alt="" className="w-full h-full object-cover" />
-                  : <BookOpen className="w-6 h-6 text-slate-500" aria-hidden="true" />}
+                  : <BookOpen className="w-6 h-6 text-slate-400" aria-hidden="true" />}
               </div>
               <div className="flex-1 min-w-0">
                 <label htmlFor={`${ids}-cover`} className={LABEL}>{tr('Cover-Bild')}</label>

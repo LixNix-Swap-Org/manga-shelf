@@ -373,6 +373,10 @@
 @media (pointer: coarse) {
   .hit-44:not(.absolute):not(.fixed):not(.sticky) { position: relative; }
   .hit-44::before { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+  /* targets in a tight row (the reader circles): 44 px high, as wide as the target plus the gap, so neighbours share the
+     middle and a tap never lands on the next one */
+  .hit-44-row:not(.absolute):not(.fixed):not(.sticky) { position: relative; }
+  .hit-44-row::before { content: ''; position: absolute; left: 50%; top: 50%; width: max(100%, min(44px, calc(100% + var(--hit-gap, 4px)))); height: max(100%, 44px); transform: translate(-50%, -50%); }
   input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea { font-size: max(1rem, 1em) !important; }
 }
 
