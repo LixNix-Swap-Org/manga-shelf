@@ -523,8 +523,8 @@ function runPushRemindersIfDue({ db, createCtx, now = new Date(), timeZone, fetc
         for (const sub of subs) {
             if (shouldStop()) return report;
             if (!ctxs.has(sub.user_id)) ctxs.set(sub.user_id, createCtx({ user: { id: sub.user_id, username: sub.username, role: sub.role } }));
-            let messages = [];
-            let announce = [];
+            let messages;
+            let announce;
             try {
                 const result = findFor(ctxs.get(sub.user_id), sub, day);
                 announce = result.announce;

@@ -202,6 +202,7 @@ const parseBulkSet = (set) => {
 // the image ("Original" in the gallery) can never run a script. Control characters are refused too: browsers drop tabs
 // and line breaks from a URL, so "/\t/host" would become the protocol-relative "//host".
 const IMAGE_REF = /^(?:\/(?![/\\])|https?:\/\/|data:image\/(?:png|jpe?g|gif|webp|avif|bmp)[;,])/i;
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 /** True for an allowed image reference (see IMAGE_REF); blank values are the callers' business. */
 const isImageRef = (value) => typeof value === 'string' && !CONTROL_CHARS.test(value.trim()) && IMAGE_REF.test(value.trim());
