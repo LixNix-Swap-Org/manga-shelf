@@ -79,9 +79,24 @@ export function looksLikeCode(text) {
   return false;
 }
 
+/**
+ * Inside a declaration marked `// i18n` the author already said "these are texts": besides what isGerman-free
+ * looksLikeCode lets through, plain words and hyphen compounds count too ('mittel', 'installiert', 'ZIP-Datei
+ * hochladen', 'erscheint bald'), which looksLikeCode takes for ids. Still not: digits, paths, URLs, CSS classes, ids
+ * with _ . : / = and ALL-CAPS constants. Values of id-like properties (key, id, tone …) are left to the caller.
+ */
+export function looksLikeMarkedText(text) {
+  const s = String(text).trim();
+  if (!s || /^[A-Z0-9_]+$/.test(s)) return false;
+  return /^[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß-]*[:,]?( [A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß-]*[:,]?)*[.…!?]*$/.test(s);
+}
+
 /** Heuristic: German UI text (umlaut/ß, stop words, UI words, capitalised words). Single lowercase tokens are data. */
 export function isGerman(text) {
   const s = String(text).trim();
+  // an abbreviation or a capitalised hyphen compound, then lower-case words: 'CSV-Text fehlt', 'ISBN erforderlich',
+  // 'Push-Abo fehlt' (looksLikeCode takes these for identifiers)
+  if (/^(?:[A-Z]{2,}|[A-ZÄÖÜ][A-Za-zÄÖÜäöüß]*-[A-ZÄÖÜ][a-zäöüß]+)( [a-zäöüß]{3,})+[.!]?$/.test(s) && !HEADER_NAME.test(s)) return true;
   if (looksLikeCode(s)) return false;
   if (/[äöüÄÖÜß]/.test(s)) return true;
   const words = s.toLowerCase().match(/[a-zäöüß]+/g) || [];
