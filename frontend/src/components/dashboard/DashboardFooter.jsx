@@ -45,7 +45,7 @@ function useDeviceSaveState(active) {
 /** Footer with app version, connection state, offline copy refresh, PWA install and the QR code for the apps. */
 export default function DashboardFooter({
   user, isOfflineMode, networkOffline, offlineCopyAt, refreshingCopy, refreshError, handleRefreshOfflineCopy,
-  pendingPurchases = 0, isInstallable, isInstalledApp, handleInstallClick
+  pendingPurchases = 0, isInstallable, isInstalledApp, handleInstallClick, onOpenWhatsNew = null
 }) {
   // formatAge depends on the clock, not only on props
   const [, setTick] = useState(0);
@@ -84,9 +84,22 @@ export default function DashboardFooter({
   <div className="flex items-center gap-2">
     <span className="font-semibold text-slate-400">{tr('Manga Shelf')}</span>
     <span className="text-slate-500" aria-hidden="true">•</span>
-    <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60">{/* i18n-ignore: version number */}
-      v{APP_VERSION}
-    </span>
+    {onOpenWhatsNew ? (
+      <button
+        type="button"
+        id="btn-footer-whats-new"
+        onClick={onOpenWhatsNew}
+        title={tr('Was ist neu in {version}', { version: APP_VERSION })}
+        className="hit-44 inline-flex items-center gap-1.5 font-mono text-[11px] bg-brand-950/45 text-brand-50 px-2 py-0.5 rounded-md border border-brand-500/45 hover:border-brand-400"
+      >
+        {`v${APP_VERSION}`}
+        <span className="font-sans text-brand-300">· {tr('Was ist neu')}</span>
+      </button>
+    ) : (
+      <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700/60">{/* i18n-ignore: version number */}
+        v{APP_VERSION}
+      </span>
+    )}
   </div>
   <div className="flex flex-wrap items-center justify-center gap-3 text-slate-400">
     {onDevice ? (

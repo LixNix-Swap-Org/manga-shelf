@@ -6,6 +6,7 @@ import path from 'path'
 import { createHash } from 'crypto'
 import { precompressDir } from './precompress.js'
 import { appCspPlugin } from './src/app/csp.js'
+import { changelogSince } from './src/utils/whatsNew.js'
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf-8'))
 
@@ -48,6 +49,26 @@ export function stampServiceWorker(source, { version, files, build = '', catalog
     .replaceAll('__BUILD_ID__', build)
     .replace('/*__PRECACHE__*/', files.map((file) => JSON.stringify(file)).join(', '))
     .replace('/*__CATALOGS__*/', Object.keys(catalogs).sort().map((code) => `${JSON.stringify(code)}: ${JSON.stringify(catalogs[code])}`).join(', '))
+}
+
+// "Was ist neu" (src/components/whatsNew): the CHANGELOG sections from 4.0.0 on, as `import text from 'virtual:changelog'`
+const CHANGELOG_ID = 'virtual:changelog'
+const CHANGELOG_RESOLVED = '\0virtual:changelog'
+const CHANGELOG_PATH = path.resolve(import.meta.dirname, '..', 'CHANGELOG.md')
+
+function changelogPlugin() {
+  return {
+    name: 'whats-new-changelog',
+    resolveId(id) {
+      return id === CHANGELOG_ID ? CHANGELOG_RESOLVED : null
+    },
+    load(id) {
+      if (id !== CHANGELOG_RESOLVED) return null
+      // a build without the file (a Docker stage that forgot to copy it) fails instead of shipping an empty dialog
+      this.addWatchFile(CHANGELOG_PATH)
+      return `export default ${JSON.stringify(changelogSince(fs.readFileSync(CHANGELOG_PATH, 'utf-8')))}`
+    }
+  }
 }
 
 const LOCAL_BOOT_STUB = '\0local-boot-stub'
@@ -170,6 +191,7 @@ export default defineConfig(({ mode }) => {
     base: appMode ? './' : '/',
     plugins: [
       react(),
+      changelogPlugin(),
       ...(appMode ? [appCspPlugin()] : [webBuildWithoutLocalCore()]),
       // Vitest runs the core as CommonJS itself
       ...(mode === 'test' ? [] : [coreCommonjsInDev()]),

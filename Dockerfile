@@ -15,6 +15,8 @@ RUN npm ci
 COPY frontend/ ./
 # the app shells' standalone core (frontend/src/local, src/app) imports ../core; the web build resolves it too
 COPY core/ /app/core/
+# "Was ist neu" in the app reads the changes per version from it (vite.config.js, virtual:changelog)
+COPY CHANGELOG.md /app/CHANGELOG.md
 RUN npm run build
 
 # ===================================================

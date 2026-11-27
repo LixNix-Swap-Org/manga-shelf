@@ -1189,3 +1189,29 @@ test('migration 61 drops mangas.manga_passion_edition_data and animes.tags, keep
     conn.exec('DELETE FROM schema_migrations WHERE version = 61');
     assert.deepEqual(schema.runSequentialMigrations(conn, quiet).map(r => r.version), [61]);
 });
+
+test('migration 62 marks every existing account as having seen "Was ist neu" up to 4.2.0; new accounts start empty', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    const schema = require('../core/schema');
+    const conn = new DatabaseSync(':memory:');
+    conn.exec('PRAGMA foreign_keys = ON;');
+    applySchemaBefore(conn, 62);
+    conn.exec('DELETE FROM schema_migrations WHERE version = 62');
+    const cols = () => conn.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+    assert.equal(cols().includes('whats_new_seen'), false);
+    conn.prepare("INSERT INTO users (username, password_hash, role) VALUES ('alt', 'x', 'admin')").run();
+
+    const quiet = { log: { debug() {}, info() {}, warn() {}, error() {} } };
+    assert.deepEqual(schema.runSequentialMigrations(conn, quiet).map(r => r.version), [62]);
+    assert.ok(cols().includes('whats_new_seen'));
+    assert.equal(conn.prepare("SELECT whats_new_seen FROM users WHERE username = 'alt'").get().whats_new_seen, '4.2.0');
+    conn.prepare("INSERT INTO users (username, password_hash, role) VALUES ('neu', 'x', 'visitor')").run();
+    assert.equal(conn.prepare("SELECT whats_new_seen FROM users WHERE username = 'neu'").get().whats_new_seen, null);
+
+    // replayed: the column is there, nothing is overwritten
+    conn.prepare("UPDATE users SET whats_new_seen = '4.3.0' WHERE username = 'alt'").run();
+    conn.exec('DELETE FROM schema_migrations WHERE version = 62');
+    assert.deepEqual(schema.runSequentialMigrations(conn, quiet).map(r => r.version), [62]);
+    assert.equal(conn.prepare("SELECT whats_new_seen FROM users WHERE username = 'alt'").get().whats_new_seen, '4.3.0');
+    assert.equal(conn.prepare("SELECT whats_new_seen FROM users WHERE username = 'neu'").get().whats_new_seen, null);
+});

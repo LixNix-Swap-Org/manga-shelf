@@ -28,7 +28,11 @@ export function rememberAccountDefaults(user) {
   const shareAnime = typeof user.share_anime_activity === 'boolean' ? user.share_anime_activity : null;
   const showTodo = typeof user.show_todo === 'boolean' ? user.show_todo : null;
   const lentReminderDays = LENT_REMINDER_CHOICES.includes(user.lent_reminder_days) ? user.lent_reminder_days : null;
-  writeCache(null, KEY, { animeVisibility: visibility, shareAnime, showTodo, lentReminderDays });
+  // users.whats_new_seen (migration 62): the last version whose "Was ist neu" the account saw; null for a new account.
+  // A server before 4.3 does not send the field at all (whatsNewKnown false): then the device remembers it.
+  const whatsNewKnown = Object.prototype.hasOwnProperty.call(user, 'whats_new_seen');
+  const whatsNewSeen = whatsNewKnown && typeof user.whats_new_seen === 'string' ? user.whats_new_seen : null;
+  writeCache(null, KEY, { animeVisibility: visibility, shareAnime, showTodo, lentReminderDays, whatsNewSeen, whatsNewKnown });
   emit();
 }
 
@@ -55,7 +59,8 @@ function load(fresh) {
 /**
  * `{ animeVisibility, shareAnime, loaded }`: the default visibility of new anime ratings (users.default_anime_visibility)
  * , whether others see the own anime list by name (users.share_anime_activity) and whether the shelf shows "Zu erledigen"
- * (users.show_todo) and after how many days a lending is listed there (users.lent_reminder_days), null while unknown. Asked once per session; `fresh` asks again (the account dialog), `enabled: false` asks nothing.
+ * (users.show_todo), after how many days a lending is listed there (users.lent_reminder_days) and the last version whose
+ * "Was ist neu" the account saw (users.whats_new_seen, `whatsNewKnown` false on a server without it), null while unknown. Asked once per session; `fresh` asks again (the account dialog), `enabled: false` asks nothing.
  */
 export default function useAccountDefaults({ enabled = true, fresh = false } = {}) {
   const [state, setState] = useState(() => {
@@ -73,5 +78,13 @@ export default function useAccountDefaults({ enabled = true, fresh = false } = {
     if (enabled) load(fresh);
   }, [enabled, fresh]);
 
-  return { animeVisibility: state.defaults?.animeVisibility ?? null, shareAnime: state.defaults?.shareAnime ?? null, showTodo: state.defaults?.showTodo ?? null, lentReminderDays: state.defaults?.lentReminderDays ?? null, loaded: state.loaded };
+  return {
+    animeVisibility: state.defaults?.animeVisibility ?? null,
+    shareAnime: state.defaults?.shareAnime ?? null,
+    showTodo: state.defaults?.showTodo ?? null,
+    lentReminderDays: state.defaults?.lentReminderDays ?? null,
+    whatsNewSeen: state.defaults?.whatsNewSeen ?? null,
+    whatsNewKnown: Boolean(state.defaults?.whatsNewKnown),
+    loaded: state.loaded
+  };
 }
