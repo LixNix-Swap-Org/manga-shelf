@@ -14,6 +14,11 @@ export default function useAccountDialogRequests({ location, navigate }) {
     setShowPasswordModal(true);
   };
 
+  const openAccountTab = (tab) => {
+    setAccountTab(tab);
+    setShowPasswordModal(true);
+  };
+
   const openApiKeys = () => {
     setAccountTab('services');
     setShowPasswordModal(true);
@@ -44,5 +49,5 @@ export default function useAccountDialogRequests({ location, navigate }) {
     navigate({ search: location.search }, { replace: true, state: null });
   }, [openAccount]); // eslint-disable-line react-hooks/exhaustive-deps -- runs once per request
 
-  return { showPasswordModal, setShowPasswordModal, accountTab, handleOpenPasswordModal, openApiKeys };
+  return { showPasswordModal, setShowPasswordModal, accountTab, handleOpenPasswordModal, openApiKeys, openAccountTab };
 }

@@ -2,12 +2,33 @@
 
 ## Unreleased
 
+### Für alle
+- **Was ist neu:** Nach einem Update zeigt die App einmal oben auf der Startseite, was neu ist. Nachlesen kannst du es jederzeit unter „Was ist neu“ in „Mehr“ (Handy) oder im Kontomenü (PC).
+- **Erinnerungen im Browser:** Überfällige Ausleihen kommen als eigene Mitteilung. Ein Browser, den du neu einschaltest, meldet einmal auch Ausleihen, die schon überfällig waren. [Einstellungen öffnen](app:einstellungen)
+
+### Before updating
 - **Database migration 61** runs at the first start, after the usual backup: it removes two columns that are empty since 4.0 (`mangas.manga_passion_edition_data`, `animes.tags`). Nothing visible changes. 4.2.0 cannot open the migrated database; going back restores that backup.
+- **Database migration 62** runs at the first start, after the usual backup: it adds the column `users.whats_new_seen` (the last version whose news the account has seen). Every existing account counts as having seen 4.2.0, so it gets one hint about what is new in this version. 4.2.0 cannot open the migrated database; going back restores that backup.
+
+### What's new
+- **"Was ist neu" in the app:** "Mehr" on phones, the account menu and the version in the footer open a dialog with the changes per version since 4.0.0. "Für alle" shows the German `### Für alle` block of each CHANGELOG version (in other UI languages, and for a version without that block, its English sections without the technical ones); admins also get "Für Admins" with the whole section, "Before updating" on top. After an update a card on the start page names what came since the version the account last saw, once per account on every device (`users.whats_new_seen`, `PUT /api/auth/profile`); "Später" hides it for this session, X or "Ansehen" for good. The CHANGELOG is built into the app, so this works offline and without a server too. A new account starts at the running version without a hint.
+
+### Reminders in the browser
 - **Browser reminders:** a browser switched on for the first time also hears of lendings that were overdue already (once). On a release day with overdue lendings the lendings come as a notification of their own instead of under "Heute neu erschienen" or "Morgen erscheint". A lending reminder names the longest time a volume of the group has been away, like "Zu erledigen".
 - **Browser reminder switch:** after switching on it shows the choices the server keeps for this browser; closing the permission prompt without an answer no longer shows the "blocked" hint; a test message to a browser the push service no longer knows switches the reminders off with a hint to switch them on again.
+
+### Maintenance
 - **Internal:** a value that is missing by mistake in a database write now fails the same way on every server and in the apps instead of being stored as empty on some of them.
 
-## 4.2.0
+## 4.2.0 – 2026-11-23
+
+### Für alle
+- **Lücken in einer Zeile:** Fehlen drei oder mehr Bände am Stück, steht auf der Seite einer Reihe nur noch eine Zeile wie „Band 9 bis 29 fehlen“, mit Preis und „In die Einkaufsliste“.
+- **Aufgeräumte Reihenseite am Handy:** Suche, Sortierung und Bandtypen liegen hinter dem Knopf „Filter“. Die Status-Reiter brechen um, statt abgeschnitten zu werden.
+- **Schnell verleihen:** Tippe auf die gelbe Besitzer-Pille deines Bandes: „Verleihen an …“ oder „Zurückbekommen von …“.
+- **Mein Manga-Jahr:** Dein Jahr unter Statistiken → Leseverlauf: gelesene Bände und Seiten im Vergleich zum Vorjahr, deine meistgelesene Reihe und dein stärkster Monat. [Ansehen](app:statistik/verlauf)
+- **Erinnerungen im Browser:** Neue Bände, neue Anime-Folgen und überfällige Ausleihen kommen als Mitteilung, auch wenn der Tab zu ist. Du wählst Tag, Uhrzeit und was gemeldet wird (für Admins und Editoren). [Einstellungen öffnen](app:einstellungen)
+- **Cover vom eigenen Server:** Cover laden jetzt von eurem Server. Die Cover-Seiten sehen nicht mehr, wer die App öffnet.
 
 ### Before updating
 - **Database migration 60** runs at the first start, after the usual backup: it adds the table for browser reminders (empty until someone switches them on). 4.1.0 cannot open the migrated database; going back restores that backup.
@@ -32,7 +53,13 @@
 ### Maintenance
 - Updated dependencies: Electron 44.11.5, and minor updates of express-rate-limit, eslint, puppeteer-core, lucide-react, react-router-dom, sql.js, postcss, vitest and actions/setup-java.
 
-## 4.1.0
+## 4.1.0 – 2026-11-16
+
+### Für alle
+- **„Für wen?“ an mehr Stellen:** Beim Anlegen eines Bandes, beim Abhaken auf der Einkaufsliste und beim Scannen im Laden wählst du, wem der Band gehört: dir, dem Haushalt oder (als Admin) einer anderen Person des Regals.
+- **Besitzer schneller ändern:** Admins klicken auf die gelbe Besitzer-Pille eines Bandes und haken Personen an oder ab, ohne „Band bearbeiten“ zu öffnen.
+- **Platz unten am iPhone:** Die Startseite lässt Platz für den Scan-Knopf, die letzte Zeile wird nicht mehr verdeckt.
+- **Schneller ohne Server:** In der App ohne Server öffnen sich bei großen Sammlungen die Einkaufsliste und „Zu erledigen“ deutlich schneller.
 
 ### Before updating
 - **4.0.1 was not published on its own:** its changes (listed under 4.0.1 below) come with this version. Coming from 4.0.0, **database migration 59** runs at the first start, after the usual backup: it adds the loan period per account (90 days for everybody, as before). 4.0.0 cannot open the migrated database; going back restores that backup. 4.1.0 adds no further migration.
@@ -53,6 +80,13 @@
 - Updated dependencies: Node 22.23.5 in the Docker image, Electron 44.11.1, and minor updates of vite, sql.js, lucide-react, dotenv, express-rate-limit and puppeteer-core; the glob and minimatch security alerts are fixed. A code-scanning finding in the author filter was cleared without a change in behaviour.
 
 ## 4.0.1
+
+### Für alle
+- **Ausleihfrist einstellbar:** Unter Einstellungen → Allgemein legst du fest, nach welcher Zeit ein verliehener Band unter „Zu erledigen“ auftaucht. [Einstellungen öffnen](app:einstellungen)
+- **Kleinere Filterleiste am Handy:** In der Sammlung stehen Status, Regal-Chip, „Filter“ und Ansicht in zwei Zeilen, der Rest liegt hinter „Filter“.
+- **Anime-Knopf oben:** Am Handy führt ein kleiner Anime-Knopf neben dem App-Namen direkt zu Anime.
+- **Rückfrage vor dem Löschen von Exemplaren:** Stellst du einen Band von „Vorhanden“ weg, fragt die App, bevor Preise, Zustand und Ausleihen seiner Exemplare verloren gehen.
+- **Besitzer auf einen Blick:** Bandkarten zeigen die Besitzer in einer gelben Pille, Sammlungskarten nennen, wem wie viele Bände gehören („Ma 7 · Le 3“).
 
 ### Before updating
 - **Database migration 59** runs at the first start, after the usual backup: it adds the loan period per account (90 days for everybody, as before). 4.0.0 cannot open the migrated database; going back restores that backup.
@@ -76,7 +110,16 @@
 - **Readers marked:** the green book icon stands in front of the reader circles on the volume card.
 - **Collection card:** on a shelf with more than one person, each series card names who owns volumes of it and how many, most first ("Ma 7 · Le 3", at most three people, then "+n"); the label names everybody. `owners` of `GET /api/mangas` now carries the number of volumes per person.
 
-## 4.0.0
+## 4.0.0 – 2026-11-15
+
+### Für alle
+- **Eine Wunschliste pro Person:** Jeder hat seine eigene Wunschliste, alle im Regal sehen sie. Auf der Einkaufsliste kannst du deine als Link mit Familie und Freunden teilen. [Einkaufsliste öffnen](app:einkauf)
+- **Exemplare und Verleihen:** Jedes Exemplar hat eigenen Preis, Kaufdatum und Zustand, auch ein zweites Exemplar desselben Bandes. Du kannst ein Exemplar verleihen, und „Zu erledigen“ erinnert dich, wenn es lange weg ist.
+- **Gelesen gilt überall:** Ein gelesener Band zählt in jedem Regal mit derselben Ausgabe als gelesen.
+- **Neue Aufteilung:** Oben bleiben Suche, „Neuer Manga“, „Statistiken“ und dein Konto. Einstellungen und Verwaltung haben je ein eigenes Fenster, die Seite einer Reihe hat Reiter.
+- **„Zu erledigen“ und „+1 gelesen“:** Eine Karte auf der Startseite sammelt, was offen ist, und bei „Weiterlesen“ hakst du den nächsten Band mit einem Tipp ab.
+- **Statistiken als eigene Seite:** mit dem neuen Reiter „Aktivität“, der zeigt, wer im Regal was gelesen, gekauft oder geändert hat. [Ansehen](app:statistik/aktivitaet)
+- **Privatsphäre:** Unter Einstellungen → Privatsphäre entscheidest du, ob andere deine Anime-Liste mit Namen sehen. [Einstellungen öffnen](app:einstellungen/privatsphaere)
 
 ### Before updating
 - **Database migrations 40 to 58** run at the first start, after the usual backup `backups/vor-update-v<old>-auf-v<new>-…zip`. Migration 40 checks the value columns: volumes without a type become regular volumes, a second household shelf (there should never be one) loses that mark, and triggers refuse a volume status, volume type, collecting status or series format outside the known values. Migration 41 builds the **global catalog**: every edition and every volume of it exists once, however many shelves hold it (same Manga Passion edition, a shared ISBN, or the same title, language, format and publisher). Nothing in the shelves changes; what the merge papered over (different volume counts, two ISBNs for one volume) is listed in the table `catalog_merge_log`. Migration 42 gives `mangas`, `trash`, `shelves` and `animes` the foreign keys they lacked: a series or trash entry pointing to a shelf that no longer exists moves into the household shelf, a reference to a deleted account is cleared, and the start log names how many rows that were. Migration 43 moves reading marks and webtoon chapter progress onto the catalog (see below): marks of the same edition in two shelves merge into one, keeping the earliest read and the highest chapter. Migration 44 turns ownership into **copies** (see below). Migration 45 moves the series link of every anime onto its work (see below): a linked series without a work gets one of its own. Migration 46 makes the catalog the source of the edition data (see below); a series or volume keeps every value it has, and what differs from its catalog entry counts as its own. Migration 47 adds who borrowed a copy (see Copies); nothing is lent after it. Migration 48 adds the setting to share the anime list (see Privacy). Migration 49 makes anime tags and notes personal (see Anime): every existing tag stays and anyone may still remove it, and the note of an entry goes into the own note of everybody who has it on their list. Migration 50 moves calendar feed addresses into a table of their own; every address keeps working. Migration 51 stores the Manga Passion edition data once per edition instead of once per shelf. Migration 52 makes the database refuse an account role outside the four known ones. Migration 53 adds the table for saved filters. Migration 54 adds the per-account switch for "Zu erledigen". Migration 55 adds who last changed a volume and when (empty for every existing volume). Migration 56 allows a second copy of the same volume per person; every existing copy stays as it is. Migration 57 adds wishlists per person: every series on the old shared wishlist stays wished, as the household's wish. Migration 58 lets a person share their own wishlist as a read-only link; every calendar address keeps working. Because the schema changes, 3.7.0 cannot open the migrated database; going back to 3.7.0 restores that backup, and everything changed since is lost.
@@ -204,7 +247,7 @@
 - **Zu erledigen:** a card on the shelf lists what is open in the collection, each with a link to its series: missing volumes already owned in another of your shelves, pre-orders whose release date has passed, and gaps. The quick access has an entry for it. New endpoint `GET /api/todo`.
 - **"Erklärtexte anzeigen"** (Einstellungen, Allgemein, for this device) shows or hides the short explaining sentences under the headings of the shopping list and the radar; on by default.
 
-## 3.7.0
+## 3.7.0 – 2026-11-05
 
 ### Before updating
 - **Database migration 39** runs at the first start: the table `data_versions` and triggers on the collection and anime tables that count every row written there. As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.6.0 cannot open the migrated database.
@@ -247,7 +290,7 @@
 ### Security
 - **Updates without advisories:** Electron 44.10.0, `electron-builder` 26.18.0, Capacitor 7.6.10, `sql.js` 1.15.2 (standalone mode of the apps), `lucide-react` 1.64.0, `react-router-dom` 7.18.5, `postcss` 8.5.32, `autoprefixer` 10.6.2, `dotenv` 18.0.9, `puppeteer-core` 25.16.0, `docker/login-action` 4.7.0.
 
-## 3.6.0
+## 3.6.0 – 2026-10-29
 
 ### Before updating
 - **Database migrations 37 and 38** run at the first start: `volumes.sort_after` (where a special stands, empty for every existing entry) and the table `works` (one row with a numeric id per work, made from the work keys the series already carry), `mangas.work_id` and `animes.work_id` (the work of the linked series, filled in for every linked anime). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.5.0 cannot open the migrated database.
@@ -283,7 +326,7 @@
 - **Build and test tools:** `undici` 7.30.1 and 6.29.1 (GHSA-qrxm-fqhp-jwvm and further advisories) and `fast-uri` 3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr); neither ships with the server.
 - **Updates without advisories:** `sql.js` 1.15.1 (standalone mode of the apps), `lucide-react` 1.61.0, `postcss` 8.5.31, `vitest` 5.0.5, `eslint` 10.13.0, `js-yaml` 5.5.0, `puppeteer-core` 25.15.0, CodeQL actions 4.39.1.
 
-## 3.5.0
+## 3.5.0 – 2026-10-25
 
 ### Before updating
 - **Database migrations 34 to 36** run at the first start: `animes.tags` (tags of the anime list), the table `anime_airings` (aired episodes for the calendar history) and, for webtoons, `mangas.format` (`print`, the default for every existing series, or `webtoon`), `mangas.total_chapters` and the table `chapter_progress` (each user's chapter of a webtoon). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.4.0 cannot open the migrated database.
@@ -342,7 +385,7 @@
 ### Tests and documentation
 - Server tests for webtoons (`test/webtoon.test.js`, the scenario "webtoons", the CSV round trip of a print edition and a webtoon of one title, the format switch that keeps the Manga Passion link), migrations 34 to 36, the anime calendar, history, discover and tags (`test/anime/extras.test.js`), the season chain against a fake AniList (`test/anime/seasonChain.test.js`), the separate radar and anime feed tokens, the chapter readers of the CSV and the egg (`test/deploy.test.js`); Vitest for webtoons, the release-day reminders (`releaseReminders.test.jsx`), the anime calendar and discover tabs, the shop basket and the calendar feed panel. README: webtoons, release-day reminders, the anime calendar and its own address, the Pterodactyl installation; `AGENTS.md`: Case T, migrations 34 to 36, the anime feed token, the season chain, the shop basket and the reminder rules.
 
-## 3.4.0
+## 3.4.0 – 2026-10-18
 
 ### Before updating
 - **Database migrations 29 to 33** run at the first start: `anime_progress.watched_episodes` (single watched episodes), `anime_progress.episode_scores` (ratings of single episodes) and `animes.custom_seasons` (seasons set by hand), shelves (`shelves`, `shelf_members`, `mangas.shelf_id`, `trash.shelf_id`) and the visibility of anime ratings (`anime_progress.rating_visibility`, `public_comment`, `users.default_anime_visibility`). As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.3.0 cannot open the migrated database.
@@ -406,7 +449,7 @@
 ### Tests and documentation
 - Server tests for shelves and their rules (`test/shelves.test.js`, `test/shelfAccess.test.js`, `test/shelfCore.test.js`), migrations 32 and 33, rating visibility (`test/anime/multiUserRatings.test.js`) and the takeover into the device's shelf; Vitest for the user dialog, the shelves dialog, the move question, shelf filter and badge, viewer reads, the tools list, the confirmation dialog and the anime dialog. Test fixes for Windows (paths built for the host platform), and `.gitattributes` keeps LF line endings in the repository (CRLF only for `.bat`). README: "Users and shelves" and anime ratings; `AGENTS.md`: schema, roles, the shelf endpoints with the move preview, Cases D, E, L, M, O and Q.
 
-## 3.3.0
+## 3.3.0 – 2026-10-11
 
 ### Before updating
 - **Database migration 28** runs at the first start: `animes.kind` and the TMDB columns, `anime_progress.audio_language` and `subtitle_language`, and the API key table accepts the provider `tmdb`. As always the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is written first. Because the schema changes, 3.2.0 cannot open the migrated database.
@@ -439,7 +482,7 @@
 ### Tests and documentation
 - Handler, gateway, updater and interface tests for all of the above; the TMDB fixtures in `test/fixtures/` are hand-written after TMDB's documented answers, not recorded. README: search speed, "Films & TV shows", watched language, "Going back", the new variables and credits; `AGENTS.md`: Case L, Gotcha 29, the updater contract (downgrade journal, recovery, hold and anchor).
 
-## 3.2.0
+## 3.2.0 – 2026-10-11
 
 ### Added
 - **Search bar can also search online.** A globe button in the search field switches between searching only your collection (the default, remembered per device) and searching your collection plus Manga Passion (German editions), AniList and MyAnimeList. The shelf keeps filtering as you type; the online search starts 600 ms after you stop typing (from 3 characters on), or at once with Enter.
@@ -476,7 +519,7 @@
 ### PWA
 - **The "Neue Version verfügbar" notice no longer shows when the waiting service worker belongs to the release that is already open:** the page asks it (message `HAS_FILE`, answer within 1 s) whether it precaches the entry script it runs. Another release, no answer or no `MessageChannel` show the notice as before.
 
-## 3.1.0
+## 3.1.0 – 2026-10-10
 
 ### Before updating
 - **This is the last manual update for Pterodactyl servers and self-installed headless binaries.** From 3.1.0 on, System → Updates lists every published release. Where the server can replace itself, it downloads and checks the release, asks for your password again, creates a verified database backup and restarts. Docker, `.deb`/`.rpm`, a Linux system service made with `sudo … install-service`, the Windows task, the desktop app and installs from source do not replace themselves: the card shows the exact command or download link for the version you pick.
@@ -527,7 +570,7 @@ State: base v2.19.1 (`f0c2a64`), the commits after it up to the tip of the branc
 - **`TRUST_PROXY` defaults to `loopback`.** Behind a proxy on another host enter its address (no hop count), in front of Pterodactyl/Docker only the gateway address of the Docker network (e.g. `loopback, 172.18.0.1`, never the whole subnet), and make the app port reachable only through the proxy.
 - **Every session ends once:** the signing key now lives in `data/secret.key` (no longer in the database and therefore in no backup).
 - **Import the Pterodactyl egg again** (install container with `ash`, installation without install scripts, variable `TRUST_PROXY`).
-- **Database migrations 12–61** run at the first start (migration 28 arrives with 3.3.0, migrations 29 to 31 with single anime episodes, their ratings and seasons set by hand, migration 32 with shelves, migration 33 with rating visibility, migration 34 with anime tags, migration 35 with aired episodes, migration 36 with webtoons, migration 37 with the place of special volumes, migration 38 with the table of works, migration 39 with the data versions, migration 40 with checked value columns, migrations 41 and 42 with the global catalog and the missing foreign keys, migration 43 with reading marks on the catalog, migration 44 with copies, migration 45 with anime links on the work, migration 46 with the catalog as the source of edition data, migration 47 with lending, migration 48 with sharing the anime list, migrations 49 to 52 with personal anime tags and notes, the feed table, edition data on the catalog and checked account roles, migration 53 with saved filters, migration 54 with the switch for "Zu erledigen", migration 55 with "Zuletzt geändert von" on volumes, migration 56 with further copies per person, migration 57 with wishlists per person, migration 58 with shared wishlist links, migration 59 with the loan period of "Zu erledigen", migration 60 with browser reminders, migration 61 removes two empty legacy columns); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
+- **Database migrations 12–62** run at the first start (migration 28 arrives with 3.3.0, migrations 29 to 31 with single anime episodes, their ratings and seasons set by hand, migration 32 with shelves, migration 33 with rating visibility, migration 34 with anime tags, migration 35 with aired episodes, migration 36 with webtoons, migration 37 with the place of special volumes, migration 38 with the table of works, migration 39 with the data versions, migration 40 with checked value columns, migrations 41 and 42 with the global catalog and the missing foreign keys, migration 43 with reading marks on the catalog, migration 44 with copies, migration 45 with anime links on the work, migration 46 with the catalog as the source of edition data, migration 47 with lending, migration 48 with sharing the anime list, migrations 49 to 52 with personal anime tags and notes, the feed table, edition data on the catalog and checked account roles, migration 53 with saved filters, migration 54 with the switch for "Zu erledigen", migration 55 with "Zuletzt geändert von" on volumes, migration 56 with further copies per person, migration 57 with wishlists per person, migration 58 with shared wishlist links, migration 59 with the loan period of "Zu erledigen", migration 60 with browser reminders, migration 61 removes two empty legacy columns, migration 62 with "Was ist neu"); before that the backup `backups/vor-update-v<old>-auf-v<new>-…zip` is created automatically.
 - **Migration 22 unifies known publisher spellings** in series and volumes (e.g. "Carlsen Verlag GmbH" → "Carlsen Manga", "EMA" → "Egmont Manga", "TOKYOPOP GmbH" → "TOKYOPOP", appended legal forms of built-in publishers). Deleting an alias later does not undo that.
 - **Migration 27 turns the stored series languages into codes** ("Deutsch" → `de`, "English" → `en`, `en-US` → `en` with the region `US`). A text it does not recognise becomes `de` and is named in the start log ("unknown series languages set to 'de'"); check those series afterwards. Every existing series gets the currency `EUR`.
 - **No automatic way back:** going back to the old version only works by starting the old version and immediately restoring the backup `vor-update-…zip` (README, "Upgrading from v2.19.1"). Do not run the old version permanently on the new database: new "Gelesen" (read) volumes it writes are not converted by a later update any more.

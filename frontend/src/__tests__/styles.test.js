@@ -259,7 +259,7 @@ describe('dialog overlays', () => {
     for (const rel of OVERLAY_FILES) {
       const text = fs.readFileSync(path.join(srcDir, rel), 'utf8');
       expect(text, rel).toMatch(/className="outline-none dialog-overlay /);
-      expect(text, rel).toMatch(/className="dialog-box /);
+      expect(text, rel).toMatch(/className=("|\{`)dialog-box /);
       expect(text, rel).not.toMatch(/fixed inset-0[^"]*(items-center|p-2 sm:p-4|overflow-hidden)/);
       // the utilities would override the overlay's flex-start alignment and its safe-area padding
       expect(text, rel).not.toMatch(/dialog-overlay [^"]*(\bitems-center\b|\bjustify-center\b|(^|\s)(\w+:)?p[xy]?-\d)/);

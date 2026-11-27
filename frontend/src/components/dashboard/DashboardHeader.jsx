@@ -7,7 +7,7 @@ import { isAppMode, isLocalMode } from '../../utils/api';
 import useConnection from '../../app/useConnection';
 import { LOCAL_SERVER_NAME } from '../../app/connection';
 import { getCoverOrigin } from '../../utils/coverOrigin';
-import { BookOpen, Calendar, ChartColumn, ChevronDown, Download, Globe, LogOut, Menu, Plus, Search, Settings, ShieldCheck, Tv, X } from 'lucide-react';
+import { BookOpen, Calendar, ChartColumn, ChevronDown, Download, Globe, LogOut, Menu, Plus, Search, Settings, ShieldCheck, Sparkles, Tv, X } from 'lucide-react';
 import { APP_VERSION, roleBadgeClass, roleLabel } from './dashboardShell';
 import { adminSections } from './adminSections';
 import QuickAccessPanel, { quickAccessEntries, quickOptionId, QUICK_LISTBOX_ID } from './QuickAccess';
@@ -148,6 +148,17 @@ function useCoverPreconnect(active, pending) {
 }
 
 /** Top navbar with search, quick controls, action buttons and mobile drawer. Purely presentational: state and handlers via props. */
+// the blue dot on the menu and account buttons while "Was ist neu" holds news this account has not seen
+const NewDot = () => (
+  <span aria-hidden="true" className="pointer-events-none absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-brand-400 border-2 border-slate-900" />
+);
+
+const VersionPill = () => (
+  <span className="font-mono text-[10px] font-medium text-slate-300 bg-slate-800/90 border border-slate-700/60 rounded-md px-1.5 py-px">{/* i18n-ignore: version number */}
+    {APP_VERSION}
+  </span>
+);
+
 export default function DashboardHeader({
   activeMainView,
   canEdit,
@@ -169,6 +180,8 @@ export default function DashboardHeader({
   todoCount = 0,
   mobileMenuOpen,
   onLogout,
+  onOpenWhatsNew = null,
+  whatsNewUnseen = false,
   onLocalReplaced,
   onOpenSeries,
   radarData,
@@ -434,13 +447,14 @@ export default function DashboardHeader({
               ref={menuToggleRef}
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="hit-44 btn-secondary p-1.5 sm:p-2 text-slate-300 hover:text-white shrink-0"
+              className="hit-44 btn-secondary relative p-1.5 sm:p-2 text-slate-300 hover:text-white shrink-0"
               title={mobileMenuOpen ? t('Menü schließen') : t('Menü öffnen')}
               aria-label={mobileMenuOpen ? t('Menü schließen') : t('Menü öffnen')}
               aria-expanded={mobileMenuOpen}
               aria-controls="mobile-menu-drawer"
             >
               {mobileMenuOpen ? <X className="w-4 h-4" aria-hidden="true" /> : <Menu className="w-4 h-4" aria-hidden="true" />}
+              {whatsNewUnseen && !mobileMenuOpen && <NewDot />}
             </button>
           </div>
           )}
@@ -602,10 +616,11 @@ export default function DashboardHeader({
               aria-controls={accountOpen ? 'account-menu' : undefined}
               aria-label={t('Konto-Menü von {name}', { name: user?.username || '' })}
               title={t('Konto-Menü')}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 hover:border-brand-500/60 pl-1 pr-2 py-1 shrink-0"
+              className="relative flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 hover:border-brand-500/60 pl-1 pr-2 py-1 shrink-0"
             >
               <span aria-hidden="true" className="w-7 h-7 rounded-full bg-brand-500/25 border border-brand-400/60 text-brand-200 text-xs font-bold flex items-center justify-center uppercase">{(user?.username || '?').slice(0, 1)}</span>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${accountOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+              {whatsNewUnseen && <NewDot />}
             </button>
             {accountOpen && (
               <div id="account-menu" className="absolute right-0 mt-2 w-72 glass-panel border border-slate-700/80 rounded-2xl shadow-2xl p-2 z-50 animate-fade-in">
@@ -619,6 +634,14 @@ export default function DashboardHeader({
                 {!user?.offline && (
                   <button id="btn-change-password" type="button" onClick={() => fromAccountMenu(handleOpenPasswordModal)} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-slate-100 hover:bg-slate-800/80" title={accountLabel}>
                     <Settings className="w-4 h-4 text-brand-300" aria-hidden="true" /> {t('Einstellungen')}
+                  </button>
+                )}
+                {onOpenWhatsNew && (
+                  <button id="btn-whats-new" type="button" onClick={() => fromAccountMenu(onOpenWhatsNew)} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-slate-100 ${whatsNewUnseen ? 'border border-brand-500/45 bg-brand-950/45 font-semibold' : 'hover:bg-slate-800/80'}`}>
+                    <Sparkles className="w-4 h-4 text-brand-300" aria-hidden="true" />
+                    <span className="flex-1 text-left">{t('Was ist neu')}</span>
+                    <VersionPill />
+                    {whatsNewUnseen && <span className="w-2 h-2 rounded-full bg-brand-400" aria-label={t('ungelesen')} />}
                   </button>
                 )}
                 <div aria-hidden="true" className="my-1 border-t border-slate-800" />
@@ -719,6 +742,19 @@ export default function DashboardHeader({
             </button>
           )}
 
+          {onOpenWhatsNew && (
+            <button
+              id="btn-mobile-menu-whats-new"
+              type="button"
+              onClick={() => runFromMenu(onOpenWhatsNew)}
+              className={`w-full btn-secondary text-xs py-2 flex items-center justify-center gap-2 ${whatsNewUnseen ? 'text-brand-50 font-semibold border-brand-500/55 bg-brand-950/45' : 'text-slate-200'}`}
+            >
+              <Sparkles className="w-4 h-4 text-brand-300" aria-hidden="true" /> {t('Was ist neu')}
+              <VersionPill />
+              {whatsNewUnseen && <span className="w-2 h-2 rounded-full bg-brand-400" aria-label={t('ungelesen')} />}
+            </button>
+          )}
+
           <button 
             id="btn-mobile-menu-logout"
             type="button"
@@ -757,6 +793,7 @@ export default function DashboardHeader({
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         menuToggleRef={menuToggleRef}
+        menuDot={whatsNewUnseen}
       />
     </header>
   );

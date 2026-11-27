@@ -69,7 +69,7 @@ describe('AccountModal: default visibility of anime ratings', () => {
     const put = fetchMock.mock.calls.find(([url, init]) => url === '/api/auth/profile' && init?.method === 'PUT');
     expect(JSON.parse(put[1].body)).toEqual({ default_anime_visibility: 'anonymous' });
     const { result } = renderHook(() => useAccountDefaults());
-    expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, lentReminderDays: null, loaded: true });
+    expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, lentReminderDays: null, whatsNewSeen: null, whatsNewKnown: false, loaded: true });
   });
 
   it('a refused change goes back to the stored value', async () => {
@@ -103,7 +103,7 @@ describe('useAccountDefaults', () => {
     await waitFor(() => expect(answers).toHaveLength(2));
     expect(result.current.animeVisibility).toBeNull();
     answers[1](fakeResponse(200, { user: { id: 2, default_anime_visibility: 'anonymous' } }));
-    await waitFor(() => expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, lentReminderDays: null, loaded: true }));
+    await waitFor(() => expect(result.current).toEqual({ animeVisibility: 'anonymous', shareAnime: null, showTodo: null, lentReminderDays: null, whatsNewSeen: null, whatsNewKnown: false, loaded: true }));
     renderHook(() => useAccountDefaults());
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(2);
   });

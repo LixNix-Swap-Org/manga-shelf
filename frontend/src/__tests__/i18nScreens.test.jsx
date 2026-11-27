@@ -20,7 +20,7 @@ describe('German screen texts stay byte-identical', () => {
   for (const screen of SCREENS) {
     it(screen.name, async () => {
       expect(getLanguage()).toBe('de');
-      const lines = (await renderScreen(screen)).map((line) => line.split(`v${APP_VERSION}`).join('vX.Y.Z'));
+      const lines = (await renderScreen(screen)).map((line) => line.split(`v${APP_VERSION}`).join('vX.Y.Z').split(APP_VERSION).join('X.Y.Z'));
       expect(lines.length).toBeGreaterThan(2);
       fresh[screen.name] = lines;
       if (!update) expect(lines).toEqual(stored[screen.name]);

@@ -5,9 +5,9 @@ import { t } from '../../i18n/index.js';
 
 /**
  * Shell of the collection tools: overlay above other dialogs, scrolling body (the whole dialog on short landscape
- * screens), Escape and backdrop click close it unless `busy`.
+ * screens), Escape and backdrop click close it unless `busy`. `width` is the box's max-width class.
  */
-export default function ToolDialog({ id, title, subtitle, Icon, onClose, busy = false, children, footer = null }) {
+export default function ToolDialog({ id, title, subtitle, Icon, onClose, busy = false, children, footer = null, width = 'max-w-3xl' }) {
   const titleId = useId();
   const close = () => { if (!busy) onClose(); };
   const dialogRef = useDialogA11y(true, { onClose: close });
@@ -29,7 +29,7 @@ export default function ToolDialog({ id, title, subtitle, Icon, onClose, busy = 
       onClick={(e) => { if (e.target === e.currentTarget) close(); }}
       className="outline-none dialog-overlay z-[60] bg-black/80 backdrop-blur-md animate-fade-in"
     >
-      <div className="dialog-box glass-panel max-w-3xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] short:max-h-none rounded-3xl p-5 sm:p-7 short:p-4 border border-slate-700/80 shadow-2xl flex flex-col overflow-hidden">
+      <div className={`dialog-box glass-panel ${width} max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] short:max-h-none rounded-3xl p-5 sm:p-7 short:p-4 border border-slate-700/80 shadow-2xl flex flex-col overflow-hidden`}>
         <div className="flex items-start justify-between gap-3 pb-4 short:pb-2 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             {Icon && (

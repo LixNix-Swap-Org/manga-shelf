@@ -8,6 +8,8 @@ const UI_LOCALES = ['de', 'en', 'fr', 'es', 'it', 'pt-BR', 'nl', 'pl', 'ja', 'ko
 // after how many days a lent copy is listed in "Zu erledigen" (users.lent_reminder_days, migration 59)
 const LENT_REMINDER_CHOICES = [14, 30, 60, 90, 180, 365];
 const DEFAULT_LENT_REMINDER_DAYS = 90;
+// the last app version whose "Was ist neu" the account has seen (users.whats_new_seen, migration 62)
+const VERSION_PATTERN = /^\d{1,4}\.\d{1,4}\.\d{1,6}$/;
 
 /** Canonical spelling of a supported UI locale ('EN' -> 'en', 'pt-br' -> 'pt-BR'), else null. */
 function uiLocale(value) {
@@ -55,6 +57,12 @@ function parseProfileBody(body) {
         }
         out.lent_reminder_days = body.lent_reminder_days;
     }
+    if (Object.prototype.hasOwnProperty.call(body, 'whats_new_seen')) {
+        if (typeof body.whats_new_seen !== 'string' || !VERSION_PATTERN.test(body.whats_new_seen)) {
+            throw badRequest('Ungültige Version für „Was ist neu“ (z. B. 4.3.0)', 'BAD_REQUEST');
+        }
+        out.whats_new_seen = body.whats_new_seen;
+    }
     if (!Object.keys(out).length) throw badRequest('Keine Änderung angegeben');
     return out;
 }
@@ -68,14 +76,15 @@ function saveProfile(db, userId, fields) {
 
 /** { locale, default_language } of a user; defaults when the row is missing. */
 function readProfile(db, userId) {
-    const row = db.prepare('SELECT locale, default_language, default_anime_visibility, share_anime_activity, show_todo, lent_reminder_days FROM users WHERE id = ?').get(userId);
+    const row = db.prepare('SELECT locale, default_language, default_anime_visibility, share_anime_activity, show_todo, lent_reminder_days, whats_new_seen FROM users WHERE id = ?').get(userId);
     return {
         locale: row ? row.locale ?? null : null,
         default_language: (row && row.default_language) || 'de',
         default_anime_visibility: (row && row.default_anime_visibility) || 'public',
         share_anime_activity: !row || row.share_anime_activity !== 0,
         show_todo: !row || row.show_todo !== 0,
-        lent_reminder_days: row && LENT_REMINDER_CHOICES.includes(row.lent_reminder_days) ? row.lent_reminder_days : DEFAULT_LENT_REMINDER_DAYS
+        lent_reminder_days: row && LENT_REMINDER_CHOICES.includes(row.lent_reminder_days) ? row.lent_reminder_days : DEFAULT_LENT_REMINDER_DAYS,
+        whats_new_seen: row && typeof row.whats_new_seen === 'string' && VERSION_PATTERN.test(row.whats_new_seen) ? row.whats_new_seen : null
     };
 }
 

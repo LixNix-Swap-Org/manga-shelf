@@ -345,7 +345,7 @@ test('app login: X-Client: app or client: app add the token, other clients get t
 test('bearer: an Authorization header authenticates reads and writes like the cookie', async () => {
     const token = await appLogin('ed');
     const app = withBearer(token);
-    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor', locale: null, default_language: 'de', default_anime_visibility: 'public', share_anime_activity: true, show_todo: true, lent_reminder_days: 90 });
+    assert.deepEqual((await app('GET', '/auth/me')).body.user, { id: ids.ed, username: 'ed', role: 'editor', locale: null, default_language: 'de', default_anime_visibility: 'public', share_anime_activity: true, show_todo: true, lent_reminder_days: 90, whats_new_seen: null });
     const created = await app('POST', '/mangas', { title: 'Bearer Reihe' });
     assert.equal(created.status, 200);
     assert.equal((await withBearer(await appLogin('vis'))('POST', '/mangas', { title: 'X' })).body.code, 'READ_ONLY');
@@ -506,6 +506,21 @@ test('profile: "Zu erledigen" can be switched off and on per account', async () 
     const bad = await app('PUT', '/auth/profile', { show_todo: 'nein' });
     assert.equal(bad.status, 400);
     assert.equal((await app('PUT', '/auth/profile', { show_todo: true })).body.user.show_todo, true);
+});
+
+test('profile: the last version whose "Was ist neu" the account saw is kept per account', async () => {
+    const app = await loggedIn('ed');
+    assert.equal((await app('GET', '/auth/me')).body.user.whats_new_seen, null, 'a new account has seen nothing yet');
+    const seen = await app('PUT', '/auth/profile', { whats_new_seen: '4.3.0' });
+    assert.equal(seen.status, 200);
+    assert.equal(seen.body.user.whats_new_seen, '4.3.0');
+    assert.equal((await app('GET', '/auth/me')).body.user.whats_new_seen, '4.3.0');
+    assert.equal((await (await loggedIn('vis'))('GET', '/auth/me')).body.user.whats_new_seen, null, 'only for this account');
+    for (const bad of ['4.3', 'v4.3.0', '4.3.0-beta', 430, null, '']) {
+        assert.equal((await app('PUT', '/auth/profile', { whats_new_seen: bad })).status, 400, String(bad));
+    }
+    const guest = await loggedIn('vis');
+    assert.equal((await guest('PUT', '/auth/profile', { whats_new_seen: '4.2.0' })).body.user.whats_new_seen, '4.2.0', 'readers keep theirs too');
 });
 
 test('profile: the loan period of "Zu erledigen" is chosen per account', async () => {

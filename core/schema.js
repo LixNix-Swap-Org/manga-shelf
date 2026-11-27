@@ -1563,6 +1563,20 @@ function migrationList(log = silentLog) {
                 drop('mangas', 'manga_passion_edition_data', /,\s*["`]?manga_passion_edition_data["`]?\s+TEXT(?:\s+DEFAULT\s+NULL)?(?=\s*[,)])/i);
                 drop('animes', 'tags', /,\s*["`]?tags["`]?\s+TEXT(?=\s*[,)])/i);
             }
+        },
+        {
+            version: 62,
+            name: 'add_whats_new_seen',
+            up: (d) => {
+                // the last app version whose "Was ist neu" this account has seen (core/lib/locales.js, PUT /auth/profile);
+                // the hint after an update shows what came since. The accounts that exist now knew 4.2.0, the version
+                // before this migration, so they hear of what is new in the next one; NULL (a new account) takes the
+                // running version without a hint
+                const cols = new Set(d.prepare('PRAGMA table_info(users)').all().map(c => c.name));
+                if (cols.has('whats_new_seen')) return;
+                d.exec('ALTER TABLE users ADD COLUMN whats_new_seen TEXT;');
+                d.prepare('UPDATE users SET whats_new_seen = ?').run('4.2.0');
+            }
         }
     ];
 }

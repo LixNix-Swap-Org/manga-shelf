@@ -58,7 +58,7 @@ const itemClass = (active) => `relative flex-1 min-w-0 min-h-[56px] flex flex-co
 // mounted but hidden and id-less, so an open scanner survives rotating the phone.
 export default function BottomNav({
   activeMainView, setView, missingCount = 0, releaseCount = 0, onScan, mobileMenuOpen = false, setMobileMenuOpen, menuToggleRef,
-  narrow = true
+  narrow = true, menuDot = false
 }) {
   const navRef = useRef(null);
   // like the detail bar: hidden while the on-screen keyboard is up, so it does not cover the focused field
@@ -143,6 +143,9 @@ export default function BottomNav({
         >
           {mobileMenuOpen ? <X className="w-5 h-5" aria-hidden="true" /> : <Ellipsis className="w-5 h-5" aria-hidden="true" />}
           <span aria-hidden="true">{t('Mehr')}</span>
+          {menuDot && !mobileMenuOpen && (
+            <span aria-hidden="true" className="pointer-events-none absolute top-1.5 left-1/2 ml-2 w-2.5 h-2.5 rounded-full bg-brand-400 border-2 border-slate-950" />
+          )}
         </button>
       </div>
     </nav>,

@@ -9,6 +9,8 @@ import { STATS_PATH, statsPath, statsTabFromPath } from './utils/statsRoute';
 import CollectionStats from './components/dashboard/CollectionStats';
 import ContinueReading from './components/dashboard/ContinueReading';
 import TodoList from './components/dashboard/TodoList';
+import WhatsNewHint from './components/whatsNew/WhatsNewHint';
+import useWhatsNew from './hooks/useWhatsNew';
 import AnimeSearchHits, { animeSearchHits, ANIME_SEARCH_MIN_CHARS } from './components/dashboard/AnimeSearchHits';
 import DashboardFooter from './components/dashboard/DashboardFooter';
 import ScanCandidatesDialog from './components/dashboard/ScanCandidatesDialog';
@@ -50,6 +52,7 @@ const UserManagementModal = lazy(() => import('./components/modals/UserManagemen
 import DashboardAnimeDialogs from './components/dashboard/DashboardAnimeDialogs';
 import DashboardToolDialogs from './components/dashboard/DashboardToolDialogs';
 const AccountModal = lazy(() => import('./components/modals/AccountModal'));
+const WhatsNewDialog = lazy(() => import('./components/whatsNew/WhatsNewDialog'));
 const BackupRestoreModal = lazy(() => import('./components/modals/BackupRestoreModal'));
 const StatsPage = lazy(() => import('./components/modals/StatsPage'));
 const AddMangaModal = lazy(() => import('./components/modals/AddMangaModal'));
@@ -107,7 +110,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
 
   // Modal visibility states
   const [showUsersModal, setShowUsersModal] = useState(false);
-  const { showPasswordModal, setShowPasswordModal, accountTab, handleOpenPasswordModal, openApiKeys } = useAccountDialogRequests({ location, navigate });
+  const { showPasswordModal, setShowPasswordModal, accountTab, handleOpenPasswordModal, openApiKeys, openAccountTab } = useAccountDialogRequests({ location, navigate });
   const [animeAdd, setAnimeAdd] = useState(null); // { mangaId, query?, share? } while the add dialog is open
   const [animeDetailId, setAnimeDetailId] = useState(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -123,6 +126,15 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
   } = useOfflineStatus({ user, onOnlineRef });
   // "Zu erledigen" can be switched off per account (Einstellungen, Allgemein); unknown counts as on
   const accountDefaults = useAccountDefaults({ enabled: !isOfflineMode && Boolean(user) });
+  // "Was ist neu": the hint after an update, the dot on "Mehr" and the account menu, the dialog ({ since } while open)
+  const whatsNew = useWhatsNew({ user, enabled: !isOfflineMode });
+  const [whatsNewOpen, setWhatsNewOpen] = useState(null);
+  const { seen: whatsNewSeen, markSeen: markWhatsNewSeen } = whatsNew;
+  const openWhatsNew = useCallback(() => {
+    setMobileMenuOpen(false);
+    setWhatsNewOpen({ since: whatsNewSeen });
+    markWhatsNewSeen();
+  }, [whatsNewSeen, markWhatsNewSeen]);
   const showTodo = accountDefaults.showTodo !== false;
 
   // the badges of the other views follow a delete and a restore from the trash toast
@@ -457,6 +469,19 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
     setActiveToolModal(tool);
   }, []);
 
+  // an `app:` link of a "Was ist neu" item (utils/whatsNew.js APP_LINK_TARGETS)
+  const followWhatsNewLink = (target) => {
+    setWhatsNewOpen(null);
+    const [place, sub] = String(target).split('/');
+    if (place === 'statistik') {
+      if (!isOfflineMode) navigate(statsPath(sub || 'ueberblick'));
+    } else if (place === 'einstellungen') {
+      openAccountTab({ privatsphaere: 'privacy', dienste: 'services', konto: 'account' }[sub] || 'general');
+    } else if (place === 'einkauf') setView('shopping');
+    else if (place === 'radar') setView('radar');
+    else if (place === 'anime') setView(ANIME_VIEW);
+  };
+
   const handleOpenRestoreModal = () => {
     setShowRestoreModal(true);
   };
@@ -481,6 +506,8 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         handleOpenTool={handleOpenTool}
         headingRef={headingRef}
         handleOpenPasswordModal={handleOpenPasswordModal}
+        whatsNewUnseen={whatsNew.unseen}
+        onOpenWhatsNew={whatsNew.ready ? openWhatsNew : null}
         isInstallable={isInstallable}
         isInstalledApp={isInstalledApp}
         isOfflineMode={isOfflineMode}
@@ -551,6 +578,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         {shownView === 'shelf' && (
           <>
             <h2 className="sr-only">{t('Sammlung')}</h2>
+            <WhatsNewHint whatsNew={whatsNew} isAdmin={user?.role === 'admin'} onOpen={openWhatsNew} />
             <CollectionStats
               totalSeries={totalSeries}
               totalOwnedVolumes={totalOwnedVolumes}
@@ -805,6 +833,7 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         isInstallable={isInstallable}
         isInstalledApp={isInstalledApp}
         handleInstallClick={handleInstallClick}
+        onOpenWhatsNew={whatsNew.ready ? openWhatsNew : null}
       />
 
       {/* MODALS */}
@@ -828,6 +857,16 @@ export default function Dashboard({ user, onLogout, onLocalReplaced }) {
         )}
 
         {showPasswordModal && <AccountModal isOpen onClose={() => setShowPasswordModal(false)} user={user} initialTab={accountTab} />}
+
+        {whatsNewOpen && (
+          <WhatsNewDialog
+            current={whatsNew.current}
+            since={whatsNewOpen.since}
+            isAdmin={user?.role === 'admin'}
+            onClose={() => setWhatsNewOpen(null)}
+            onLink={followWhatsNewLink}
+          />
+        )}
 
         <DashboardAnimeDialogs
           anime={anime}
